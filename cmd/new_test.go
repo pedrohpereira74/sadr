@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/pedrohpereira74/sadr/internal/storage"
 )
 
 func setupNewTest(t *testing.T) string {
@@ -34,5 +36,79 @@ func TestNewCreatesRecord(t *testing.T) {
 	}
 	if len(entries) != 1 {
 		t.Errorf("expected 1 record, got %d", len(entries))
+	}
+}
+
+func TestNewAdrCreatesRecordWithTypeAdr(t *testing.T) {
+	dir := setupNewTest(t)
+
+	rootCmd.SetArgs([]string{"new", "adr", "--title", "Use Redis for cache"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	recordsDir := filepath.Join(dir, ".sadr", "records")
+	s := storage.NewStorage(recordsDir)
+	records, _ := s.ListRecords()
+	if len(records) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(records))
+	}
+	if records[0].Type != "adr" {
+		t.Errorf("expected type 'adr', got '%s'", records[0].Type)
+	}
+}
+
+func TestNewSnippetCreatesRecordWithTypeSnippet(t *testing.T) {
+	dir := setupNewTest(t)
+
+	rootCmd.SetArgs([]string{"new", "snippet", "--title", "Retry helper"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	recordsDir := filepath.Join(dir, ".sadr", "records")
+	s := storage.NewStorage(recordsDir)
+	records, _ := s.ListRecords()
+	if len(records) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(records))
+	}
+	if records[0].Type != "snippet" {
+		t.Errorf("expected type 'snippet', got '%s'", records[0].Type)
+	}
+}
+
+func TestNewQuickOnlyAsksQuickFields(t *testing.T) {
+	dir := setupNewTest(t)
+
+	rootCmd.SetArgs([]string{"new", "--quick", "--title", "Quick record"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	recordsDir := filepath.Join(dir, ".sadr", "records")
+	s := storage.NewStorage(recordsDir)
+	records, _ := s.ListRecords()
+	if len(records) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(records))
+	}
+}
+
+func TestNewGlobalSavesToHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	globalRecords := filepath.Join(home, ".sadr", "records")
+	if err := os.MkdirAll(globalRecords, 0755); err != nil {
+		t.Fatalf("failed to create dir: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"new", "--global", "--title", "Personal snippet"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	entries, _ := os.ReadDir(globalRecords)
+	if len(entries) != 1 {
+		t.Errorf("expected 1 record in global, got %d", len(entries))
 	}
 }
