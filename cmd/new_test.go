@@ -10,6 +10,10 @@ import (
 
 func setupNewTest(t *testing.T) string {
 	t.Helper()
+	newTitle = ""
+	newQuick = false
+	newGlobal = false
+
 	dir := t.TempDir()
 	sadrDir := filepath.Join(dir, ".sadr", "records")
 	if err := os.MkdirAll(sadrDir, 0755); err != nil {
@@ -110,5 +114,35 @@ func TestNewGlobalSavesToHome(t *testing.T) {
 	entries, _ := os.ReadDir(globalRecords)
 	if len(entries) != 1 {
 		t.Errorf("expected 1 record in global, got %d", len(entries))
+	}
+}
+
+func TestNewReadsConfigForWizard(t *testing.T) {
+	dir := setupNewTest(t)
+
+	configContent := `
+fields:
+  - name: title
+    type: text
+    required: true
+  - name: tags
+    type: multiselect
+    required: true
+    options: [api, security, database]
+`
+	configPath := filepath.Join(dir, ".sadr", "config.yaml")
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"new", "--title", "Test record"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	recordsDir := filepath.Join(dir, ".sadr", "records")
+	entries, _ := os.ReadDir(recordsDir)
+	if len(entries) != 1 {
+		t.Errorf("expected 1 record, got %d", len(entries))
 	}
 }

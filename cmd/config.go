@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/pedrohpereira74/sadr/internal/discover"
+	"github.com/pedrohpereira74/sadr/internal/templates"
 	"github.com/spf13/cobra"
 )
 
@@ -33,8 +34,7 @@ var configCmd = &cobra.Command{
 					return
 				}
 
-				boilerplate := "# Global sadr config — personal preferences\n# This file is never versioned.\n\neditor: \n\nai:\n  provider: gemini\n  api_key_env: GEMINI_API_KEY\n"
-				if err := os.WriteFile(globalConfig, []byte(boilerplate), 0644); err != nil {
+				if err := os.WriteFile(globalConfig, []byte(templates.GlobalConfig), 0644); err != nil {
 					_, _ = fmt.Fprintf(os.Stderr, ":(  Failed to create config: %v\n", err)
 					return
 				}

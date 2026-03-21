@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/pedrohpereira74/sadr/internal/config"
 	"github.com/pedrohpereira74/sadr/internal/discover"
 	"github.com/pedrohpereira74/sadr/internal/model"
 	"github.com/pedrohpereira74/sadr/internal/storage"
@@ -34,13 +35,37 @@ var newSnippetCmd = &cobra.Command{
 	Run:   runNew("snippet"),
 }
 
+func loadFieldDefs(configPath string) []wizard.FieldDef {
+	cfg, err := config.LoadFromFile(configPath)
+	if err != nil {
+		return nil
+	}
+
+	var fields []wizard.FieldDef
+	for _, f := range cfg.Fields {
+		fd := wizard.FieldDef{
+			Name:    f.Name,
+			Type:    f.Type,
+			Options: f.Options,
+			Default: f.Default,
+		}
+		if f.Required != nil {
+			fd.Required = *f.Required
+		}
+		fields = append(fields, fd)
+	}
+	return fields
+}
+
 func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
 		var recordsDir string
+		var configPath string
 
 		if newGlobal {
 			home, _ := os.UserHomeDir()
 			recordsDir = filepath.Join(home, ".sadr", "records")
+			configPath = filepath.Join(home, ".sadr", "config.yaml")
 			if _, err := os.Stat(recordsDir); os.IsNotExist(err) {
 				_, _ = fmt.Fprintln(os.Stderr, ":(  Global storage not found. Run 'sadr config --global' first.")
 				return
@@ -53,6 +78,7 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 				return
 			}
 			recordsDir = paths.Records
+			configPath = filepath.Join(paths.Root, "config.yaml")
 		}
 
 		var r model.Record
@@ -62,8 +88,12 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 			var result map[string]string
 			var wizErr error
 
+			fieldDefs := loadFieldDefs(configPath)
+
 			if newQuick {
 				result, wizErr = wizard.RunQuickWizard()
+			} else if fieldDefs != nil {
+				result, wizErr = wizard.RunWizardFromConfig(fieldDefs)
 			} else {
 				result, wizErr = wizard.RunWizard()
 			}
@@ -80,11 +110,17 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 			if result["snippet"] != "" {
 				r.Snippet = result["snippet"]
 			}
-			if result["tags"] != "" {
-				r.Fields["tags"] = result["tags"]
-			}
-			if result["file_ref"] != "" {
-				r.FileRef = result["file_ref"]
+			for key, value := range result {
+				if key == "title" || key == "snippet" {
+					continue
+				}
+				if key == "file_ref" {
+					r.FileRef = value
+					continue
+				}
+				if value != "" {
+					r.Fields[key] = value
+				}
 			}
 		} else {
 			r, err = model.NewRecordWithOptions(newTitle, recordType)
