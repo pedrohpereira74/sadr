@@ -105,3 +105,19 @@ func TestListRecords(t *testing.T) {
 		t.Errorf("expected 2 records, got %d", len(records))
 	}
 }
+
+func TestDeleteRecord(t *testing.T) {
+	s := newTestStorage(t)
+
+	r, _ := model.NewRecord("To be deleted")
+	path, _ := s.SaveRecord(r)
+
+	err := s.DeleteRecord(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("expected file to be deleted at %s", path)
+	}
+}

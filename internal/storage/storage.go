@@ -134,6 +134,31 @@ func (s *Storage) LoadRecord(path string) (model.Record, error) {
 	return r, nil
 }
 
+func (s *Storage) ListRecords() ([]model.Record, error) {
+	entries, err := os.ReadDir(s.Dir)
+	if err != nil {
+		return nil, err
+	}
+
+	var records []model.Record
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
+			continue
+		}
+		path := filepath.Join(s.Dir, entry.Name())
+		r, err := s.LoadRecord(path)
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, r)
+	}
+	return records, nil
+}
+
+func (s *Storage) DeleteRecord(path string) error {
+	return os.Remove(path)
+}
+
 func isFrontmatterKey(key string) bool {
 	return key == "tags"
 }
