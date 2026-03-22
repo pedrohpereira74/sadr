@@ -23,6 +23,7 @@ var newGlobal bool
 var newClipboard bool
 var newFile string
 var newSmart bool
+var newDiff bool
 
 var newCmd = &cobra.Command{
 	Use:   "new",
@@ -95,6 +96,21 @@ func readSnippetFromSource() string {
 		return strings.TrimSpace(string(content))
 	}
 
+	if newDiff {
+		cmd := exec.Command("git", "diff")
+		output, err := cmd.Output()
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, ":(  Git diff failed: %v\n", err)
+			return ""
+		}
+		content := strings.TrimSpace(string(output))
+		if content == "" {
+			_, _ = fmt.Fprintln(os.Stderr, ":(  Git diff is empty. Stage or commit something first.")
+			return ""
+		}
+		return content
+	}
+
 	return ""
 }
 
@@ -153,7 +169,26 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 		var err error
 
 		snippetFromSource := readSnippetFromSource()
+		if newDiff && snippetFromSource == "" {
+			return
+		}
 		hasSnippet := snippetFromSource != ""
+
+		if newSmart && !hasSnippet {
+			_, _ = fmt.Fprintln(os.Stderr, ":(  Opening editor to capture snippet for AI analysis...")
+			content, editorErr := captureSnippetFromEditor()
+			if editorErr != nil {
+				_, _ = fmt.Fprintf(os.Stderr, ":(  Failed to open editor: %v\n", editorErr)
+				return
+			}
+			if strings.TrimSpace(content) == "" {
+				_, _ = fmt.Fprintln(os.Stderr, ":(  --smart requires a snippet to analyze. Operation aborted.")
+				return
+			}
+
+			snippetFromSource = content
+			hasSnippet = true
+		}
 
 		if newTitle == "" {
 			var result map[string]string
@@ -240,6 +275,40 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 	}
 }
 
+func captureSnippetFromEditor() (string, error) {
+	tmpFile, err := os.CreateTemp("", "sadr-snippet-*.txt")
+	if err != nil {
+		return "", err
+	}
+	tmpName := tmpFile.Name()
+	_ = tmpFile.Close()
+	defer func() { _ = os.Remove(tmpName) }()
+
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = os.Getenv("VISUAL")
+	}
+	if editor == "" {
+		editor = "vim"
+	}
+
+	c := exec.Command(editor, tmpName)
+	c.Stdin = os.Stdin
+	c.Stdout = os.Stdout
+	c.Stderr = os.Stderr
+
+	if err := c.Run(); err != nil {
+		return "", err
+	}
+
+	content, err := os.ReadFile(tmpName)
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(string(content)), nil
+}
+
 func init() {
 	newCmd.PersistentFlags().StringVar(&newTitle, "title", "", "Record title (skip for interactive wizard)")
 	newCmd.PersistentFlags().BoolVarP(&newQuick, "quick", "q", false, "Only ask quick_fields (title + tags)")
@@ -247,6 +316,7 @@ func init() {
 	newCmd.PersistentFlags().BoolVarP(&newClipboard, "clipboard", "c", false, "Read snippet from clipboard")
 	newCmd.PersistentFlags().StringVarP(&newFile, "file", "f", "", "Read snippet from file")
 	newCmd.PersistentFlags().BoolVarP(&newSmart, "smart", "s", false, "AI suggests field values from snippet")
+	newCmd.PersistentFlags().BoolVar(&newDiff, "diff", false, "Read snippet from git diff")
 	newCmd.AddCommand(newAdrCmd)
 	newCmd.AddCommand(newSnippetCmd)
 	rootCmd.AddCommand(newCmd)

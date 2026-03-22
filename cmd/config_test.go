@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -44,5 +45,55 @@ func TestConfigGlobalCreatesDirectory(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(sadrGlobal, "config.yaml")); os.IsNotExist(err) {
 		t.Error("expected ~/.sadr/config.yaml to be created")
+	}
+}
+
+func TestConfigSetAPIKeyCreatesFile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	rootCmd.SetArgs([]string{"config", "--set-api-key", "test-key-123"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	configPath := filepath.Join(home, ".sadr", "config.yaml")
+	content, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("failed to read config: %v", err)
+	}
+
+	if !strings.Contains(string(content), `api_key: "test-key-123"`) {
+		t.Errorf("expected api key in config, got:\n%s", string(content))
+	}
+}
+
+func TestConfigSetAPIKeyUpdatesExistingFile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	globalDir := filepath.Join(home, ".sadr")
+	_ = os.MkdirAll(globalDir, 0755)
+	configPath := filepath.Join(globalDir, "config.yaml")
+
+	initialContent := "editor: \"nano\"\napi_key: \"old-key\"\nsome_other_setting: true\n"
+	_ = os.WriteFile(configPath, []byte(initialContent), 0644)
+
+	rootCmd.SetArgs([]string{"config", "--set-api-key", "new-key-456"})
+	_ = rootCmd.Execute()
+
+	content, _ := os.ReadFile(configPath)
+	strContent := string(content)
+
+	if !strings.Contains(strContent, `api_key: "new-key-456"`) {
+		t.Errorf("expected updated api key, got:\n%s", strContent)
+	}
+	if strings.Contains(strContent, "old-key") {
+		t.Errorf("did not expect old key, got:\n%s", strContent)
+	}
+	if !strings.Contains(strContent, `editor: "nano"`) {
+		t.Errorf("expected original content to be preserved, got:\n%s", strContent)
 	}
 }

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -13,6 +14,10 @@ func setupNewTest(t *testing.T) string {
 	newTitle = ""
 	newQuick = false
 	newGlobal = false
+	newClipboard = false
+	newFile = ""
+	newDiff = false
+	newSmart = false
 
 	dir := t.TempDir()
 	sadrDir := filepath.Join(dir, ".sadr", "records")
@@ -168,5 +173,80 @@ func TestNewFromFile(t *testing.T) {
 	}
 	if records[0].Snippet != "client := retryablehttp.NewClient()" {
 		t.Errorf("expected snippet from file, got '%s'", records[0].Snippet)
+	}
+}
+
+func TestNewFromDiff(t *testing.T) {
+	dir := setupNewTest(t)
+
+	_ = exec.Command("git", "init").Run()
+	_ = os.WriteFile(filepath.Join(dir, "file.go"), []byte("package main"), 0644)
+	_ = exec.Command("git", "add", ".").Run()
+	_ = exec.Command("git", "commit", "-m", "initial").Run()
+	_ = os.WriteFile(filepath.Join(dir, "file.go"), []byte("package main\n\nfunc hello() {}"), 0644)
+
+	rootCmd.SetArgs([]string{"new", "--diff", "--title", "Added hello function"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	recordsDir := filepath.Join(dir, ".sadr", "records")
+	s := storage.NewStorage(recordsDir)
+	records, _ := s.ListRecords()
+	if len(records) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(records))
+	}
+	if records[0].Snippet == "" {
+		t.Error("expected snippet from git diff, got empty")
+	}
+}
+
+func TestNewFromDiffEmpty(t *testing.T) {
+	dir := setupNewTest(t)
+
+	_ = exec.Command("git", "init").Run()
+	_ = os.WriteFile(filepath.Join(dir, "file.go"), []byte("package main"), 0644)
+	_ = exec.Command("git", "add", ".").Run()
+	_ = exec.Command("git", "commit", "-m", "initial").Run()
+
+	rootCmd.SetArgs([]string{"new", "--diff", "--title", "No changes"})
+	_ = rootCmd.Execute()
+
+	recordsDir := filepath.Join(dir, ".sadr", "records")
+	entries, _ := os.ReadDir(recordsDir)
+	if len(entries) != 0 {
+		t.Errorf("expected 0 records when diff is empty, got %d", len(entries))
+	}
+}
+
+func TestNewSmartWithoutSnippetAborts(t *testing.T) {
+	dir := setupNewTest(t)
+
+	rootCmd.SetArgs([]string{"new", "--smart"})
+	t.Setenv("EDITOR", "true")
+
+	_ = rootCmd.Execute()
+
+	recordsDir := filepath.Join(dir, ".sadr", "records")
+	entries, _ := os.ReadDir(recordsDir)
+	if len(entries) != 0 {
+		t.Errorf("expected 0 records when --smart is aborted, got %d", len(entries))
+	}
+}
+
+func TestNewSmartWithoutAPIKeyStillCreatesRecord(t *testing.T) {
+	dir := setupNewTest(t)
+	t.Setenv("GEMINI_API_KEY", "")
+
+	snippetFile := filepath.Join(dir, "snippet.go")
+	_ = os.WriteFile(snippetFile, []byte("client := retryablehttp.NewClient()"), 0644)
+
+	rootCmd.SetArgs([]string{"new", "--smart", "--file", snippetFile, "--title", "Test"})
+	_ = rootCmd.Execute()
+
+	recordsDir := filepath.Join(dir, ".sadr", "records")
+	entries, _ := os.ReadDir(recordsDir)
+	if len(entries) != 1 {
+		t.Errorf("expected 1 record (fallback to manual), got %d", len(entries))
 	}
 }

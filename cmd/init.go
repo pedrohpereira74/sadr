@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/pedrohpereira74/sadr/internal/templates"
@@ -133,6 +135,11 @@ var initCmd = &cobra.Command{
 
 		_, _ = fmt.Fprintln(os.Stderr, ":(  sadr: therapy for snippets that lost their meaning.")
 		_, _ = fmt.Fprintln(os.Stderr, "")
+
+		if flag.Lookup("test.v") == nil {
+			time.Sleep(3 * time.Second)
+		}
+
 		_, _ = fmt.Fprintln(os.Stderr, "    Done! Created .sadr/ in this directory.")
 		_, _ = fmt.Fprintf(os.Stderr, "    Config: .sadr/config.yaml (%s preset)\n", chosen)
 		_, _ = fmt.Fprintln(os.Stderr, "    Try it: run 'sadr new --quick' to capture your first snippet.")

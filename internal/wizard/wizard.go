@@ -48,7 +48,7 @@ func NewModel() Model {
 		steps: []step{
 			{
 				name:      "snippet",
-				prompt:    "Snippet (opens editor)",
+				prompt:    "Snippet",
 				fieldType: "editor",
 				required:  false,
 			},
@@ -102,7 +102,7 @@ func NewModelFromConfig(fields []FieldDef) Model {
 	steps := []step{
 		{
 			name:      "snippet",
-			prompt:    "Snippet (opens editor)",
+			prompt:    "Snippet",
 			fieldType: "editor",
 			required:  false,
 		},
