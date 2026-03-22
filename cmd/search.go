@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/pedrohpereira74/sadr/internal/discover"
 	"github.com/pedrohpereira74/sadr/internal/search"
 	"github.com/pedrohpereira74/sadr/internal/storage"
 	"github.com/spf13/cobra"
@@ -12,20 +11,20 @@ import (
 
 var searchDeep bool
 var searchID int
+var searchGlobal bool
 
 var searchCmd = &cobra.Command{
 	Use:   "search [query]",
 	Short: "Search records by title, tags, or content",
 	Run: func(cmd *cobra.Command, args []string) {
-		dir, _ := os.Getwd()
-		paths, err := discover.FindSadrDir(dir)
+		recordsDir, err := resolveRecordsDir(searchGlobal)
 		if err != nil {
 			_, _ = fmt.Fprintln(os.Stderr, ":(  "+err.Error())
 			return
 		}
 
 		if searchID > 0 {
-			s := storage.NewStorage(paths.Records)
+			s := storage.NewStorage(recordsDir)
 			records, err := s.ListRecords()
 			if err != nil {
 				_, _ = fmt.Fprintf(os.Stderr, ":(  Something went wrong: %v\n", err)
@@ -57,7 +56,7 @@ var searchCmd = &cobra.Command{
 		}
 
 		query := args[0]
-		results, err := search.Search(paths.Records, query, searchDeep)
+		results, err := search.Search(recordsDir, query, searchDeep)
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, ":(  Something went wrong: %v\n", err)
 			return
@@ -71,7 +70,7 @@ var searchCmd = &cobra.Command{
 		for _, r := range results {
 			tags := r.Fields["tags"]
 			if tags == "" {
-				tags = "{no tags}"
+				tags = "-"
 			}
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", r.Type, r.Title, tags)
 		}
@@ -81,5 +80,6 @@ var searchCmd = &cobra.Command{
 func init() {
 	searchCmd.Flags().BoolVar(&searchDeep, "deep", false, "Search inside snippet content and fields")
 	searchCmd.Flags().IntVar(&searchID, "id", 0, "Show a specific record by its numeric ID")
+	searchCmd.Flags().BoolVarP(&searchGlobal, "global", "g", false, "Search personal records in ~/.sadr/")
 	rootCmd.AddCommand(searchCmd)
 }

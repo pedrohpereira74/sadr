@@ -9,11 +9,17 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+type editorFinishedMsg struct {
+	content string
+	err     error
+}
+
 type step struct {
 	name        string
 	prompt      string
 	value       string
 	fieldType   string
+	required    bool
 	options     []string
 	cursorPos   int
 	selectedMap map[int]bool
@@ -24,6 +30,7 @@ type Model struct {
 	steps       []step
 	done        bool
 	quitting    bool
+	tempFile    string
 }
 
 type FieldDef struct {
@@ -40,18 +47,21 @@ func NewModel() Model {
 		steps: []step{
 			{
 				name:      "snippet",
-				prompt:    "Snippet (opens editor, leave empty for ADR-only)",
+				prompt:    "Snippet (opens editor)",
 				fieldType: "editor",
+				required:  false,
 			},
 			{
 				name:      "title",
 				prompt:    "Title",
 				fieldType: "text",
+				required:  true,
 			},
 			{
 				name:        "tags",
 				prompt:      "Tags",
 				fieldType:   "multiselect",
+				required:    true,
 				options:     []string{"architecture", "api", "database", "security", "performance", "tooling", "infrastructure", "bugfix"},
 				selectedMap: map[int]bool{},
 			},
@@ -59,6 +69,7 @@ func NewModel() Model {
 				name:      "file_ref",
 				prompt:    "File reference (type :skip for N/A)",
 				fieldType: "text",
+				required:  true,
 			},
 		},
 	}
@@ -72,11 +83,13 @@ func NewQuickModel() Model {
 				name:      "title",
 				prompt:    "Title",
 				fieldType: "text",
+				required:  true,
 			},
 			{
 				name:        "tags",
 				prompt:      "Tags",
 				fieldType:   "multiselect",
+				required:    true,
 				options:     []string{"architecture", "api", "database", "security", "performance", "tooling", "infrastructure", "bugfix"},
 				selectedMap: map[int]bool{},
 			},
@@ -88,15 +101,17 @@ func NewModelFromConfig(fields []FieldDef) Model {
 	steps := []step{
 		{
 			name:      "snippet",
-			prompt:    "Snippet (opens editor, leave empty for ADR-only)",
+			prompt:    "Snippet (opens editor)",
 			fieldType: "editor",
+			required:  false,
 		},
 	}
 
 	for _, f := range fields {
 		s := step{
-			name:   f.Name,
-			prompt: f.Name,
+			name:     f.Name,
+			prompt:   f.Name,
+			required: f.Required,
 		}
 
 		switch f.Type {
@@ -128,6 +143,17 @@ func NewModelFromConfig(fields []FieldDef) Model {
 	}
 }
 
+func removeEditorSteps(m Model) Model {
+	var filtered []step
+	for _, s := range m.steps {
+		if s.fieldType != "editor" {
+			filtered = append(filtered, s)
+		}
+	}
+	m.steps = filtered
+	return m
+}
+
 func (m Model) Completed() bool {
 	return m.currentStep >= len(m.steps)
 }
@@ -152,24 +178,60 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	current := &m.steps[m.currentStep]
 
 	switch msg := msg.(type) {
+	case editorFinishedMsg:
+		current.value = msg.content
+		m.currentStep++
+		if m.Completed() {
+			m.done = true
+			return m, tea.Quit
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		switch msg.Type {
-		case tea.KeyCtrlC, tea.KeyEsc:
+		case tea.KeyCtrlC:
 			m.quitting = true
 			return m, tea.Quit
 
+		case tea.KeyTab:
+			if current.required {
+				return m, nil
+			}
+			current.value = ""
+			m.currentStep++
+			if m.Completed() {
+				m.done = true
+				return m, tea.Quit
+			}
+			return m, nil
+
 		case tea.KeyEnter:
 			if current.fieldType == "editor" {
-				content, err := openEditorForSnippet()
-				if err == nil {
-					current.value = content
+				tmpFile, err := os.CreateTemp("", "sadr-snippet-*.txt")
+				if err != nil {
+					m.currentStep++
+					return m, nil
 				}
-				m.currentStep++
-				if m.Completed() {
-					m.done = true
-					return m, tea.Quit
+				m.tempFile = tmpFile.Name()
+				_ = tmpFile.Close()
+
+				editor := os.Getenv("EDITOR")
+				if editor == "" {
+					editor = os.Getenv("VISUAL")
 				}
-				return m, nil
+				if editor == "" {
+					editor = "vim"
+				}
+
+				c := exec.Command(editor, m.tempFile)
+				return m, tea.ExecProcess(c, func(err error) tea.Msg {
+					content, readErr := os.ReadFile(m.tempFile)
+					_ = os.Remove(m.tempFile)
+					if err != nil || readErr != nil {
+						return editorFinishedMsg{content: "", err: err}
+					}
+					return editorFinishedMsg{content: strings.TrimSpace(string(content))}
+				})
 			}
 
 			if current.fieldType == "select" {
@@ -190,7 +252,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				current.value = "N/A"
 			}
 
-			if current.value == "" && (current.name == "title" || current.name == "tags") {
+			if current.fieldType == "text" && current.value == "" {
+				return m, nil
+			}
+
+			if current.value == "" && current.required {
 				return m, nil
 			}
 
@@ -214,6 +280,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeySpace:
 			if current.fieldType == "multiselect" {
 				current.selectedMap[current.cursorPos] = !current.selectedMap[current.cursorPos]
+			} else if current.fieldType == "text" {
+				current.value += " "
 			}
 
 		case tea.KeyBackspace:
@@ -245,14 +313,19 @@ func (m Model) View() string {
 	current := m.steps[m.currentStep]
 	var b strings.Builder
 
-	b.WriteString(fmt.Sprintf("\n:(  %s\n\n", current.prompt))
+	requiredHint := " (Tab to skip)"
+	if current.required {
+		requiredHint = " (required)"
+	}
+
+	b.WriteString(fmt.Sprintf("\n:(  %s%s\n\n", current.prompt, requiredHint))
 
 	if current.fieldType == "text" {
 		b.WriteString(fmt.Sprintf("  > %s█\n", current.value))
 	}
 
 	if current.fieldType == "editor" {
-		b.WriteString("  Press Enter to open editor, or Esc to skip\n")
+		b.WriteString("  Press Enter to open editor\n")
 	}
 
 	if current.fieldType == "select" {
@@ -284,43 +357,8 @@ func (m Model) View() string {
 	return b.String()
 }
 
-func openEditorForSnippet() (string, error) {
-	tmpFile, err := os.CreateTemp("", "sadr-snippet-*.txt")
-	if err != nil {
-		return "", err
-	}
-	tmpName := tmpFile.Name()
-	_ = tmpFile.Close()
-	defer func() { _ = os.Remove(tmpName) }()
-
-	editor := os.Getenv("EDITOR")
-	if editor == "" {
-		editor = os.Getenv("VISUAL")
-	}
-	if editor == "" {
-		editor = "vim"
-	}
-
-	c := exec.Command(editor, tmpName)
-	c.Stdin = os.Stdin
-	c.Stdout = os.Stdout
-	c.Stderr = os.Stderr
-
-	if err := c.Run(); err != nil {
-		return "", err
-	}
-
-	content, err := os.ReadFile(tmpName)
-	if err != nil {
-		return "", err
-	}
-
-	return strings.TrimSpace(string(content)), nil
-}
-
-func RunWizard() (map[string]string, error) {
-	m := NewModel()
-	p := tea.NewProgram(m)
+func runProgram(m Model) (map[string]string, error) {
+	p := tea.NewProgram(m, tea.WithAltScreen())
 
 	finalModel, err := p.Run()
 	if err != nil {
@@ -333,38 +371,24 @@ func RunWizard() (map[string]string, error) {
 	}
 
 	return final.Result(), nil
+}
+
+func RunWizard(skipEditor bool) (map[string]string, error) {
+	m := NewModel()
+	if skipEditor {
+		m = removeEditorSteps(m)
+	}
+	return runProgram(m)
 }
 
 func RunQuickWizard() (map[string]string, error) {
-	m := NewQuickModel()
-	p := tea.NewProgram(m)
-
-	finalModel, err := p.Run()
-	if err != nil {
-		return nil, err
-	}
-
-	final := finalModel.(Model)
-	if final.quitting && !final.done {
-		return nil, fmt.Errorf("cancelled")
-	}
-
-	return final.Result(), nil
+	return runProgram(NewQuickModel())
 }
 
-func RunWizardFromConfig(fields []FieldDef) (map[string]string, error) {
+func RunWizardFromConfig(fields []FieldDef, skipEditor bool) (map[string]string, error) {
 	m := NewModelFromConfig(fields)
-	p := tea.NewProgram(m)
-
-	finalModel, err := p.Run()
-	if err != nil {
-		return nil, err
+	if skipEditor {
+		m = removeEditorSteps(m)
 	}
-
-	final := finalModel.(Model)
-	if final.quitting && !final.done {
-		return nil, fmt.Errorf("cancelled")
-	}
-
-	return final.Result(), nil
+	return runProgram(m)
 }

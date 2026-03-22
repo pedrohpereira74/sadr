@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 
 	"github.com/pedrohpereira74/sadr/internal/discover"
@@ -62,17 +61,6 @@ var configCmd = &cobra.Command{
 
 		openEditor(editor, localConfig)
 	},
-}
-
-func openEditor(editor string, path string) {
-	c := exec.Command(editor, path)
-	c.Stdin = os.Stdin
-	c.Stdout = os.Stdout
-	c.Stderr = os.Stderr
-
-	if err := c.Run(); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, ":(  Editor exited with error: %v\n", err)
-	}
 }
 
 func init() {

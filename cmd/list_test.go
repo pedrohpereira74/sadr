@@ -86,3 +86,21 @@ func TestListFiltersByTags(t *testing.T) {
 		t.Errorf("expected 2 records with tag 'api', got %d", len(lines))
 	}
 }
+
+func TestListFiltersByField(t *testing.T) {
+	setupListTest(t)
+
+	var buf bytes.Buffer
+	rootCmd.SetOut(&buf)
+	listType = ""
+	listTags = ""
+	rootCmd.SetArgs([]string{"list", "--field", "tags=database,performance"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	if len(lines) != 1 {
+		t.Errorf("expected 1 record, got %d", len(lines))
+	}
+}

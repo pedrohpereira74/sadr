@@ -6,26 +6,25 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/pedrohpereira74/sadr/internal/discover"
 	"github.com/pedrohpereira74/sadr/internal/storage"
 	"github.com/spf13/cobra"
 )
 
 var deleteID int
 var deleteConfirm bool
+var deleteGlobal bool
 
 var deleteCmd = &cobra.Command{
 	Use:   "delete",
 	Short: "Delete a record",
 	Run: func(cmd *cobra.Command, args []string) {
-		dir, _ := os.Getwd()
-		paths, err := discover.FindSadrDir(dir)
+		recordsDir, err := resolveRecordsDir(deleteGlobal)
 		if err != nil {
 			_, _ = fmt.Fprintln(os.Stderr, ":(  "+err.Error())
 			return
 		}
 
-		s := storage.NewStorage(paths.Records)
+		s := storage.NewStorage(recordsDir)
 
 		if deleteID > 0 {
 			records, err := s.ListRecords()
@@ -45,7 +44,7 @@ var deleteCmd = &cobra.Command{
 				return
 			}
 
-			entries, _ := os.ReadDir(paths.Records)
+			entries, _ := os.ReadDir(recordsDir)
 			var mdFiles []string
 			for _, entry := range entries {
 				if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".md") {
@@ -53,7 +52,7 @@ var deleteCmd = &cobra.Command{
 				}
 			}
 
-			path := filepath.Join(paths.Records, mdFiles[deleteID-1])
+			path := filepath.Join(recordsDir, mdFiles[deleteID-1])
 			if err := s.DeleteRecord(path); err != nil {
 				_, _ = fmt.Fprintf(os.Stderr, ":(  Failed to delete: %v\n", err)
 				return
@@ -70,5 +69,6 @@ var deleteCmd = &cobra.Command{
 func init() {
 	deleteCmd.Flags().IntVar(&deleteID, "id", 0, "Record ID to delete")
 	deleteCmd.Flags().BoolVar(&deleteConfirm, "confirm", false, "Skip confirmation")
+	deleteCmd.Flags().BoolVarP(&deleteGlobal, "global", "g", false, "Delete personal record from ~/.sadr/")
 	rootCmd.AddCommand(deleteCmd)
 }

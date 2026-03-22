@@ -146,3 +146,27 @@ fields:
 		t.Errorf("expected 1 record, got %d", len(entries))
 	}
 }
+
+func TestNewFromFile(t *testing.T) {
+	dir := setupNewTest(t)
+
+	snippetFile := filepath.Join(dir, "snippet.go")
+	if err := os.WriteFile(snippetFile, []byte("client := retryablehttp.NewClient()"), 0644); err != nil {
+		t.Fatalf("failed to write snippet file: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"new", "--title", "Retry client", "--file", snippetFile})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	recordsDir := filepath.Join(dir, ".sadr", "records")
+	s := storage.NewStorage(recordsDir)
+	records, _ := s.ListRecords()
+	if len(records) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(records))
+	}
+	if records[0].Snippet != "client := retryablehttp.NewClient()" {
+		t.Errorf("expected snippet from file, got '%s'", records[0].Snippet)
+	}
+}

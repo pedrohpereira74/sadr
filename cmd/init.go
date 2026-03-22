@@ -6,11 +6,86 @@ import (
 	"path/filepath"
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/pedrohpereira74/sadr/internal/templates"
 	"github.com/spf13/cobra"
 )
 
 var initPreset string
+
+type presetModel struct {
+	cursor  int
+	chosen  string
+	options []string
+	done    bool
+}
+
+func newPresetModel() presetModel {
+	return presetModel{
+		options: []string{"Minimal (title + tags — quick capture)", "Extended (title + tags + ADR fields — full decisions)"},
+	}
+}
+
+func (m presetModel) Init() tea.Cmd { return nil }
+
+func (m presetModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.Type {
+		case tea.KeyCtrlC, tea.KeyEsc:
+			return m, tea.Quit
+		case tea.KeyUp:
+			if m.cursor > 0 {
+				m.cursor--
+			}
+		case tea.KeyDown:
+			if m.cursor < len(m.options)-1 {
+				m.cursor++
+			}
+		case tea.KeyEnter:
+			if m.cursor == 0 {
+				m.chosen = "minimal"
+			} else {
+				m.chosen = "extended"
+			}
+			m.done = true
+			return m, tea.Quit
+		default:
+			return m, nil
+		}
+	}
+	return m, nil
+}
+
+func (m presetModel) View() string {
+	if m.done {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\n:(  Choose your starting config:\n\n")
+	for i, opt := range m.options {
+		cursor := "  "
+		if i == m.cursor {
+			cursor = "> "
+		}
+		b.WriteString(fmt.Sprintf("  %s%s\n", cursor, opt))
+	}
+	return b.String()
+}
+
+func selectPreset() string {
+	m := newPresetModel()
+	p := tea.NewProgram(m)
+	finalModel, err := p.Run()
+	if err != nil {
+		return "minimal"
+	}
+	final := finalModel.(presetModel)
+	if final.chosen == "" {
+		return ""
+	}
+	return final.chosen
+}
 
 var initCmd = &cobra.Command{
 	Use:   "init",
@@ -25,6 +100,15 @@ var initCmd = &cobra.Command{
 			return
 		}
 
+		chosen := initPreset
+		if chosen == "" {
+			chosen = selectPreset()
+			if chosen == "" {
+				_, _ = fmt.Fprintln(os.Stderr, ":(  Cancelled.")
+				return
+			}
+		}
+
 		if err := os.MkdirAll(filepath.Join(sadrDir, "records"), 0755); err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, ":(  Failed to create .sadr/records/: %v\n", err)
 			return
@@ -35,10 +119,8 @@ var initCmd = &cobra.Command{
 		}
 
 		preset := templates.MinimalConfig
-		presetName := "minimal"
-		if initPreset == "extended" {
+		if chosen == "extended" {
 			preset = templates.ExtendedConfig
-			presetName = "extended"
 		}
 
 		configPath := filepath.Join(sadrDir, "config.yaml")
@@ -52,7 +134,7 @@ var initCmd = &cobra.Command{
 		_, _ = fmt.Fprintln(os.Stderr, ":(  sadr: therapy for snippets that lost their meaning.")
 		_, _ = fmt.Fprintln(os.Stderr, "")
 		_, _ = fmt.Fprintln(os.Stderr, "    Done! Created .sadr/ in this directory.")
-		_, _ = fmt.Fprintf(os.Stderr, "    Config: .sadr/config.yaml (%s preset)\n", presetName)
+		_, _ = fmt.Fprintf(os.Stderr, "    Config: .sadr/config.yaml (%s preset)\n", chosen)
 		_, _ = fmt.Fprintln(os.Stderr, "    Try it: run 'sadr new --quick' to capture your first snippet.")
 	},
 }
@@ -79,6 +161,6 @@ func addToGitignore(dir string) {
 }
 
 func init() {
-	initCmd.Flags().StringVar(&initPreset, "preset", "minimal", "Config preset: minimal or extended")
+	initCmd.Flags().StringVar(&initPreset, "preset", "", "Config preset: minimal or extended (skip interactive selection)")
 	rootCmd.AddCommand(initCmd)
 }

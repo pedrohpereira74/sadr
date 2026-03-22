@@ -31,17 +31,17 @@ fields:
 
   - name: status
     type: select
-    required: true
+    required: false
     options: [proposed, accepted, deprecated, superseded]
     default: proposed
 
   - name: context
     type: text
-    required: true
+    required: false
 
   - name: decision
     type: text
-    required: true
+    required: false
 
   - name: alternatives
     type: text
