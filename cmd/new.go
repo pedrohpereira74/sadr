@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
+	"github.com/pedrohpereira74/sadr/internal/ai"
 	"github.com/pedrohpereira74/sadr/internal/config"
 	"github.com/pedrohpereira74/sadr/internal/model"
 	"github.com/pedrohpereira74/sadr/internal/storage"
@@ -20,6 +22,7 @@ var newQuick bool
 var newGlobal bool
 var newClipboard bool
 var newFile string
+var newSmart bool
 
 var newCmd = &cobra.Command{
 	Use:   "new",
@@ -59,6 +62,14 @@ func loadFieldDefs(configPath string) []wizard.FieldDef {
 		fields = append(fields, fd)
 	}
 	return fields
+}
+
+func fieldNames(defs []wizard.FieldDef) []string {
+	var names []string
+	for _, f := range defs {
+		names = append(names, f.Name)
+	}
+	return names
 }
 
 func readSnippetFromSource() string {
@@ -142,6 +153,7 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 		var err error
 
 		snippetFromSource := readSnippetFromSource()
+		hasSnippet := snippetFromSource != ""
 
 		if newTitle == "" {
 			var result map[string]string
@@ -149,16 +161,35 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 
 			fieldDefs := loadFieldDefs(configPath)
 
-			hasSnippet := snippetFromSource != ""
+			var suggestions map[string]string
+			if newSmart && hasSnippet {
+				_, _ = fmt.Fprintln(os.Stderr, ":(  Analyzing snippet...")
+				fields := fieldNames(fieldDefs)
+				if fields == nil {
+					fields = []string{"title", "tags", "context", "decision"}
+				}
+				suggestions, err = ai.Suggest(snippetFromSource, fields)
+				if err != nil {
+					_, _ = fmt.Fprintf(os.Stderr, "DEBUG: ai error: %v\n", err)
+					_, _ = fmt.Fprintf(os.Stderr, ":(  GEMINI_API_KEY not set. Falling back to manual mode.\n")
+					_, _ = fmt.Fprintf(os.Stderr, "    Set it up: https://ai.google.dev\n\n")
+					_, _ = fmt.Fprintf(os.Stderr, "    Starting wizard in 3 seconds...\n")
+					time.Sleep(3 * time.Second)
+					suggestions = nil
+				}
+			}
 
 			if newQuick {
 				result, wizErr = wizard.RunQuickWizard()
+			} else if fieldDefs != nil && suggestions != nil {
+				result, wizErr = wizard.RunWizardFromConfigWithSuggestions(fieldDefs, suggestions, hasSnippet)
 			} else if fieldDefs != nil {
 				result, wizErr = wizard.RunWizardFromConfig(fieldDefs, hasSnippet)
+			} else if suggestions != nil {
+				result, wizErr = wizard.RunWizardWithSuggestions(suggestions, hasSnippet)
 			} else {
 				result, wizErr = wizard.RunWizard(hasSnippet)
 			}
-
 			if wizErr != nil {
 				return
 			}
@@ -169,7 +200,7 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 				return
 			}
 
-			if snippetFromSource != "" {
+			if hasSnippet {
 				r.Snippet = snippetFromSource
 			} else if result["snippet"] != "" {
 				r.Snippet = result["snippet"]
@@ -193,7 +224,7 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 				_, _ = fmt.Fprintf(os.Stderr, ":(  %v\n", err)
 				return
 			}
-			if snippetFromSource != "" {
+			if hasSnippet {
 				r.Snippet = snippetFromSource
 			}
 		}
@@ -215,6 +246,7 @@ func init() {
 	newCmd.PersistentFlags().BoolVarP(&newGlobal, "global", "g", false, "Save to personal vault (~/.sadr/)")
 	newCmd.PersistentFlags().BoolVarP(&newClipboard, "clipboard", "c", false, "Read snippet from clipboard")
 	newCmd.PersistentFlags().StringVarP(&newFile, "file", "f", "", "Read snippet from file")
+	newCmd.PersistentFlags().BoolVarP(&newSmart, "smart", "s", false, "AI suggests field values from snippet")
 	newCmd.AddCommand(newAdrCmd)
 	newCmd.AddCommand(newSnippetCmd)
 	rootCmd.AddCommand(newCmd)

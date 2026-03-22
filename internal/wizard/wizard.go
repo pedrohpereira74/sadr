@@ -31,6 +31,7 @@ type Model struct {
 	done        bool
 	quitting    bool
 	tempFile    string
+	Suggestions map[string]string
 }
 
 type FieldDef struct {
@@ -391,4 +392,30 @@ func RunWizardFromConfig(fields []FieldDef, skipEditor bool) (map[string]string,
 		m = removeEditorSteps(m)
 	}
 	return runProgram(m)
+}
+
+func RunWizardWithSuggestions(suggestions map[string]string, skipEditor bool) (map[string]string, error) {
+	m := NewModel()
+	if skipEditor {
+		m = removeEditorSteps(m)
+	}
+	applySuggestions(&m, suggestions)
+	return runProgram(m)
+}
+
+func RunWizardFromConfigWithSuggestions(fields []FieldDef, suggestions map[string]string, skipEditor bool) (map[string]string, error) {
+	m := NewModelFromConfig(fields)
+	if skipEditor {
+		m = removeEditorSteps(m)
+	}
+	applySuggestions(&m, suggestions)
+	return runProgram(m)
+}
+
+func applySuggestions(m *Model, suggestions map[string]string) {
+	for i, s := range m.steps {
+		if val, ok := suggestions[s.name]; ok {
+			m.steps[i].value = val
+		}
+	}
 }
