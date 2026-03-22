@@ -199,6 +199,26 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 			var suggestions map[string]string
 			if newSmart && hasSnippet {
 				_, _ = fmt.Fprintln(os.Stderr, ":(  Analyzing snippet...")
+				if os.Getenv("GEMINI_API_KEY") == "" {
+					home, err := os.UserHomeDir()
+					if err == nil {
+						globalConfig := filepath.Join(home, ".sadr", "config.yaml")
+						if content, err := os.ReadFile(globalConfig); err == nil {
+							lines := strings.Split(string(content), "\n")
+							for _, line := range lines {
+								line = strings.TrimSpace(line)
+								if strings.HasPrefix(line, "api_key:") {
+									// Extrai a chave e limpa espaços e aspas
+									key := strings.TrimSpace(strings.TrimPrefix(line, "api_key:"))
+									key = strings.Trim(key, `"'`)
+									// Injeta na memória (só dura enquanto o comando roda)
+									_ = os.Setenv("GEMINI_API_KEY", key)
+									break
+								}
+							}
+						}
+					}
+				}
 				fields := fieldNames(fieldDefs)
 				if fields == nil {
 					fields = []string{"title", "tags", "context", "decision"}
