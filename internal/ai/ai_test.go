@@ -25,7 +25,7 @@ func TestParseResponseWithArrays(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result["tags"] != "api,performance" {
-		t.Errorf("expected 'api,performance', got '%s'", result["tags"])
+	if result["tags"] != "api, performance" {
+		t.Errorf("expected 'api, performance', got '%s'", result["tags"])
 	}
 }

@@ -3,9 +3,8 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
 
+	"github.com/pedrohpereira74/sadr/internal/storage"
 	"github.com/spf13/cobra"
 )
 
@@ -29,20 +28,12 @@ var editCmd = &cobra.Command{
 			return
 		}
 
-		entries, _ := os.ReadDir(recordsDir)
-		var mdFiles []string
-		for _, entry := range entries {
-			if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".md") {
-				mdFiles = append(mdFiles, entry.Name())
-			}
-		}
-
-		if editID > len(mdFiles) {
-			_, _ = fmt.Fprintf(os.Stderr, ":(  Record #%d not found. You have %d records.\n", editID, len(mdFiles))
+		s := storage.NewStorage(recordsDir)
+		path, err := s.GetRecordPathByIndex(editID - 1)
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, ":(  Record #%d not found or invalid.\n", editID)
 			return
 		}
-
-		path := filepath.Join(recordsDir, mdFiles[editID-1])
 
 		editor := findEditor()
 		if editor == "" {

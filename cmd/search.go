@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/muesli/reflow/wordwrap"
 	"github.com/pedrohpereira74/sadr/internal/search"
 	"github.com/pedrohpereira74/sadr/internal/storage"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 var searchDeep bool
@@ -35,6 +37,12 @@ var searchCmd = &cobra.Command{
 				return
 			}
 			r := records[searchID-1]
+
+			width, _, err := term.GetSize(int(os.Stdout.Fd()))
+			if err != nil || width <= 0 {
+				width = 80 // fallback
+			}
+
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "# %s\n\n", r.Title)
 			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Type: %s\n", r.Type)
 			if r.FileRef != "N/A" {
@@ -42,10 +50,12 @@ var searchCmd = &cobra.Command{
 			}
 			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "")
 			if r.Snippet != "" {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "## Snippet\n\n```\n%s\n```\n\n", r.Snippet)
+				wSnippet := wordwrap.String(r.Snippet, width)
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "## Snippet\n\n```\n%s\n```\n\n", wSnippet)
 			}
 			for key, value := range r.Fields {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "## %s\n\n%s\n\n", key, value)
+				wValue := wordwrap.String(value, width)
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "## %s\n\n%s\n\n", key, wValue)
 			}
 			return
 		}

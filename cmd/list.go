@@ -32,70 +32,44 @@ var listCmd = &cobra.Command{
 			return
 		}
 
-		if listType != "" {
-			var filtered []struct{ Type, Title, Tags string }
-			for _, r := range records {
-				if r.Type == listType {
-					filtered = append(filtered, struct{ Type, Title, Tags string }{r.Type, r.Title, r.Fields["tags"]})
-				}
-			}
-			if len(filtered) == 0 {
-				_, _ = fmt.Fprintln(os.Stderr, ":(  Nothing here yet. Run 'sadr new' to capture your first snippet.")
-				return
-			}
-			for _, r := range filtered {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", r.Type, r.Title, r.Tags)
-			}
+		if listField != "" && len(strings.SplitN(listField, "=", 2)) != 2 {
+			_, _ = fmt.Fprintln(os.Stderr, ":(  Invalid field filter. Use --field key=value")
 			return
 		}
 
-		if listTags != "" {
-			var filtered []struct{ Type, Title, Tags string }
-			for _, r := range records {
-				if search.HasAnyTag(r.Fields["tags"], listTags) {
-					filtered = append(filtered, struct{ Type, Title, Tags string }{r.Type, r.Title, r.Fields["tags"]})
+		var filtered []struct{ Type, Title, Tags string }
+		for _, r := range records {
+			tags := r.Fields["tags"]
+			if tags == "" {
+				tags = "-"
+			}
+
+			match := true
+			if listType != "" && r.Type != listType {
+				match = false
+			}
+			if match && listTags != "" && !search.HasAnyTag(r.Fields["tags"], listTags) {
+				match = false
+			}
+			if match && listField != "" {
+				parts := strings.SplitN(listField, "=", 2)
+				if r.Fields[parts[0]] != parts[1] {
+					match = false
 				}
 			}
-			if len(filtered) == 0 {
-				_, _ = fmt.Fprintln(os.Stderr, ":(  Nothing here yet. Run 'sadr new' to capture your first snippet.")
-				return
+
+			if match {
+				filtered = append(filtered, struct{ Type, Title, Tags string }{r.Type, r.Title, tags})
 			}
-			for _, r := range filtered {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", r.Type, r.Title, r.Tags)
-			}
-			return
 		}
 
-		if listField != "" {
-			parts := strings.SplitN(listField, "=", 2)
-			if len(parts) != 2 {
-				_, _ = fmt.Fprintln(os.Stderr, ":(  Invalid field filter. Use --field key=value")
-				return
-			}
-			key, value := parts[0], parts[1]
-			var filtered []struct{ Type, Title, Tags string }
-			for _, r := range records {
-				if r.Fields[key] == value {
-					filtered = append(filtered, struct{ Type, Title, Tags string }{r.Type, r.Title, r.Fields["tags"]})
-				}
-			}
-			if len(filtered) == 0 {
-				_, _ = fmt.Fprintln(os.Stderr, ":(  Nothing here yet. Run 'sadr new' to capture your first snippet.")
-				return
-			}
-			for _, r := range filtered {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", r.Type, r.Title, r.Tags)
-			}
-			return
-		}
-
-		if len(records) == 0 {
+		if len(filtered) == 0 {
 			_, _ = fmt.Fprintln(os.Stderr, ":(  Nothing here yet. Run 'sadr new' to capture your first snippet.")
 			return
 		}
 
-		for _, r := range records {
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", r.Type, r.Title, r.Fields["tags"])
+		for _, item := range filtered {
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", item.Type, item.Title, item.Tags)
 		}
 	},
 }

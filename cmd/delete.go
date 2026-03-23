@@ -3,8 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/pedrohpereira74/sadr/internal/storage"
 	"github.com/spf13/cobra"
@@ -44,15 +42,11 @@ var deleteCmd = &cobra.Command{
 				return
 			}
 
-			entries, _ := os.ReadDir(recordsDir)
-			var mdFiles []string
-			for _, entry := range entries {
-				if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".md") {
-					mdFiles = append(mdFiles, entry.Name())
-				}
+			path, err := s.GetRecordPathByIndex(deleteID - 1)
+			if err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, ":(  Something went wrong: %v\n", err)
+				return
 			}
-
-			path := filepath.Join(recordsDir, mdFiles[deleteID-1])
 			if err := s.DeleteRecord(path); err != nil {
 				_, _ = fmt.Fprintf(os.Stderr, ":(  Failed to delete: %v\n", err)
 				return

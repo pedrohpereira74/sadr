@@ -36,11 +36,16 @@ var exportCmd = &cobra.Command{
 		}
 
 		if exportID > 0 {
-			if exportID > len(records) {
-				_, _ = fmt.Fprintf(os.Stderr, ":(  Record #%d not found. You have %d records.\n", exportID, len(records))
+			path, err := s.GetRecordPathByIndex(exportID - 1)
+			if err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, ":(  Record #%d not found or invalid.\n", exportID)
 				return
 			}
-			r := records[exportID-1]
+			r, err := s.LoadRecord(path)
+			if err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, ":(  Failed to read record %d: %v\n", exportID, err)
+				return
+			}
 			exportRecord(r, exportID, paths.Exports)
 			return
 		}

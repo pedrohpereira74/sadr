@@ -4,13 +4,16 @@ go 1.26
 
 require (
 	github.com/charmbracelet/bubbletea v1.3.10
+	github.com/muesli/reflow v0.3.0
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/term v0.41.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
+	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
+	github.com/charmbracelet/bubbles v1.0.0 // indirect
 	github.com/charmbracelet/colorprofile v0.4.1 // indirect
 	github.com/charmbracelet/lipgloss v1.1.0 // indirect
 	github.com/charmbracelet/x/ansi v0.11.6 // indirect

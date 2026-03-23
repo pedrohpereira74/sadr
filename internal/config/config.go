@@ -16,6 +16,7 @@ type Config struct {
 type GlobalConfig struct {
 	Editor string   `yaml:"editor"`
 	AI     AIConfig `yaml:"ai"`
+	APIKey string   `yaml:"api_key"`
 }
 type AIConfig struct {
 	Provider  string `yaml:"provider"`
@@ -70,6 +71,7 @@ func validate(cfg Config) error {
 		"multitext",
 		"multiselect",
 		"filepath",
+		"list",
 	}
 	for _, field := range cfg.Fields {
 		if field.Name == "" {

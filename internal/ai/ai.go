@@ -36,17 +36,19 @@ func ParseResponse(response string) (map[string]string, error) {
 
 	result := map[string]string{}
 	for key, val := range raw {
+		cleanKey := strings.ToLower(strings.TrimSpace(key))
+
 		switch v := val.(type) {
 		case string:
-			result[key] = v
+			result[cleanKey] = v
 		case []interface{}:
 			var parts []string
 			for _, item := range v {
 				parts = append(parts, fmt.Sprintf("%v", item))
 			}
-			result[key] = strings.Join(parts, ",")
+			result[cleanKey] = strings.Join(parts, ", ")
 		default:
-			result[key] = fmt.Sprintf("%v", v)
+			result[cleanKey] = fmt.Sprintf("%v", v)
 		}
 	}
 

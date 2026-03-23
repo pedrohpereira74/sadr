@@ -43,10 +43,13 @@ var newSnippetCmd = &cobra.Command{
 	Run:   runNew("snippet"),
 }
 
-func loadFieldDefs(configPath string) []wizard.FieldDef {
+func loadFieldDefs(configPath string) ([]wizard.FieldDef, error) {
 	cfg, err := config.LoadFromFile(configPath)
 	if err != nil {
-		return nil
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("invalid config.yaml: %v", err)
 	}
 
 	var fields []wizard.FieldDef
@@ -62,7 +65,7 @@ func loadFieldDefs(configPath string) []wizard.FieldDef {
 		}
 		fields = append(fields, fd)
 	}
-	return fields
+	return fields, nil
 }
 
 func fieldNames(defs []wizard.FieldDef) []string {
@@ -194,7 +197,11 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 			var result map[string]string
 			var wizErr error
 
-			fieldDefs := loadFieldDefs(configPath)
+			fieldDefs, cfgErr := loadFieldDefs(configPath)
+			if cfgErr != nil {
+				_, _ = fmt.Fprintf(os.Stderr, "\n:(  CONFIGURATION ERROR  )\n%v\n\nPlease fix your config.yaml and try again.\n", cfgErr)
+				os.Exit(1)
+			}
 
 			var suggestions map[string]string
 			if newSmart && hasSnippet {
@@ -203,19 +210,8 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 					home, err := os.UserHomeDir()
 					if err == nil {
 						globalConfig := filepath.Join(home, ".sadr", "config.yaml")
-						if content, err := os.ReadFile(globalConfig); err == nil {
-							lines := strings.Split(string(content), "\n")
-							for _, line := range lines {
-								line = strings.TrimSpace(line)
-								if strings.HasPrefix(line, "api_key:") {
-									// Extrai a chave e limpa espaços e aspas
-									key := strings.TrimSpace(strings.TrimPrefix(line, "api_key:"))
-									key = strings.Trim(key, `"'`)
-									// Injeta na memória (só dura enquanto o comando roda)
-									_ = os.Setenv("GEMINI_API_KEY", key)
-									break
-								}
-							}
+						if cfg, err := config.LoadGlobalFromFile(globalConfig); err == nil && cfg.APIKey != "" {
+							_ = os.Setenv("GEMINI_API_KEY", cfg.APIKey)
 						}
 					}
 				}
@@ -234,17 +230,13 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 				}
 			}
 
-			if newQuick {
-				result, wizErr = wizard.RunQuickWizard()
-			} else if fieldDefs != nil && suggestions != nil {
-				result, wizErr = wizard.RunWizardFromConfigWithSuggestions(fieldDefs, suggestions, hasSnippet)
-			} else if fieldDefs != nil {
-				result, wizErr = wizard.RunWizardFromConfig(fieldDefs, hasSnippet)
-			} else if suggestions != nil {
-				result, wizErr = wizard.RunWizardWithSuggestions(suggestions, hasSnippet)
-			} else {
-				result, wizErr = wizard.RunWizard(hasSnippet)
+			opts := wizard.Options{
+				Quick:       newQuick,
+				SkipEditor:  hasSnippet,
+				Fields:      fieldDefs,
+				Suggestions: suggestions,
 			}
+			result, wizErr = wizard.Run(opts)
 			if wizErr != nil {
 				return
 			}
@@ -253,6 +245,14 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 			if err != nil {
 				_, _ = fmt.Fprintf(os.Stderr, ":(  %v\n", err)
 				return
+			}
+
+			if fieldDefs != nil {
+				for _, fd := range fieldDefs {
+					if fd.Name != "title" && fd.Name != "snippet" {
+						r.FieldOrder = append(r.FieldOrder, fd.Name)
+					}
+				}
 			}
 
 			if hasSnippet {
@@ -270,6 +270,30 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 					continue
 				}
 				if value != "" {
+					fieldType := "string"
+					for _, fd := range fieldDefs {
+						if strings.ToLower(strings.TrimSpace(fd.Name)) == strings.ToLower(strings.TrimSpace(key)) {
+							fieldType = fd.Type
+							break
+						}
+					}
+
+					if fieldType == "list" && (strings.Contains(value, ",") || strings.Contains(value, ";")) {
+						rawParts := strings.FieldsFunc(value, func(r rune) bool {
+							return r == ',' || r == ';'
+						})
+						var bullets []string
+						for _, p := range rawParts {
+							p = strings.TrimSpace(p)
+							if p != "" {
+								bullets = append(bullets, "- "+p)
+							}
+						}
+						value = strings.Join(bullets, "\n")
+					} else if fieldType == "select" {
+						value = fmt.Sprintf("[%s]", strings.TrimSpace(value))
+					}
+
 					r.Fields[key] = value
 				}
 			}

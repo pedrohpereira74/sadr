@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -32,6 +33,18 @@ type Model struct {
 	quitting    bool
 	tempFile    string
 	Suggestions map[string]string
+	width       int
+	textarea    textarea.Model
+}
+
+func initTextarea() textarea.Model {
+	ta := textarea.New()
+	ta.Placeholder = "Digite aqui... (Enter confirma)"
+	ta.Focus()
+	ta.ShowLineNumbers = false
+	ta.SetWidth(80)
+	ta.SetHeight(5)
+	return ta
 }
 
 type FieldDef struct {
@@ -116,7 +129,7 @@ func NewModelFromConfig(fields []FieldDef) Model {
 		}
 
 		switch f.Type {
-		case "text", "multitext":
+		case "text", "multitext", "list":
 			s.fieldType = "text"
 		case "select":
 			s.fieldType = "select"
@@ -141,6 +154,8 @@ func NewModelFromConfig(fields []FieldDef) Model {
 	return Model{
 		currentStep: 0,
 		steps:       steps,
+		Suggestions: make(map[string]string),
+		textarea:    initTextarea(),
 	}
 }
 
@@ -179,6 +194,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	current := &m.steps[m.currentStep]
 
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.textarea.SetWidth(msg.Width - 4)
+		return m, nil
+
 	case editorFinishedMsg:
 		current.value = msg.content
 		m.currentStep++
@@ -195,14 +215,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case tea.KeyTab:
+			if current.fieldType == "text" {
+				current.value = strings.TrimSpace(m.textarea.Value())
+			}
 			if current.required {
 				return m, nil
 			}
-			current.value = ""
+			current.value = "N/A"
 			m.currentStep++
 			if m.Completed() {
 				m.done = true
 				return m, tea.Quit
+			}
+			if m.steps[m.currentStep].fieldType == "text" {
+				m.textarea.Reset()
+				m.textarea.SetValue(m.steps[m.currentStep].value)
 			}
 			return m, nil
 
@@ -249,8 +276,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				current.value = strings.Join(selected, ",")
 			}
 
-			if current.fieldType == "text" && current.value == ":skip" {
-				current.value = "N/A"
+			if current.fieldType == "text" {
+				current.value = strings.TrimSpace(m.textarea.Value())
+				if current.value == ":skip" {
+					current.value = "N/A"
+				}
 			}
 
 			if current.fieldType == "text" && current.value == "" {
@@ -265,6 +295,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.Completed() {
 				m.done = true
 				return m, tea.Quit
+			}
+			if m.steps[m.currentStep].fieldType == "text" {
+				m.textarea.Reset()
+				m.textarea.SetValue(m.steps[m.currentStep].value)
 			}
 			return m, nil
 
@@ -281,21 +315,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeySpace:
 			if current.fieldType == "multiselect" {
 				current.selectedMap[current.cursorPos] = !current.selectedMap[current.cursorPos]
-			} else if current.fieldType == "text" {
-				current.value += " "
-			}
-
-		case tea.KeyBackspace:
-			if current.fieldType == "text" && len(current.value) > 0 {
-				current.value = current.value[:len(current.value)-1]
-			}
-
-		case tea.KeyRunes:
-			if current.fieldType == "text" {
-				current.value += string(msg.Runes)
 			}
 
 		default:
+			if current.fieldType == "text" {
+				var cmd tea.Cmd
+				m.textarea, cmd = m.textarea.Update(msg)
+				return m, cmd
+			}
 			return m, nil
 		}
 	}
@@ -314,7 +341,7 @@ func (m Model) View() string {
 	current := m.steps[m.currentStep]
 	var b strings.Builder
 
-	requiredHint := " (Tab to skip)"
+	requiredHint := " (tab to skip)"
 	if current.required {
 		requiredHint = " (required)"
 	}
@@ -322,7 +349,7 @@ func (m Model) View() string {
 	b.WriteString(fmt.Sprintf("\n:(  %s%s\n\n", current.prompt, requiredHint))
 
 	if current.fieldType == "text" {
-		b.WriteString(fmt.Sprintf("  > %s█\n", current.value))
+		b.WriteString(fmt.Sprintf("  \n%s\n\n", m.textarea.View()))
 	}
 
 	if current.fieldType == "editor" {
@@ -359,6 +386,9 @@ func (m Model) View() string {
 }
 
 func runProgram(m Model) (map[string]string, error) {
+	if len(m.steps) > 0 && m.steps[0].fieldType == "text" {
+		m.textarea.SetValue(m.steps[0].value)
+	}
 	p := tea.NewProgram(m, tea.WithAltScreen())
 
 	finalModel, err := p.Run()
@@ -374,48 +404,50 @@ func runProgram(m Model) (map[string]string, error) {
 	return final.Result(), nil
 }
 
-func RunWizard(skipEditor bool) (map[string]string, error) {
-	m := NewModel()
-	if skipEditor {
-		m = removeEditorSteps(m)
-	}
-	return runProgram(m)
+type Options struct {
+	Quick       bool
+	SkipEditor  bool
+	Fields      []FieldDef
+	Suggestions map[string]string
 }
 
-func RunQuickWizard() (map[string]string, error) {
-	return runProgram(NewQuickModel())
-}
+func Run(opts Options) (map[string]string, error) {
+	var m Model
+	if opts.Quick {
+		m = NewQuickModel()
+	} else if len(opts.Fields) > 0 {
+		m = NewModelFromConfig(opts.Fields)
+	} else {
+		m = NewModel()
+	}
 
-func RunWizardFromConfig(fields []FieldDef, skipEditor bool) (map[string]string, error) {
-	m := NewModelFromConfig(fields)
-	if skipEditor {
+	if opts.SkipEditor {
 		m = removeEditorSteps(m)
 	}
-	return runProgram(m)
-}
 
-func RunWizardWithSuggestions(suggestions map[string]string, skipEditor bool) (map[string]string, error) {
-	m := NewModel()
-	if skipEditor {
-		m = removeEditorSteps(m)
+	if len(opts.Suggestions) > 0 {
+		applySuggestions(&m, opts.Suggestions)
 	}
-	applySuggestions(&m, suggestions)
-	return runProgram(m)
-}
 
-func RunWizardFromConfigWithSuggestions(fields []FieldDef, suggestions map[string]string, skipEditor bool) (map[string]string, error) {
-	m := NewModelFromConfig(fields)
-	if skipEditor {
-		m = removeEditorSteps(m)
-	}
-	applySuggestions(&m, suggestions)
 	return runProgram(m)
 }
 
 func applySuggestions(m *Model, suggestions map[string]string) {
 	for i, s := range m.steps {
 		if val, ok := suggestions[s.name]; ok {
-			m.steps[i].value = val
+			if s.fieldType == "multiselect" && s.selectedMap != nil {
+				parts := strings.Split(val, ",")
+				for _, part := range parts {
+					part = strings.TrimSpace(part)
+					for j, opt := range s.options {
+						if strings.EqualFold(opt, part) {
+							m.steps[i].selectedMap[j] = true
+						}
+					}
+				}
+			} else {
+				m.steps[i].value = val
+			}
 		}
 	}
 }

@@ -15,6 +15,7 @@ type Record struct {
 	SchemaVersion int
 	FileRef       string
 	Fields        map[string]string
+	FieldOrder    []string
 	CreatedAt     time.Time
 }
 

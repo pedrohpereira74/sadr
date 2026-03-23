@@ -32,7 +32,15 @@ func (s *Storage) SaveRecord(r model.Record) (string, error) {
 	for _, key := range frontmatterKeys {
 		if value, exists := r.Fields[key]; exists && value != "" {
 			if key == "tags" {
-				frontmatter[key] = strings.Split(value, ",")
+				raw := strings.Split(value, ",")
+				var clean []string
+				for _, t := range raw {
+					t = strings.TrimSpace(t)
+					if t != "" {
+						clean = append(clean, t)
+					}
+				}
+				frontmatter[key] = clean
 			} else {
 				frontmatter[key] = value
 			}
@@ -49,21 +57,53 @@ func (s *Storage) SaveRecord(r model.Record) (string, error) {
 	content.Write(yamlBytes)
 	content.WriteString("---\n\n")
 
+	content.WriteString(fmt.Sprintf("# %s\n\n", r.Title))
+
+	if tagsStr, ok := r.Fields["tags"]; ok && tagsStr != "" {
+		tagsList := strings.Split(tagsStr, ",")
+		var formattedTags []string
+		for _, t := range tagsList {
+			formattedTags = append(formattedTags, "`#"+strings.TrimSpace(t)+"`")
+		}
+		content.WriteString(fmt.Sprintf("**Tags:** %s\n\n", strings.Join(formattedTags, " ")))
+	}
+
 	if r.Snippet != "" {
 		content.WriteString("## Snippet\n\n```\n")
 		content.WriteString(r.Snippet)
 		content.WriteString("\n```\n\n")
 	}
 
-	for key, value := range r.Fields {
-		if value == "" || isFrontmatterKey(key) {
+	written := map[string]bool{"tags": true}
+
+	for _, key := range r.FieldOrder {
+		value, ok := r.Fields[key]
+		if !ok || value == "" || written[key] {
 			continue
 		}
-		content.WriteString(fmt.Sprintf("## %s\n\n%s\n\n", key, value))
+
+		capitalizedKey := key
+		if len(key) > 0 {
+			capitalizedKey = strings.ToUpper(key[:1]) + strings.ToLower(key[1:])
+		}
+		content.WriteString(fmt.Sprintf("## %s\n\n%s\n\n", capitalizedKey, strings.TrimSpace(value)))
+		written[key] = true
+	}
+
+	for key, value := range r.Fields {
+		if value == "" || written[key] {
+			continue
+		}
+
+		capitalizedKey := key
+		if len(key) > 0 {
+			capitalizedKey = strings.ToUpper(key[:1]) + strings.ToLower(key[1:])
+		}
+		content.WriteString(fmt.Sprintf("## %s\n\n%s\n\n", capitalizedKey, strings.TrimSpace(value)))
 	}
 
 	slug := slugify(r.Title)
-	nextID := s.countFiles() + 1
+	nextID := s.getMaxID() + 1
 	filename := fmt.Sprintf("sadr-%04d-%s.md", nextID, slug)
 	fullPath := filepath.Join(s.Dir, filename)
 
@@ -159,28 +199,48 @@ func (s *Storage) DeleteRecord(path string) error {
 	return os.Remove(path)
 }
 
-func isFrontmatterKey(key string) bool {
-	return key == "tags"
-}
-
 func slugify(title string) string {
 	s := strings.ToLower(title)
 	s = strings.ReplaceAll(s, " ", "-")
 	return s
 }
 
-func (s *Storage) countFiles() int {
+func (s *Storage) getMaxID() int {
 	entries, err := os.ReadDir(s.Dir)
 	if err != nil {
 		return 0
 	}
-	count := 0
+	maxID := 0
 	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".md") {
-			count++
+		if !entry.IsDir() && strings.HasPrefix(entry.Name(), "sadr-") && strings.HasSuffix(entry.Name(), ".md") {
+			parts := strings.Split(entry.Name(), "-")
+			if len(parts) >= 2 {
+				var id int
+				_, err := fmt.Sscanf(parts[1], "%d", &id)
+				if err == nil && id > maxID {
+					maxID = id
+				}
+			}
 		}
 	}
-	return count
+	return maxID
+}
+
+func (s *Storage) GetRecordPathByIndex(idx int) (string, error) {
+	entries, err := os.ReadDir(s.Dir)
+	if err != nil {
+		return "", err
+	}
+	var mdFiles []string
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".md") {
+			mdFiles = append(mdFiles, entry.Name())
+		}
+	}
+	if idx < 0 || idx >= len(mdFiles) {
+		return "", fmt.Errorf("record bounds error")
+	}
+	return filepath.Join(s.Dir, mdFiles[idx]), nil
 }
 
 func splitSections(body string) map[string]string {
