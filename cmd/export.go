@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"html"
 	"os"
 	"path/filepath"
 	"strings"
@@ -79,47 +80,77 @@ var exportCmd = &cobra.Command{
 }
 
 func exportRecord(r model.Record, id int, exportsDir string) {
-	var html strings.Builder
-	html.WriteString("<!DOCTYPE html>\n<html><head>\n")
-	html.WriteString("<meta charset=\"utf-8\">\n")
-	html.WriteString(fmt.Sprintf("<title>%s</title>\n", r.Title))
-	html.WriteString("<style>body{font-family:system-ui,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;line-height:1.6}code{background:#f4f4f4;padding:2px 6px;border-radius:3px}pre{background:#f4f4f4;padding:16px;border-radius:6px;overflow-x:auto}.meta{color:#666;font-size:0.9em}</style>\n")
-	html.WriteString("</head><body>\n")
-	html.WriteString(fmt.Sprintf("<h1>%s</h1>\n", r.Title))
-	html.WriteString(fmt.Sprintf("<p class=\"meta\">Type: %s", r.Type))
-	if r.FileRef != "N/A" {
-		html.WriteString(fmt.Sprintf(" · File: %s", r.FileRef))
+	var b strings.Builder
+	b.WriteString("<!DOCTYPE html>\n<html><head>\n")
+	b.WriteString("<meta charset=\"utf-8\">\n")
+	b.WriteString(fmt.Sprintf("<title>%s</title>\n", html.EscapeString(r.Title)))
+
+	b.WriteString(fmt.Sprintf("<meta name=\"sadr-type\" content=\"%s\">\n", html.EscapeString(r.Type)))
+	if r.FileRef != "N/A" && r.FileRef != "" {
+		b.WriteString(fmt.Sprintf(
+			"<meta name=\"sadr-file-ref\" content=\"%s\">\n", html.EscapeString(r.FileRef)))
 	}
-	html.WriteString("</p>\n")
+
+	b.WriteString(`
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+`)
+
+	b.WriteString(`<style>
+body { font-family: system-ui, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; line-height: 1.6; }
+p { white-space: pre-wrap; }
+code { font-family: monospace; background: #f4f4f4; padding: 2px 6px; border-radius: 3px; }
+pre { background: #f6f8fa; padding: 16px; border-radius: 6px; overflow-x: auto; tab-size: 4; }
+pre code { 
+    display: block;
+    white-space: pre-wrap;
+    word-break: normal;
+    overflow-wrap: anywhere;
+    background: transparent;
+    padding: 0; }
+@media print {
+	@page { margin: 0; }
+	body { margin: 1.5cm; max-width: 100%; }
+	p { page-break-inside: avoid; }
+	h1, h2 { page-break-after: avoid; }
+}
+</style>
+`)
+
+	b.WriteString("</head><body>\n")
+	b.WriteString(fmt.Sprintf("<h1>%s</h1>\n", html.EscapeString(r.Title)))
 
 	if r.Snippet != "" {
-		html.WriteString("<h2>Snippet</h2>\n")
-		html.WriteString(fmt.Sprintf("<pre><code>%s</code></pre>\n", r.Snippet))
+		b.WriteString("<h2>Snippet</h2>\n")
+		b.WriteString(fmt.Sprintf("<pre><code>%s</code></pre>\n", html.EscapeString(r.Snippet)))
 	}
 
 	for key, value := range r.Fields {
-		html.WriteString(fmt.Sprintf("<h2>%s</h2>\n<p>%s</p>\n", key, value))
+		b.WriteString(fmt.Sprintf("<h2>%s</h2>\n<p>%s</p>\n", html.EscapeString(key), html.EscapeString(value)))
 	}
 
-	html.WriteString("</body></html>")
+	b.WriteString("<script>hljs.highlightAll();</script>\n")
+	b.WriteString("</body></html>")
 
 	slug := strings.ToLower(r.Title)
 	slug = strings.ReplaceAll(slug, " ", "-")
 	filename := fmt.Sprintf("sadr-%04d-%s.html", id, slug)
 	outputPath := filepath.Join(exportsDir, filename)
 
-	if err := os.WriteFile(outputPath, []byte(html.String()), 0644); err != nil {
+	if err := os.WriteFile(outputPath, []byte(b.String()), 0644); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, ":(  Failed to export: %v\n", err)
 		return
 	}
 
-	_, _ = fmt.Fprintf(os.Stderr, ":(  %s exported — From tribal knowledge to actual documentation.\n", filepath.Base(outputPath))
+	_, _ = fmt.Fprintf(os.Stderr,
+		":(  %s exported — From tribal knowledge to actual documentation.\n", filepath.Base(outputPath))
 }
 
 func init() {
 	exportCmd.Flags().IntVar(&exportID, "id", 0, "Record ID to export")
 	exportCmd.Flags().BoolVar(&exportAll, "all", false, "Export all records")
 	exportCmd.Flags().StringVar(&exportTags, "tags", "", "Export records matching tags (comma-separated)")
-	exportCmd.Flags().BoolVarP(&exportGlobal, "global", "g", false, "Export personal records from ~/.sadr/")
+	exportCmd.Flags().BoolVarP(
+		&exportGlobal, "global", "g", false, "Export personal records from ~/.sadr/")
 	rootCmd.AddCommand(exportCmd)
 }

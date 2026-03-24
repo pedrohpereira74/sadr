@@ -199,7 +199,8 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 
 			fieldDefs, cfgErr := loadFieldDefs(configPath)
 			if cfgErr != nil {
-				_, _ = fmt.Fprintf(os.Stderr, "\n:(  CONFIGURATION ERROR  )\n%v\n\nPlease fix your config.yaml and try again.\n", cfgErr)
+				_, _ = fmt.Fprintf(os.Stderr,
+					"\n:(  CONFIGURATION ERROR  )\n%v\n\nPlease fix your config.yaml and try again.\n", cfgErr)
 				os.Exit(1)
 			}
 
@@ -210,7 +211,7 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 				var docLanguage string
 				home, err := os.UserHomeDir()
 				if err == nil {
-					globalConfig := filepath.Join(home, ".sadr", "config.yaml")
+					globalConfig := filepath.Join(home, ".sadr", "global-config.yaml")
 					if cfg, err := config.LoadGlobalFromFile(globalConfig); err == nil {
 						if cfg.Language != "" {
 							docLanguage = cfg.Language
@@ -322,7 +323,9 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 			return
 		}
 
-		_, _ = fmt.Fprintf(os.Stderr, ":(  %s saved — Congrats, your code can now defend itself in a code review.\n", filepath.Base(path))
+		_, _ = fmt.Fprintf(
+			os.Stderr,
+			":(  %s saved — Congrats, your code can now defend itself in a code review.\n", filepath.Base(path))
 	}
 }
 

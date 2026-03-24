@@ -43,8 +43,8 @@ func TestConfigGlobalCreatesDirectory(t *testing.T) {
 	if _, err := os.Stat(sadrGlobal); os.IsNotExist(err) {
 		t.Error("expected ~/.sadr/ to be created")
 	}
-	if _, err := os.Stat(filepath.Join(sadrGlobal, "config.yaml")); os.IsNotExist(err) {
-		t.Error("expected ~/.sadr/config.yaml to be created")
+	if _, err := os.Stat(filepath.Join(sadrGlobal, "global-config.yaml")); os.IsNotExist(err) {
+		t.Error("expected ~/.sadr/global-config.yaml to be created")
 	}
 }
 
@@ -58,7 +58,7 @@ func TestConfigSetAPIKeyCreatesFile(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	configPath := filepath.Join(home, ".sadr", "config.yaml")
+	configPath := filepath.Join(home, ".sadr", "global-config.yaml")
 	content, err := os.ReadFile(configPath)
 	if err != nil {
 		t.Fatalf("failed to read config: %v", err)
@@ -76,7 +76,7 @@ func TestConfigSetAPIKeyUpdatesExistingFile(t *testing.T) {
 
 	globalDir := filepath.Join(home, ".sadr")
 	_ = os.MkdirAll(globalDir, 0755)
-	configPath := filepath.Join(globalDir, "config.yaml")
+	configPath := filepath.Join(globalDir, "global-config.yaml")
 
 	initialContent := "editor: \"nano\"\napi_key: \"old-key\"\nsome_other_setting: true\n"
 	_ = os.WriteFile(configPath, []byte(initialContent), 0644)

@@ -27,7 +27,7 @@ var configCmd = &cobra.Command{
 
 			globalDir := filepath.Join(home, ".sadr")
 			_ = os.MkdirAll(globalDir, 0755)
-			configPath := filepath.Join(globalDir, "config.yaml")
+			configPath := filepath.Join(globalDir, "global-config.yaml")
 
 			content, err := os.ReadFile(configPath)
 			var newContent string
@@ -53,25 +53,25 @@ var configCmd = &cobra.Command{
 				newContent = strings.Join(lines, "\n")
 			}
 
-			if err := os.WriteFile(configPath, []byte(newContent), 0644); err != nil {
+			if err := os.WriteFile(configPath, []byte(newContent), 0600); err != nil {
 				_, _ = fmt.Fprintf(os.Stderr, ":(  Failed to save API key: %v\n", err)
 				return
 			}
 
-			_, _ = fmt.Fprintln(os.Stderr, ":(  API Key saved globally. The --smart mode is now fully armed and operational.")
+			_, _ = fmt.Fprintln(os.Stderr, ":)  API Key saved globally. The --smart mode is now fully armed and operational.")
 			return
 		}
 
 		editor := findEditor()
 		if editor == "" {
-			_, _ = fmt.Fprintln(os.Stderr, ":(  No editor found. Set $EDITOR or add 'editor' to ~/.sadr/config.yaml")
+			_, _ = fmt.Fprintln(os.Stderr, ":(  No editor found. Set $EDITOR or add 'editor' to ~/.sadr/global-config.yaml")
 			return
 		}
 
 		if configGlobal {
 			home, _ := os.UserHomeDir()
 			globalDir := filepath.Join(home, ".sadr")
-			globalConfig := filepath.Join(globalDir, "config.yaml")
+			globalConfig := filepath.Join(globalDir, "global-config.yaml")
 
 			if _, err := os.Stat(globalConfig); os.IsNotExist(err) {
 				if err := os.MkdirAll(globalDir, 0755); err != nil {
@@ -84,7 +84,7 @@ var configCmd = &cobra.Command{
 					return
 				}
 
-				_, _ = fmt.Fprintln(os.Stderr, ":(  Created ~/.sadr/config.yaml for the first time. Opening...")
+				_, _ = fmt.Fprintln(os.Stderr, ":(  Created ~/.sadr/global-config.yaml for the first time. Opening...")
 			}
 
 			openEditor(editor, globalConfig)

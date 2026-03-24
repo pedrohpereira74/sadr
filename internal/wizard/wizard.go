@@ -318,6 +318,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		default:
+			if msg.String() == " " && current.fieldType == "multiselect" {
+				current.selectedMap[current.cursorPos] = !current.selectedMap[current.cursorPos]
+				return m, nil
+			}
+
 			if current.fieldType == "text" {
 				var cmd tea.Cmd
 				m.textarea, cmd = m.textarea.Update(msg)

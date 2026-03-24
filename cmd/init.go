@@ -14,6 +14,7 @@ import (
 )
 
 var initPreset string
+var initGlobal bool
 
 type presetModel struct {
 	cursor  int
@@ -91,10 +92,65 @@ func selectPreset() string {
 
 var initCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Initialize a .sadr/ repository in the current directory",
+	Short: "Initialize a .sadr/ repository in the current directory or globally",
 	Run: func(cmd *cobra.Command, args []string) {
-		dir, _ := os.Getwd()
-		sadrDir := filepath.Join(dir, ".sadr")
+		home, errHome := os.UserHomeDir()
+		cwd, errCwd := os.Getwd()
+		
+		if initGlobal {
+			if errHome != nil {
+				_, _ = fmt.Fprintln(os.Stderr, ":(  Could not find home directory:", errHome)
+				return
+			}
+
+			sadrDir := filepath.Join(home, ".sadr")
+
+			chosen := initPreset
+			if chosen == "" {
+				chosen = selectPreset()
+				if chosen == "" {
+					_, _ = fmt.Fprintln(os.Stderr, ":(  Cancelled.")
+					return
+				}
+			}
+
+			if err := os.MkdirAll(filepath.Join(sadrDir, "records"), 0755); err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, ":(  Failed to create global records/: %v\n", err)
+				return
+			}
+			if err := os.MkdirAll(filepath.Join(sadrDir, "exports"), 0755); err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, ":(  Failed to create global exports/: %v\n", err)
+				return
+			}
+
+			globalConfigPath := filepath.Join(sadrDir, "global-config.yaml")
+			if _, err := os.Stat(globalConfigPath); os.IsNotExist(err) {
+				// Usa permissão 0600 por segurança (vai guardar API Key)
+				_ = os.WriteFile(globalConfigPath, []byte("editor: \"\"\napi_key: \"\"\n"), 0600)
+			}
+
+			projectConfigPath := filepath.Join(sadrDir, "config.yaml")
+			if _, err := os.Stat(projectConfigPath); os.IsNotExist(err) {
+				preset := templates.MinimalConfig
+				if chosen == "extended" {
+					preset = templates.ExtendedConfig
+				}
+				_ = os.WriteFile(projectConfigPath, []byte(preset), 0644)
+			}
+
+			_, _ = fmt.Fprintln(os.Stderr, ":)  Global Sadr workspace and personal project initialized at ~/.sadr")
+			return
+		}
+
+		if errHome == nil && errCwd == nil && filepath.Clean(home) == filepath.Clean(cwd) {
+			_, _ = fmt.Fprintln(os.Stderr,
+				":(  Access Denied: You cannot initialize a local Sadr project in your home directory.")
+			_, _ = fmt.Fprintln(os.Stderr,
+				"    If you want to initialize your personal global workspace, run: sadr init --global")
+			return
+		}
+
+		sadrDir := filepath.Join(cwd, ".sadr")
 
 		if _, err := os.Stat(sadrDir); !os.IsNotExist(err) {
 			_, _ = fmt.Fprintln(os.Stderr,
@@ -131,7 +187,7 @@ var initCmd = &cobra.Command{
 			return
 		}
 
-		addToGitignore(dir)
+		addToGitignore(cwd)
 
 		_, _ = fmt.Fprintln(os.Stderr, ":(  sadr: therapy for snippets that lost their meaning.")
 		_, _ = fmt.Fprintln(os.Stderr, "")
@@ -168,6 +224,9 @@ func addToGitignore(dir string) {
 }
 
 func init() {
-	initCmd.Flags().StringVar(&initPreset, "preset", "", "Config preset: minimal or extended (skip interactive selection)")
+	initCmd.Flags().StringVar(&initPreset,
+		"preset", "", "Config preset: minimal or extended (skip interactive selection)")
+	initCmd.Flags().BoolVarP(&initGlobal,
+		"global", "g", false, "Initialize a global Sadr workspace in your home directory")
 	rootCmd.AddCommand(initCmd)
 }
