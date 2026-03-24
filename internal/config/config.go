@@ -14,9 +14,10 @@ type Config struct {
 }
 
 type GlobalConfig struct {
-	Editor string   `yaml:"editor"`
-	AI     AIConfig `yaml:"ai"`
-	APIKey string   `yaml:"api_key"`
+	Editor   string   `yaml:"editor"`
+	Language string   `yaml:"language"`
+	AI       AIConfig `yaml:"ai"`
+	APIKey   string   `yaml:"api_key"`
 }
 type AIConfig struct {
 	Provider  string `yaml:"provider"`

@@ -59,6 +59,8 @@ const GlobalConfig = `# Global sadr config — personal preferences
 
 editor: 
 
+language: portuguese
+
 ai:
   provider: gemini
   api_key_env: GEMINI_API_KEY

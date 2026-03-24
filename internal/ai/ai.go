@@ -12,14 +12,26 @@ import (
 
 const DefaultModel = "gemini-3-flash-preview"
 
-func BuildPrompt(snippet string, fields []string) string {
-	return fmt.Sprintf(`You are a code documentation assistant. Given this code snippet, suggest values for the following fields.
-Respond ONLY with a JSON object, no markdown, no backticks, no explanation.
+func BuildPrompt(snippet string, fields []string, language string) string {
+	if language == "" {
+		language = "English"
+	}
 
-Fields to fill: %s
+	return fmt.Sprintf(`You are an expert Software Architect and Code Documentation Assistant.
+Your task is to analyze the provided code snippet and extract or deduce the requested metadata.
 
-Code snippet:
-%s`, strings.Join(fields, ", "), snippet)
+CRITICAL RULES - FAILURE TO COMPLY WILL BREAK THE SYSTEM:
+1. STRICT JSON ONLY: You must output ONLY a valid, raw JSON object.
+2. NO MARKDOWN: ABSOLUTELY NO backticks, NO 'json' codeblock tags, and NO conversational text before or after the JSON.
+3. EXACT KEYS: Your JSON MUST contain EXACTLY the following keys:
+[%s]
+DO NOT translate, rename, add, or omit any keys. The keys must remain exactly as listed above.
+4. CONTENT LANGUAGE: The VALUES inside the JSON must be written in: %s.
+
+CODE SNIPPET TO ANALYZE:
+---
+%s
+---`, strings.Join(fields, ", "), language, snippet)
 }
 
 func ParseResponse(response string) (map[string]string, error) {
@@ -55,13 +67,13 @@ func ParseResponse(response string) (map[string]string, error) {
 	return result, nil
 }
 
-func Suggest(snippet string, fields []string) (map[string]string, error) {
+func Suggest(snippet string, fields []string, language string) (map[string]string, error) {
 	apiKey := os.Getenv("GEMINI_API_KEY")
 	if apiKey == "" {
 		return nil, fmt.Errorf("GEMINI_API_KEY not set")
 	}
 
-	prompt := BuildPrompt(snippet, fields)
+	prompt := BuildPrompt(snippet, fields, language)
 
 	reqBody := map[string]interface{}{
 		"contents": []map[string]interface{}{

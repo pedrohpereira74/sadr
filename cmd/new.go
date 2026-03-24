@@ -206,20 +206,27 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 			var suggestions map[string]string
 			if newSmart && hasSnippet {
 				_, _ = fmt.Fprintln(os.Stderr, ":(  Analyzing snippet...")
-				if os.Getenv("GEMINI_API_KEY") == "" {
-					home, err := os.UserHomeDir()
-					if err == nil {
-						globalConfig := filepath.Join(home, ".sadr", "config.yaml")
-						if cfg, err := config.LoadGlobalFromFile(globalConfig); err == nil && cfg.APIKey != "" {
+
+				var docLanguage string
+				home, err := os.UserHomeDir()
+				if err == nil {
+					globalConfig := filepath.Join(home, ".sadr", "config.yaml")
+					if cfg, err := config.LoadGlobalFromFile(globalConfig); err == nil {
+						if cfg.Language != "" {
+							docLanguage = cfg.Language
+						}
+						if os.Getenv("GEMINI_API_KEY") == "" && cfg.APIKey != "" {
 							_ = os.Setenv("GEMINI_API_KEY", cfg.APIKey)
 						}
 					}
 				}
+
 				fields := fieldNames(fieldDefs)
 				if fields == nil {
 					fields = []string{"title", "tags", "context", "decision"}
 				}
-				suggestions, err = ai.Suggest(snippetFromSource, fields)
+
+				suggestions, err = ai.Suggest(snippetFromSource, fields, docLanguage)
 				if err != nil {
 					_, _ = fmt.Fprintf(os.Stderr, "DEBUG: ai error: %v\n", err)
 					_, _ = fmt.Fprintf(os.Stderr, ":(  GEMINI_API_KEY not set. Falling back to manual mode.\n")
