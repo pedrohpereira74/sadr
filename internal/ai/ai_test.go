@@ -7,8 +7,9 @@ import (
 func TestBuildPrompt(t *testing.T) {
 	snippet := "client := retryablehttp.NewClient()\nclient.RetryMax = 3"
 	fields := []string{"title", "tags", "context", "decision"}
+	language := "english"
 
-	prompt := BuildPrompt(snippet, fields)
+	prompt := BuildPrompt(snippet, fields, language)
 
 	if prompt == "" {
 		t.Fatal("expected non-empty prompt")
