@@ -19,14 +19,17 @@ func setupNewTest(t *testing.T) string {
 	newDiff = false
 	newSmart = false
 
-	dir := t.TempDir()
+	dir, _ := os.MkdirTemp("", "sadr-test-*")
+	t.Cleanup(func() { os.RemoveAll(dir) })
 	sadrDir := filepath.Join(dir, ".sadr", "records")
 	if err := os.MkdirAll(sadrDir, 0755); err != nil {
 		t.Fatalf("failed to create dir: %v", err)
 	}
+	originalWd, _ := os.Getwd()
 	if err := os.Chdir(dir); err != nil {
 		t.Fatalf("failed to change dir: %v", err)
 	}
+	t.Cleanup(func() { os.Chdir(originalWd) })
 	return dir
 }
 
@@ -103,8 +106,10 @@ func TestNewQuickOnlyAsksQuickFields(t *testing.T) {
 }
 
 func TestNewGlobalSavesToHome(t *testing.T) {
-	home := t.TempDir()
+	home, _ := os.MkdirTemp("", "sadr-test-home-*")
+	t.Cleanup(func() { os.RemoveAll(home) })
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 
 	globalRecords := filepath.Join(home, ".sadr", "records")
 	if err := os.MkdirAll(globalRecords, 0755); err != nil {
@@ -223,7 +228,7 @@ func TestNewSmartWithoutSnippetAborts(t *testing.T) {
 	dir := setupNewTest(t)
 
 	rootCmd.SetArgs([]string{"new", "--smart"})
-	t.Setenv("EDITOR", "true")
+	t.Setenv("EDITOR", "sort")
 
 	_ = rootCmd.Execute()
 

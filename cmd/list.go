@@ -7,6 +7,7 @@ import (
 
 	"github.com/pedrohpereira74/sadr/internal/search"
 	"github.com/pedrohpereira74/sadr/internal/storage"
+	"github.com/pedrohpereira74/sadr/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -64,7 +65,7 @@ var listCmd = &cobra.Command{
 		}
 
 		if len(filtered) == 0 {
-			_, _ = fmt.Fprintln(os.Stderr, ":(  Nothing here yet. Run 'sadr new' to capture your first snippet.")
+			ui.Info(os.Stderr, "Nothing here yet. Run 'sadr new' to capture your first snippet.")
 			return
 		}
 

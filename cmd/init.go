@@ -1,15 +1,14 @@
 package cmd
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/pedrohpereira74/sadr/internal/templates"
+	"github.com/pedrohpereira74/sadr/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -96,10 +95,10 @@ var initCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		home, errHome := os.UserHomeDir()
 		cwd, errCwd := os.Getwd()
-		
+
 		if initGlobal {
 			if errHome != nil {
-				_, _ = fmt.Fprintln(os.Stderr, ":(  Could not find home directory:", errHome)
+				ui.Error(os.Stderr, fmt.Sprintf("Could not find home directory: %v", errHome))
 				return
 			}
 
@@ -109,24 +108,24 @@ var initCmd = &cobra.Command{
 			if chosen == "" {
 				chosen = selectPreset()
 				if chosen == "" {
-					_, _ = fmt.Fprintln(os.Stderr, ":(  Cancelled.")
+					ui.Info(os.Stderr, "Cancelled.")
 					return
 				}
 			}
 
 			if err := os.MkdirAll(filepath.Join(sadrDir, "records"), 0755); err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, ":(  Failed to create global records/: %v\n", err)
+				ui.Error(os.Stderr, fmt.Sprintf("Failed to create global records/: %v", err))
 				return
 			}
 			if err := os.MkdirAll(filepath.Join(sadrDir, "exports"), 0755); err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, ":(  Failed to create global exports/: %v\n", err)
+				ui.Error(os.Stderr, fmt.Sprintf("Failed to create global exports/: %v", err))
 				return
 			}
 
 			globalConfigPath := filepath.Join(sadrDir, "global-config.yaml")
 			if _, err := os.Stat(globalConfigPath); os.IsNotExist(err) {
 				// Usa permissão 0600 por segurança (vai guardar API Key)
-				_ = os.WriteFile(globalConfigPath, []byte("editor: \"\"\napi_key: \"\"\n"), 0600)
+				_ = os.WriteFile(globalConfigPath, []byte(templates.GlobalConfig), 0600)
 			}
 
 			projectConfigPath := filepath.Join(sadrDir, "config.yaml")
@@ -138,23 +137,19 @@ var initCmd = &cobra.Command{
 				_ = os.WriteFile(projectConfigPath, []byte(preset), 0644)
 			}
 
-			_, _ = fmt.Fprintln(os.Stderr, ":)  Global Sadr workspace and personal project initialized at ~/.sadr")
+			ui.Success(os.Stderr, "Global sadr workspace and personal project initialized at ~/.sadr")
 			return
 		}
 
 		if errHome == nil && errCwd == nil && filepath.Clean(home) == filepath.Clean(cwd) {
-			_, _ = fmt.Fprintln(os.Stderr,
-				":(  Access Denied: You cannot initialize a local Sadr project in your home directory.")
-			_, _ = fmt.Fprintln(os.Stderr,
-				"    If you want to initialize your personal global workspace, run: sadr init --global")
+			ui.Error(os.Stderr, "Access denied: you cannot initialize a local sadr project in your home directory.\n    If you want to initialize your personal global workspace, run: sadr init --global")
 			return
 		}
 
 		sadrDir := filepath.Join(cwd, ".sadr")
 
 		if _, err := os.Stat(sadrDir); !os.IsNotExist(err) {
-			_, _ = fmt.Fprintln(os.Stderr,
-				":(  Nice try... sadr already lives here.\n    Whats next? 'git init' inside a git repo?")
+			ui.Info(os.Stderr, "Nice try... sadr already lives here.")
 			return
 		}
 
@@ -162,17 +157,17 @@ var initCmd = &cobra.Command{
 		if chosen == "" {
 			chosen = selectPreset()
 			if chosen == "" {
-				_, _ = fmt.Fprintln(os.Stderr, ":(  Cancelled.")
+				ui.Info(os.Stderr, "Cancelled.")
 				return
 			}
 		}
 
 		if err := os.MkdirAll(filepath.Join(sadrDir, "records"), 0755); err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, ":(  Failed to create .sadr/records/: %v\n", err)
+			ui.Error(os.Stderr, fmt.Sprintf("Failed to create .sadr/records/: %v", err))
 			return
 		}
 		if err := os.MkdirAll(filepath.Join(sadrDir, "exports"), 0755); err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, ":(  Failed to create .sadr/exports/: %v\n", err)
+			ui.Error(os.Stderr, fmt.Sprintf("Failed to create .sadr/exports/: %v", err))
 			return
 		}
 
@@ -183,18 +178,15 @@ var initCmd = &cobra.Command{
 
 		configPath := filepath.Join(sadrDir, "config.yaml")
 		if err := os.WriteFile(configPath, []byte(preset), 0644); err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, ":(  Failed to create config: %v\n", err)
+			ui.Error(os.Stderr, fmt.Sprintf("Failed to create config: %v", err))
 			return
 		}
 
 		addToGitignore(cwd)
 
-		_, _ = fmt.Fprintln(os.Stderr, ":(  sadr: therapy for snippets that lost their meaning.")
-		_, _ = fmt.Fprintln(os.Stderr, "")
+		ui.Info(os.Stderr, "sadr: therapy for snippets that lost their meaning.\n")
 
-		if flag.Lookup("test.v") == nil {
-			time.Sleep(3 * time.Second)
-		}
+		ui.Pause(3.0)
 
 		_, _ = fmt.Fprintln(os.Stderr, "    Done! Created .sadr/ in this directory.")
 		_, _ = fmt.Fprintf(os.Stderr, "    Config: .sadr/config.yaml (%s preset)\n", chosen)

@@ -48,12 +48,15 @@ func TestFindSadrDirWalksUp(t *testing.T) {
 func TestFindSadrDirFallsBackToGlobal(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 
 	if err := os.MkdirAll(filepath.Join(home, ".sadr", "records"), 0755); err != nil {
 		t.Fatalf("failed to create global dir: %v", err)
 	}
 
-	noProject := t.TempDir()
+	noProject := filepath.Join(home, "projects", "proj1")
+	os.MkdirAll(noProject, 0755)
+	
 	paths, err := FindSadrDir(noProject)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -67,8 +70,11 @@ func TestFindSadrDirFallsBackToGlobal(t *testing.T) {
 func TestFindSadrDirReturnsErrorWhenNoneFound(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 
-	noProject := t.TempDir()
+	noProject := filepath.Join(home, "projects", "proj2")
+	os.MkdirAll(noProject, 0755)
+	
 	_, err := FindSadrDir(noProject)
 	if err == nil {
 		t.Fatal("expected error when no .sadr/ found anywhere, got nil")

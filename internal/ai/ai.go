@@ -67,10 +67,15 @@ func ParseResponse(response string) (map[string]string, error) {
 	return result, nil
 }
 
-func Suggest(snippet string, fields []string, language string) (map[string]string, error) {
-	apiKey := os.Getenv("GEMINI_API_KEY")
+func Suggest(snippet string, fields []string, language string, apiKey string) (map[string]string, error) {
 	if apiKey == "" {
-		return nil, fmt.Errorf("GEMINI_API_KEY not set")
+		apiKey = os.Getenv("AI_API_KEY")
+	}
+	if apiKey == "" {
+		apiKey = os.Getenv("GEMINI_API_KEY") // legacy fallback
+	}
+	if apiKey == "" {
+		return nil, fmt.Errorf("AI API key not set in global config or environment")
 	}
 
 	prompt := BuildPrompt(snippet, fields, language)

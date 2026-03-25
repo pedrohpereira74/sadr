@@ -7,6 +7,7 @@ import (
 	"github.com/muesli/reflow/wordwrap"
 	"github.com/pedrohpereira74/sadr/internal/search"
 	"github.com/pedrohpereira74/sadr/internal/storage"
+	"github.com/pedrohpereira74/sadr/internal/ui"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -61,7 +62,7 @@ var searchCmd = &cobra.Command{
 		}
 
 		if len(args) == 0 {
-			_, _ = fmt.Fprintln(os.Stderr, ":(  Provide a query or use --id <number>.")
+			ui.Error(os.Stderr, "Provide a query or use --id <number>.")
 			return
 		}
 

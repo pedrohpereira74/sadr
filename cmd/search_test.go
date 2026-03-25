@@ -12,7 +12,8 @@ import (
 
 func setupSearchTest(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
+	dir, _ := os.MkdirTemp("", "sadr-test-*")
+	t.Cleanup(func() { os.RemoveAll(dir) })
 	recordsDir := filepath.Join(dir, ".sadr", "records")
 	if err := os.MkdirAll(recordsDir, 0755); err != nil {
 		t.Fatalf("failed to create dir: %v", err)
@@ -22,9 +23,11 @@ func setupSearchTest(t *testing.T) string {
 	r, _ := model.NewRecord("Use retry with backoff")
 	_, _ = s.SaveRecord(r)
 
+	originalWd, _ := os.Getwd()
 	if err := os.Chdir(dir); err != nil {
 		t.Fatalf("failed to change dir: %v", err)
 	}
+	t.Cleanup(func() { os.Chdir(originalWd) })
 
 	return dir
 }

@@ -15,7 +15,8 @@ func setupExportTest(t *testing.T) string {
 	exportAll = false
 	exportTags = ""
 
-	dir := t.TempDir()
+	dir, _ := os.MkdirTemp("", "sadr-test-*")
+	t.Cleanup(func() { os.RemoveAll(dir) })
 	recordsDir := filepath.Join(dir, ".sadr", "records")
 	exportsDir := filepath.Join(dir, ".sadr", "exports")
 	if err := os.MkdirAll(recordsDir, 0755); err != nil {
@@ -39,9 +40,11 @@ func setupExportTest(t *testing.T) string {
 	r3.Fields["tags"] = "security,api"
 	_, _ = s.SaveRecord(r3)
 
+	originalWd, _ := os.Getwd()
 	if err := os.Chdir(dir); err != nil {
 		t.Fatalf("failed to change dir: %v", err)
 	}
+	t.Cleanup(func() { os.Chdir(originalWd) })
 	return dir
 }
 

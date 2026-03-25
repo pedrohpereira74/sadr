@@ -17,11 +17,10 @@ type GlobalConfig struct {
 	Editor   string   `yaml:"editor"`
 	Language string   `yaml:"language"`
 	AI       AIConfig `yaml:"ai"`
-	APIKey   string   `yaml:"api_key"`
 }
 type AIConfig struct {
-	Provider  string `yaml:"provider"`
-	APIKeyEnv string `yaml:"api_key_env"`
+	Provider string `yaml:"provider"`
+	APIKey   string `yaml:"api_key"`
 }
 
 type Field struct {

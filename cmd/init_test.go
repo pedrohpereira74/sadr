@@ -8,10 +8,13 @@ import (
 )
 
 func TestInitCreatesSadrDirectory(t *testing.T) {
-	dir := t.TempDir()
+	dir, _ := os.MkdirTemp("", "sadr-test-*")
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	originalWd, _ := os.Getwd()
 	if err := os.Chdir(dir); err != nil {
 		t.Fatalf("failed to change dir: %v", err)
 	}
+	t.Cleanup(func() { os.Chdir(originalWd) })
 
 	rootCmd.SetArgs([]string{"init", "--preset", "minimal"})
 	if err := rootCmd.Execute(); err != nil {
@@ -30,7 +33,8 @@ func TestInitCreatesSadrDirectory(t *testing.T) {
 }
 
 func TestInitMinimalCreatesConfig(t *testing.T) {
-	dir := t.TempDir()
+	dir, _ := os.MkdirTemp("", "sadr-test-*")
+	t.Cleanup(func() { os.RemoveAll(dir) })
 	if err := os.Chdir(dir); err != nil {
 		t.Fatalf("failed to change dir: %v", err)
 	}
@@ -57,7 +61,8 @@ func TestInitMinimalCreatesConfig(t *testing.T) {
 }
 
 func TestInitExtendedCreatesConfig(t *testing.T) {
-	dir := t.TempDir()
+	dir, _ := os.MkdirTemp("", "sadr-test-*")
+	t.Cleanup(func() { os.RemoveAll(dir) })
 	if err := os.Chdir(dir); err != nil {
 		t.Fatalf("failed to change dir: %v", err)
 	}
@@ -81,7 +86,8 @@ func TestInitExtendedCreatesConfig(t *testing.T) {
 }
 
 func TestInitDoesNotOverwrite(t *testing.T) {
-	dir := t.TempDir()
+	dir, _ := os.MkdirTemp("", "sadr-test-*")
+	t.Cleanup(func() { os.RemoveAll(dir) })
 	sadrDir := filepath.Join(dir, ".sadr")
 	if err := os.MkdirAll(sadrDir, 0755); err != nil {
 		t.Fatalf("failed to create dir: %v", err)
@@ -95,7 +101,8 @@ func TestInitDoesNotOverwrite(t *testing.T) {
 }
 
 func TestInitAddsExportsToGitignore(t *testing.T) {
-	dir := t.TempDir()
+	dir, _ := os.MkdirTemp("", "sadr-test-*")
+	t.Cleanup(func() { os.RemoveAll(dir) })
 	if err := os.Chdir(dir); err != nil {
 		t.Fatalf("failed to change dir: %v", err)
 	}
@@ -115,7 +122,8 @@ func TestInitAddsExportsToGitignore(t *testing.T) {
 }
 
 func TestInitDoesNotDuplicateGitignore(t *testing.T) {
-	dir := t.TempDir()
+	dir, _ := os.MkdirTemp("", "sadr-test-*")
+	t.Cleanup(func() { os.RemoveAll(dir) })
 	if err := os.Chdir(dir); err != nil {
 		t.Fatalf("failed to change dir: %v", err)
 	}

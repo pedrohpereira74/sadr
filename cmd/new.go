@@ -7,12 +7,12 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"time"
 
 	"github.com/pedrohpereira74/sadr/internal/ai"
 	"github.com/pedrohpereira74/sadr/internal/config"
 	"github.com/pedrohpereira74/sadr/internal/model"
 	"github.com/pedrohpereira74/sadr/internal/storage"
+	"github.com/pedrohpereira74/sadr/internal/ui"
 	"github.com/pedrohpereira74/sadr/internal/wizard"
 	"github.com/spf13/cobra"
 )
@@ -80,11 +80,11 @@ func readSnippetFromSource() string {
 	if newClipboard {
 		content, err := readClipboard()
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, ":(  Clipboard not available: %v\n", err)
+			ui.Error(os.Stderr, fmt.Sprintf("Clipboard not available: %v", err))
 			return ""
 		}
 		if content == "" {
-			_, _ = fmt.Fprintln(os.Stderr, ":(  Clipboard is empty.")
+			ui.Info(os.Stderr, "Clipboard is empty.")
 			return ""
 		}
 		return content
@@ -93,7 +93,7 @@ func readSnippetFromSource() string {
 	if newFile != "" {
 		content, err := os.ReadFile(newFile)
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, ":(  Failed to read file: %v\n", err)
+			ui.Error(os.Stderr, fmt.Sprintf("Failed to read file: %v", err))
 			return ""
 		}
 		return strings.TrimSpace(string(content))
@@ -103,12 +103,12 @@ func readSnippetFromSource() string {
 		cmd := exec.Command("git", "diff")
 		output, err := cmd.Output()
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, ":(  Git diff failed: %v\n", err)
+			ui.Error(os.Stderr, fmt.Sprintf("Git diff failed: %v", err))
 			return ""
 		}
 		content := strings.TrimSpace(string(output))
 		if content == "" {
-			_, _ = fmt.Fprintln(os.Stderr, ":(  Git diff is empty. Stage or commit something first.")
+			ui.Info(os.Stderr, "Git diff is empty. Stage or commit something first.")
 			return ""
 		}
 		return content
@@ -153,7 +153,7 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 		if newGlobal {
 			paths, err := resolvePaths(true)
 			if err != nil {
-				_, _ = fmt.Fprintln(os.Stderr, ":(  "+err.Error())
+				ui.Error(os.Stderr, err.Error())
 				return
 			}
 			recordsDir = paths.Records
@@ -161,7 +161,7 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 		} else {
 			paths, err := resolvePaths(false)
 			if err != nil {
-				_, _ = fmt.Fprintln(os.Stderr, ":(  "+err.Error())
+				ui.Error(os.Stderr, err.Error())
 				return
 			}
 			recordsDir = paths.Records
@@ -178,14 +178,15 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 		hasSnippet := snippetFromSource != ""
 
 		if newSmart && !hasSnippet {
-			_, _ = fmt.Fprintln(os.Stderr, ":(  Opening editor to capture snippet for AI analysis...")
+			ui.Info(os.Stderr, "Opening editor to capture snippet for AI analysis...")
+			ui.Pause(1.5)
 			content, editorErr := captureSnippetFromEditor()
 			if editorErr != nil {
-				_, _ = fmt.Fprintf(os.Stderr, ":(  Failed to open editor: %v\n", editorErr)
+				ui.Error(os.Stderr, fmt.Sprintf("Failed to open editor: %v", editorErr))
 				return
 			}
 			if strings.TrimSpace(content) == "" {
-				_, _ = fmt.Fprintln(os.Stderr, ":(  --smart requires a snippet to analyze. Operation aborted.")
+				ui.Info(os.Stderr, "--smart requires a snippet to analyze. Operation aborted.")
 				return
 			}
 
@@ -199,16 +200,16 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 
 			fieldDefs, cfgErr := loadFieldDefs(configPath)
 			if cfgErr != nil {
-				_, _ = fmt.Fprintf(os.Stderr,
-					"\n:(  CONFIGURATION ERROR  )\n%v\n\nPlease fix your config.yaml and try again.\n", cfgErr)
+				ui.Error(os.Stderr, fmt.Sprintf("\nCONFIGURATION ERROR\n%v\n\nPlease fix your config.yaml and try again.\n", cfgErr))
 				os.Exit(1)
 			}
 
 			var suggestions map[string]string
 			if newSmart && hasSnippet {
-				_, _ = fmt.Fprintln(os.Stderr, ":(  Analyzing snippet...")
+				ui.Info(os.Stderr, "Analyzing snippet...")
 
 				var docLanguage string
+				var aiKey string
 				home, err := os.UserHomeDir()
 				if err == nil {
 					globalConfig := filepath.Join(home, ".sadr", "global-config.yaml")
@@ -216,9 +217,7 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 						if cfg.Language != "" {
 							docLanguage = cfg.Language
 						}
-						if os.Getenv("GEMINI_API_KEY") == "" && cfg.APIKey != "" {
-							_ = os.Setenv("GEMINI_API_KEY", cfg.APIKey)
-						}
+						aiKey = cfg.AI.APIKey
 					}
 				}
 
@@ -227,13 +226,13 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 					fields = []string{"title", "tags", "context", "decision"}
 				}
 
-				suggestions, err = ai.Suggest(snippetFromSource, fields, docLanguage)
+				suggestions, err = ai.Suggest(snippetFromSource, fields, docLanguage, aiKey)
 				if err != nil {
+					// Don't use ui.Error for debug, wait maybe better to skip debug or use standard print
 					_, _ = fmt.Fprintf(os.Stderr, "DEBUG: ai error: %v\n", err)
-					_, _ = fmt.Fprintf(os.Stderr, ":(  GEMINI_API_KEY not set. Falling back to manual mode.\n")
-					_, _ = fmt.Fprintf(os.Stderr, "    Set it up: https://ai.google.dev\n\n")
-					_, _ = fmt.Fprintf(os.Stderr, "    Starting wizard in 3 seconds...\n")
-					time.Sleep(3 * time.Second)
+					ui.Error(os.Stderr, "AI API key not set or request failed. Falling back to manual mode.")
+					ui.Info(os.Stderr, "Set it up: https://ai.google.dev\n\n    Starting wizard in 3 seconds...")
+					ui.Pause(3.0)
 					suggestions = nil
 				}
 			}
@@ -244,6 +243,7 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 				Fields:      fieldDefs,
 				Suggestions: suggestions,
 			}
+			ui.Pause(1.5)
 			result, wizErr = wizard.Run(opts)
 			if wizErr != nil {
 				return
@@ -251,7 +251,7 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 
 			r, err = model.NewRecordWithOptions(result["title"], recordType)
 			if err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, ":(  %v\n", err)
+				ui.Error(os.Stderr, err.Error())
 				return
 			}
 
@@ -308,7 +308,7 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 		} else {
 			r, err = model.NewRecordWithOptions(newTitle, recordType)
 			if err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, ":(  %v\n", err)
+				ui.Error(os.Stderr, err.Error())
 				return
 			}
 			if hasSnippet {
@@ -319,13 +319,11 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 		s := storage.NewStorage(recordsDir)
 		path, err := s.SaveRecord(r)
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, ":(  Failed to save: %v\n", err)
+			ui.Error(os.Stderr, fmt.Sprintf("Failed to save: %v", err))
 			return
 		}
 
-		_, _ = fmt.Fprintf(
-			os.Stderr,
-			":(  %s saved — Congrats, your code can now defend itself in a code review.\n", filepath.Base(path))
+		ui.Success(os.Stderr, fmt.Sprintf("%s saved — Congrats, your code can now defend itself in a code review.", filepath.Base(path)))
 	}
 }
 

@@ -13,7 +13,8 @@ import (
 
 func setupListTest(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
+	dir, _ := os.MkdirTemp("", "sadr-test-*")
+	t.Cleanup(func() { os.RemoveAll(dir) })
 	recordsDir := filepath.Join(dir, ".sadr", "records")
 	if err := os.MkdirAll(recordsDir, 0755); err != nil {
 		t.Fatalf("failed to create dir: %v", err)
@@ -33,9 +34,11 @@ func setupListTest(t *testing.T) string {
 	r3.Fields["tags"] = "api,architecture"
 	_, _ = s.SaveRecord(r3)
 
+	originalWd, _ := os.Getwd()
 	if err := os.Chdir(dir); err != nil {
 		t.Fatalf("failed to change dir: %v", err)
 	}
+	t.Cleanup(func() { os.Chdir(originalWd) })
 	return dir
 }
 

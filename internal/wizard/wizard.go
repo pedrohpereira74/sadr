@@ -318,7 +318,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		default:
-			if msg.String() == " " && current.fieldType == "multiselect" {
+			if (msg.String() == " " || msg.String() == "space") && current.fieldType == "multiselect" {
 				current.selectedMap[current.cursorPos] = !current.selectedMap[current.cursorPos]
 				return m, nil
 			}

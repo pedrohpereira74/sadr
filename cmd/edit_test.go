@@ -11,7 +11,8 @@ import (
 
 func setupEditTest(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
+	dir, _ := os.MkdirTemp("", "sadr-test-*")
+	t.Cleanup(func() { os.RemoveAll(dir) })
 	recordsDir := filepath.Join(dir, ".sadr", "records")
 	if err := os.MkdirAll(recordsDir, 0755); err != nil {
 		t.Fatalf("failed to create dir: %v", err)
@@ -22,16 +23,18 @@ func setupEditTest(t *testing.T) string {
 	r.Fields["status"] = "proposed"
 	_, _ = s.SaveRecord(r)
 
+	originalWd, _ := os.Getwd()
 	if err := os.Chdir(dir); err != nil {
 		t.Fatalf("failed to change dir: %v", err)
 	}
+	t.Cleanup(func() { os.Chdir(originalWd) })
 	return dir
 }
 
 func TestEditFindsRecord(t *testing.T) {
 	dir := setupEditTest(t)
 
-	os.Setenv("EDITOR", "true")
+	os.Setenv("EDITOR", "sort")
 	defer os.Unsetenv("EDITOR")
 
 	rootCmd.SetArgs([]string{"edit", "--id", "1"})

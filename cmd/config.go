@@ -8,6 +8,7 @@ import (
 
 	"github.com/pedrohpereira74/sadr/internal/discover"
 	"github.com/pedrohpereira74/sadr/internal/templates"
+	"github.com/pedrohpereira74/sadr/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -21,7 +22,7 @@ var configCmd = &cobra.Command{
 		if configSetAPIKey != "" {
 			home, err := os.UserHomeDir()
 			if err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, ":(  Failed to get home directory: %v\n", err)
+				ui.Error(os.Stderr, fmt.Sprintf("Failed to get home directory: %v", err))
 				return
 			}
 
@@ -33,13 +34,15 @@ var configCmd = &cobra.Command{
 			var newContent string
 
 			if err != nil && os.IsNotExist(err) {
-				newContent = fmt.Sprintf("editor: \"\"\napi_key: \"%s\"\n", configSetAPIKey)
+				newContent = strings.Replace(templates.GlobalConfig, `api_key: ""`+"\n", fmt.Sprintf("api_key: \"%s\"\n", configSetAPIKey), 1)
 			} else {
 				lines := strings.Split(string(content), "\n")
 				found := false
 				for i, line := range lines {
-					if strings.HasPrefix(strings.TrimSpace(line), "api_key:") {
-						lines[i] = fmt.Sprintf("api_key: \"%s\"", configSetAPIKey)
+					trimmed := strings.TrimSpace(line)
+					if strings.HasPrefix(trimmed, "api_key:") || strings.HasPrefix(trimmed, "api_key_env:") {
+						prefix := line[:len(line)-len(trimmed)]
+						lines[i] = prefix + fmt.Sprintf("api_key: \"%s\"", configSetAPIKey)
 						found = true
 						break
 					}
@@ -48,23 +51,23 @@ var configCmd = &cobra.Command{
 					if len(lines) > 0 && lines[len(lines)-1] != "" {
 						lines = append(lines, "")
 					}
-					lines = append(lines, fmt.Sprintf("api_key: \"%s\"", configSetAPIKey))
+					lines = append(lines, fmt.Sprintf("ai:\n  api_key: \"%s\"", configSetAPIKey))
 				}
 				newContent = strings.Join(lines, "\n")
 			}
 
 			if err := os.WriteFile(configPath, []byte(newContent), 0600); err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, ":(  Failed to save API key: %v\n", err)
+				ui.Error(os.Stderr, fmt.Sprintf("Failed to save API key: %v", err))
 				return
 			}
 
-			_, _ = fmt.Fprintln(os.Stderr, ":)  API Key saved globally. The --smart mode is now fully armed and operational.")
+			ui.Success(os.Stderr, "API Key saved globally. The --smart mode is now fully armed and operational.")
 			return
 		}
 
 		editor := findEditor()
 		if editor == "" {
-			_, _ = fmt.Fprintln(os.Stderr, ":(  No editor found. Set $EDITOR or add 'editor' to ~/.sadr/global-config.yaml")
+			ui.Error(os.Stderr, "No editor found. Set $EDITOR or add 'editor' to ~/.sadr/global-config.yaml")
 			return
 		}
 
@@ -74,17 +77,8 @@ var configCmd = &cobra.Command{
 			globalConfig := filepath.Join(globalDir, "global-config.yaml")
 
 			if _, err := os.Stat(globalConfig); os.IsNotExist(err) {
-				if err := os.MkdirAll(globalDir, 0755); err != nil {
-					_, _ = fmt.Fprintf(os.Stderr, ":(  Failed to create ~/.sadr/: %v\n", err)
-					return
-				}
-
-				if err := os.WriteFile(globalConfig, []byte(templates.GlobalConfig), 0644); err != nil {
-					_, _ = fmt.Fprintf(os.Stderr, ":(  Failed to create config: %v\n", err)
-					return
-				}
-
-				_, _ = fmt.Fprintln(os.Stderr, ":(  Created ~/.sadr/global-config.yaml for the first time. Opening...")
+				ui.Error(os.Stderr, "Global config not found. Please run 'sadr init --global' to configure it.")
+				return
 			}
 
 			openEditor(editor, globalConfig)
@@ -94,14 +88,14 @@ var configCmd = &cobra.Command{
 		dir, _ := os.Getwd()
 		paths, err := discover.FindSadrDir(dir)
 		if err != nil {
-			_, _ = fmt.Fprintln(os.Stderr, ":(  "+err.Error())
+			ui.Error(os.Stderr, err.Error())
 			return
 		}
 
 		localConfig := filepath.Join(paths.Root, "config.yaml")
 
 		if _, err := os.Stat(localConfig); os.IsNotExist(err) {
-			_, _ = fmt.Fprintln(os.Stderr, ":(  Config file missing. Run 'sadr init' to recreate.")
+			ui.Error(os.Stderr, "Config file missing. Run 'sadr init' to recreate.")
 			return
 		}
 

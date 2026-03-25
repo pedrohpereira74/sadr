@@ -112,8 +112,8 @@ ai:
 	if cfg.AI.Provider != "gemini" {
 		t.Errorf("expected provider 'gemini', got '%s'", cfg.AI.Provider)
 	}
-	if cfg.AI.APIKeyEnv != "GEMINI_API_KEY" {
-		t.Errorf("expected api_key_env 'GEMINI_API_KEY', got '%s'", cfg.AI.APIKeyEnv)
+	if cfg.AI.APIKey != "" {
+		t.Errorf("expected empty APIKey, got %s", cfg.AI.APIKey)
 	}
 }
 

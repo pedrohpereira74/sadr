@@ -1,13 +1,99 @@
 package cmd
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/pedrohpereira74/sadr/internal/discover"
+	"github.com/pedrohpereira74/sadr/internal/ui"
 )
+
+type fallbackModel struct {
+	cursor  int
+	chosen  string
+	options []string
+	done    bool
+}
+
+func (m fallbackModel) Init() tea.Cmd { return nil }
+
+func (m fallbackModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.Type {
+		case tea.KeyCtrlC, tea.KeyEsc:
+			return m, tea.Quit
+		case tea.KeyUp:
+			if m.cursor > 0 {
+				m.cursor--
+			}
+		case tea.KeyDown:
+			if m.cursor < len(m.options)-1 {
+				m.cursor++
+			}
+		case tea.KeyEnter:
+			if m.cursor == 0 {
+				m.chosen = "yes"
+			} else {
+				m.chosen = "no"
+			}
+			m.done = true
+			return m, tea.Quit
+		}
+	}
+	return m, nil
+}
+
+func (m fallbackModel) View() string {
+	if m.done {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\n:(  No local Sadr project found. Fallback to global at ~/.sadr?\n\n")
+	for i, opt := range m.options {
+		cursor := "  "
+		if i == m.cursor {
+			cursor = "> "
+		}
+		b.WriteString(fmt.Sprintf("  %s%s\n", cursor, opt))
+	}
+	return b.String()
+}
+
+func promptGlobalFallback() string {
+	m := fallbackModel{
+		options: []string{"Yes, use global", "No, cancel"},
+	}
+	p := tea.NewProgram(m)
+	finalModel, err := p.Run()
+	if err != nil {
+		return ""
+	}
+	final := finalModel.(fallbackModel)
+	return final.chosen
+}
+
+func handleGlobalFallback(paths discover.SadrPaths) {
+	if !paths.IsGlobal {
+		return
+	}
+	// Bypass interactive prompt during testing to prevent hangs
+	if os.Getenv("SADR_TEST") == "1" || flag.Lookup("test.v") != nil {
+		return
+	}
+	chosen := promptGlobalFallback()
+	if chosen == "yes" {
+		return
+	} else if chosen == "no" || chosen == "" {
+		ui.Success(os.Stderr, "Run 'sadr init' in your project to initialize a local Sadr project.")
+		os.Exit(0)
+	}
+}
 
 func findEditor() string {
 	if editor := os.Getenv("VISUAL"); editor != "" {
@@ -50,6 +136,7 @@ func resolveRecordsDir(global bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	handleGlobalFallback(paths)
 	return paths.Records, nil
 }
 
@@ -68,5 +155,10 @@ func resolvePaths(global bool) (discover.SadrPaths, error) {
 	}
 
 	dir, _ := os.Getwd()
-	return discover.FindSadrDir(dir)
+	paths, err := discover.FindSadrDir(dir)
+	if err != nil {
+		return paths, err
+	}
+	handleGlobalFallback(paths)
+	return paths, nil
 }

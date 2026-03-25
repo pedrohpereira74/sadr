@@ -8,7 +8,8 @@ import (
 )
 
 func TestConfigOpensLocal(t *testing.T) {
-	dir := t.TempDir()
+	dir, _ := os.MkdirTemp("", "sadr-test-*")
+	t.Cleanup(func() { os.RemoveAll(dir) })
 	sadrDir := filepath.Join(dir, ".sadr")
 	if err := os.MkdirAll(sadrDir, 0755); err != nil {
 		t.Fatalf("failed to create dir: %v", err)
@@ -17,11 +18,13 @@ func TestConfigOpensLocal(t *testing.T) {
 	if err := os.WriteFile(configPath, []byte("fields: []\n"), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
+	originalWd, _ := os.Getwd()
 	if err := os.Chdir(dir); err != nil {
 		t.Fatalf("failed to change dir: %v", err)
 	}
+	t.Cleanup(func() { os.Chdir(originalWd) })
 
-	t.Setenv("EDITOR", "true")
+	t.Setenv("EDITOR", "sort")
 
 	rootCmd.SetArgs([]string{"config"})
 	if err := rootCmd.Execute(); err != nil {
@@ -29,10 +32,12 @@ func TestConfigOpensLocal(t *testing.T) {
 	}
 }
 
-func TestConfigGlobalCreatesDirectory(t *testing.T) {
-	home := t.TempDir()
+func TestConfigGlobalDoesNotCreateDirectory(t *testing.T) {
+	home, _ := os.MkdirTemp("", "sadr-test-home-*")
+	t.Cleanup(func() { os.RemoveAll(home) })
 	t.Setenv("HOME", home)
-	t.Setenv("EDITOR", "true")
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("EDITOR", "sort")
 
 	rootCmd.SetArgs([]string{"config", "--global"})
 	if err := rootCmd.Execute(); err != nil {
@@ -40,16 +45,14 @@ func TestConfigGlobalCreatesDirectory(t *testing.T) {
 	}
 
 	sadrGlobal := filepath.Join(home, ".sadr")
-	if _, err := os.Stat(sadrGlobal); os.IsNotExist(err) {
-		t.Error("expected ~/.sadr/ to be created")
-	}
-	if _, err := os.Stat(filepath.Join(sadrGlobal, "global-config.yaml")); os.IsNotExist(err) {
-		t.Error("expected ~/.sadr/global-config.yaml to be created")
+	if _, err := os.Stat(sadrGlobal); !os.IsNotExist(err) {
+		t.Error("expected ~/.sadr/ NOT to be created")
 	}
 }
 
 func TestConfigSetAPIKeyCreatesFile(t *testing.T) {
-	home := t.TempDir()
+	home, _ := os.MkdirTemp("", "sadr-test-home-*")
+	t.Cleanup(func() { os.RemoveAll(home) })
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 
@@ -70,7 +73,8 @@ func TestConfigSetAPIKeyCreatesFile(t *testing.T) {
 }
 
 func TestConfigSetAPIKeyUpdatesExistingFile(t *testing.T) {
-	home := t.TempDir()
+	home, _ := os.MkdirTemp("", "sadr-test-home-*")
+	t.Cleanup(func() { os.RemoveAll(home) })
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 

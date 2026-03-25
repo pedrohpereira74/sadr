@@ -7,9 +7,10 @@ import (
 )
 
 type SadrPaths struct {
-	Root    string
-	Records string
-	Exports string
+	Root     string
+	Records  string
+	Exports  string
+	IsGlobal bool
 }
 
 func FindSadrDir(startDir string) (SadrPaths, error) {
@@ -18,7 +19,21 @@ func FindSadrDir(startDir string) (SadrPaths, error) {
 	for {
 		candidate := filepath.Join(dir, ".sadr")
 		if _, err := os.Stat(candidate); err == nil {
-			return buildPaths(candidate), nil
+			paths := buildPaths(candidate)
+			
+			home, errHome := os.UserHomeDir()
+			if errHome == nil && filepath.Clean(dir) == filepath.Clean(home) {
+				paths.IsGlobal = true
+			} else {
+				paths.IsGlobal = false
+			}
+
+			return paths, nil
+		}
+
+		home, errHome := os.UserHomeDir()
+		if errHome == nil && filepath.Clean(dir) == filepath.Clean(home) {
+			break
 		}
 
 		parent := filepath.Dir(dir)
@@ -32,7 +47,9 @@ func FindSadrDir(startDir string) (SadrPaths, error) {
 	if err == nil {
 		global := filepath.Join(home, ".sadr")
 		if _, err := os.Stat(global); err == nil {
-			return buildPaths(global), nil
+			paths := buildPaths(global)
+			paths.IsGlobal = true
+			return paths, nil
 		}
 	}
 
