@@ -7,7 +7,7 @@ Sadr is a CLI tool that blends a snippet manager with Architectural Decision Rec
 
 ## ✨ Features
 
-- **AI-Powered (`--smart`)**: Automatically deduces tags, context, and decisions from your code snippet using the Gemini 3.1 LLM.
+- **AI-Powered (`--smart`)**: Automatically deduces tags, context, and decisions from your code snippet using your desired AI model (currently only gemini models).
 - **Multiple Sources**: Read from `--clipboard`, a `--file`, or your latest `--diff`.
 - **Customizable Schemas**: You define the questions. The `config.yaml` is fully configurable. Add custom `select`, `multiselect`, `list`, or `text` fields.
 - **HTML Export**: Export your knowledge base to a single standalone, styled HTML file (`sadr export`).
