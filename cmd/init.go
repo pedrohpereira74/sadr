@@ -12,8 +12,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var initPreset string
-var initGlobal bool
+type initOptions struct {
+	preset string
+	global bool
+}
 
 type presetModel struct {
 	cursor  int
@@ -89,138 +91,157 @@ func selectPresetImpl() string {
 	return final.chosen
 }
 
-var initCmd = &cobra.Command{
-	Use:   "init",
-	Short: "Initialize a .sadr/ repository in the current directory or globally",
-	Long:  "Initialize a new .sadr/ directory in the current project, creating records, exports folders and a config.yaml file.",
-	Run: func(cmd *cobra.Command, args []string) {
-		home, errHome := os.UserHomeDir()
-		cwd, errCwd := os.Getwd()
+func resolvePreset(opts *initOptions) string {
+	if opts.preset != "" {
+		return opts.preset
+	}
+	chosen := presetSelector()
+	if chosen == "" {
+		ui.Info(os.Stderr, "Cancelled.")
+	}
+	return chosen
+}
 
-		if initGlobal {
-			if errHome != nil {
-				ui.Error(os.Stderr, fmt.Sprintf("Could not find home directory: %v", errHome))
-				return
-			}
+func newInitCmd() *cobra.Command {
+	opts := &initOptions{}
 
-			sadrDir := filepath.Join(home, ".sadr")
+	cmd := &cobra.Command{
+		Use:   "init",
+		Short: "Initialize a .sadr/ repository in the current directory or globally",
+		Long:  "Initialize a new .sadr/ directory in the current project, creating records, exports folders and a config.yaml file.",
+		Run: func(cmd *cobra.Command, args []string) {
+			home, errHome := os.UserHomeDir()
+			cwd, errCwd := os.Getwd()
 
-			chosen := initPreset
-			if chosen == "" {
-				chosen = presetSelector()
-				if chosen == "" {
-					ui.Info(os.Stderr, "Cancelled.")
+			if opts.global {
+				if errHome != nil {
+					ui.Error(os.Stderr, fmt.Sprintf("Could not find home directory: %v", errHome))
 					return
 				}
-			}
 
-			if err := os.MkdirAll(filepath.Join(sadrDir, "records"), 0755); err != nil {
-				ui.Error(os.Stderr, fmt.Sprintf("Failed to create global records/: %v", err))
+				sadrDir := filepath.Join(home, ".sadr")
+
+				chosen := resolvePreset(opts)
+				if chosen == "" {
+					return
+				}
+
+				if err := os.MkdirAll(filepath.Join(sadrDir, "records"), 0755); err != nil {
+					ui.Error(os.Stderr, fmt.Sprintf("Failed to create global records/: %v", err))
+					return
+				}
+				if err := os.MkdirAll(filepath.Join(sadrDir, "exports"), 0755); err != nil {
+					ui.Error(os.Stderr, fmt.Sprintf("Failed to create global exports/: %v", err))
+					return
+				}
+
+				globalConfigPath := filepath.Join(sadrDir, "global-config.yaml")
+				if _, err := os.Stat(globalConfigPath); os.IsNotExist(err) {
+					if err := os.WriteFile(globalConfigPath, []byte(templates.GlobalConfig), 0600); err != nil {
+						ui.Error(os.Stderr, fmt.Sprintf("Failed to create global config: %v", err))
+						return
+					}
+				}
+
+				projectConfigPath := filepath.Join(sadrDir, "config.yaml")
+				if _, err := os.Stat(projectConfigPath); os.IsNotExist(err) {
+					preset := templates.MinimalConfig
+					if chosen == "extended" {
+						preset = templates.ExtendedConfig
+					}
+					if err := os.WriteFile(projectConfigPath, []byte(preset), 0644); err != nil {
+						ui.Error(os.Stderr, fmt.Sprintf("Failed to create project config: %v", err))
+						return
+					}
+				}
+
+				ui.Success(os.Stderr, "Global sadr workspace and personal project initialized at ~/.sadr")
 				return
 			}
-			if err := os.MkdirAll(filepath.Join(sadrDir, "exports"), 0755); err != nil {
-				ui.Error(os.Stderr, fmt.Sprintf("Failed to create global exports/: %v", err))
+
+			if errHome == nil && errCwd == nil && filepath.Clean(home) == filepath.Clean(cwd) {
+				ui.Error(os.Stderr, "Access denied: you cannot initialize a local sadr project in your home directory.\n    If you want to initialize your personal global workspace, run: sadr init --global")
 				return
 			}
 
-			globalConfigPath := filepath.Join(sadrDir, "global-config.yaml")
-			if _, err := os.Stat(globalConfigPath); os.IsNotExist(err) {
-				// Usa permissão 0600 por segurança (vai guardar API Key)
-				_ = os.WriteFile(globalConfigPath, []byte(templates.GlobalConfig), 0600)
-			}
+			sadrDir := filepath.Join(cwd, ".sadr")
 
-			projectConfigPath := filepath.Join(sadrDir, "config.yaml")
-			if _, err := os.Stat(projectConfigPath); os.IsNotExist(err) {
+			if _, err := os.Stat(sadrDir); !os.IsNotExist(err) {
+				configPath := filepath.Join(sadrDir, "config.yaml")
+				if _, err := os.Stat(configPath); !os.IsNotExist(err) {
+					ui.Info(os.Stderr, "Nice try... sadr already lives here.")
+					return
+				}
+
+				if err := os.MkdirAll(filepath.Join(sadrDir, "records"), 0755); err != nil {
+					ui.Error(os.Stderr, fmt.Sprintf("Failed to create records/: %v", err))
+					return
+				}
+				if err := os.MkdirAll(filepath.Join(sadrDir, "exports"), 0755); err != nil {
+					ui.Error(os.Stderr, fmt.Sprintf("Failed to create exports/: %v", err))
+					return
+				}
+
+				chosen := resolvePreset(opts)
+				if chosen == "" {
+					return
+				}
+
 				preset := templates.MinimalConfig
 				if chosen == "extended" {
 					preset = templates.ExtendedConfig
 				}
-				_ = os.WriteFile(projectConfigPath, []byte(preset), 0644)
-			}
+				if err := os.WriteFile(configPath, []byte(preset), 0644); err != nil {
+					ui.Error(os.Stderr, fmt.Sprintf("Failed to create config: %v", err))
+					return
+				}
 
-			ui.Success(os.Stderr, "Global sadr workspace and personal project initialized at ~/.sadr")
-			return
-		}
-
-		if errHome == nil && errCwd == nil && filepath.Clean(home) == filepath.Clean(cwd) {
-			ui.Error(os.Stderr, "Access denied: you cannot initialize a local sadr project in your home directory.\n    If you want to initialize your personal global workspace, run: sadr init --global")
-			return
-		}
-
-		sadrDir := filepath.Join(cwd, ".sadr")
-
-		if _, err := os.Stat(sadrDir); !os.IsNotExist(err) {
-			configPath := filepath.Join(sadrDir, "config.yaml")
-			if _, err := os.Stat(configPath); !os.IsNotExist(err) {
-				ui.Info(os.Stderr, "Nice try... sadr already lives here.")
+				ui.Success(os.Stderr, "Healed! Recreated missing config.yaml.")
 				return
 			}
 
-			// .sadr/ exists but config.yaml is missing — heal
-			_ = os.MkdirAll(filepath.Join(sadrDir, "records"), 0755)
-			_ = os.MkdirAll(filepath.Join(sadrDir, "exports"), 0755)
-
-			chosen := initPreset
+			chosen := resolvePreset(opts)
 			if chosen == "" {
-				chosen = presetSelector()
-				if chosen == "" {
-					ui.Info(os.Stderr, "Cancelled.")
-					return
-				}
+				return
+			}
+
+			if err := os.MkdirAll(filepath.Join(sadrDir, "records"), 0755); err != nil {
+				ui.Error(os.Stderr, fmt.Sprintf("Failed to create .sadr/records/: %v", err))
+				return
+			}
+			if err := os.MkdirAll(filepath.Join(sadrDir, "exports"), 0755); err != nil {
+				ui.Error(os.Stderr, fmt.Sprintf("Failed to create .sadr/exports/: %v", err))
+				return
 			}
 
 			preset := templates.MinimalConfig
 			if chosen == "extended" {
 				preset = templates.ExtendedConfig
 			}
+
+			configPath := filepath.Join(sadrDir, "config.yaml")
 			if err := os.WriteFile(configPath, []byte(preset), 0644); err != nil {
 				ui.Error(os.Stderr, fmt.Sprintf("Failed to create config: %v", err))
 				return
 			}
 
-			ui.Success(os.Stderr, "Healed! Recreated missing config.yaml.")
-			return
-		}
+			addToGitignore(cwd)
 
-		chosen := initPreset
-		if chosen == "" {
-			chosen = presetSelector()
-			if chosen == "" {
-				ui.Info(os.Stderr, "Cancelled.")
-				return
-			}
-		}
+			ui.Info(os.Stderr, "sadr: therapy for snippets that lost their meaning.\n")
 
-		if err := os.MkdirAll(filepath.Join(sadrDir, "records"), 0755); err != nil {
-			ui.Error(os.Stderr, fmt.Sprintf("Failed to create .sadr/records/: %v", err))
-			return
-		}
-		if err := os.MkdirAll(filepath.Join(sadrDir, "exports"), 0755); err != nil {
-			ui.Error(os.Stderr, fmt.Sprintf("Failed to create .sadr/exports/: %v", err))
-			return
-		}
+			ui.Pause(3.0)
 
-		preset := templates.MinimalConfig
-		if chosen == "extended" {
-			preset = templates.ExtendedConfig
-		}
+			_, _ = fmt.Fprintln(os.Stderr, "    Done! Created .sadr/ in this directory.")
+			_, _ = fmt.Fprintf(os.Stderr, "    Config: .sadr/config.yaml (%s preset)\n", chosen)
+			_, _ = fmt.Fprintln(os.Stderr, "    Try it: run 'sadr new' to capture your first record.")
+		},
+	}
 
-		configPath := filepath.Join(sadrDir, "config.yaml")
-		if err := os.WriteFile(configPath, []byte(preset), 0644); err != nil {
-			ui.Error(os.Stderr, fmt.Sprintf("Failed to create config: %v", err))
-			return
-		}
-
-		addToGitignore(cwd)
-
-		ui.Info(os.Stderr, "sadr: therapy for snippets that lost their meaning.\n")
-
-		ui.Pause(3.0)
-
-		_, _ = fmt.Fprintln(os.Stderr, "    Done! Created .sadr/ in this directory.")
-		_, _ = fmt.Fprintf(os.Stderr, "    Config: .sadr/config.yaml (%s preset)\n", chosen)
-		_, _ = fmt.Fprintln(os.Stderr, "    Try it: run 'sadr new' to capture your first record.")
-	},
+	cmd.Flags().StringVar(&opts.preset,
+		"preset", "", "Config preset: minimal or extended (skip interactive selection)")
+	cmd.Flags().BoolVarP(&opts.global,
+		"global", "g", false, "Initialize a global Sadr workspace in your home directory")
+	return cmd
 }
 
 func addToGitignore(dir string) {
@@ -245,9 +266,5 @@ func addToGitignore(dir string) {
 }
 
 func init() {
-	initCmd.Flags().StringVar(&initPreset,
-		"preset", "", "Config preset: minimal or extended (skip interactive selection)")
-	initCmd.Flags().BoolVarP(&initGlobal,
-		"global", "g", false, "Initialize a global Sadr workspace in your home directory")
-	rootCmd.AddCommand(initCmd)
+	rootCmd.AddCommand(newInitCmd())
 }

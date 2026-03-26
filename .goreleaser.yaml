@@ -39,7 +39,7 @@ nfpms:
     homepage: "https://github.com/pedrohpereira74/sadr"
     maintainer: "Pedro"
     description: "Capture code with context. Because snippets without a 'why' are sadr."
-    license: "MIT"
+    license: "Apache-2.0"
     formats:
       - deb
       - rpm
@@ -51,7 +51,7 @@ homebrews:
     directory: Formula
     homepage: "https://github.com/pedrohpereira74/sadr"
     description: "Capture code with context. Because snippets without a 'why' are sadr."
-    license: "MIT"
+    license: "Apache-2.0"
     commit_author:
       name: goreleaserbot
       email: bot@goreleaser.com
@@ -62,7 +62,7 @@ scoops:
       name: scoop-bucket
     homepage: "https://github.com/pedrohpereira74/sadr"
     description: "Capture code with context. Because snippets without a 'why' are sadr."
-    license: "MIT"
+    license: "Apache-2.0"
     commit_author:
       name: goreleaserbot
       email: bot@goreleaser.com

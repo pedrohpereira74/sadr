@@ -17,31 +17,48 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var newTitle string
-var newGlobal bool
-var newClipboard bool
-var newFile string
-var newSmart bool
-var newModel string
-var newDiff bool
-
-var newCmd = &cobra.Command{
-	Use:   "new",
-	Short: "Capture a new record (snippet + ADR)",
-	Long:  "Capture a code snippet with architectural context.\nUse subcommands 'adr' or 'snippet' for specialized captures.",
-	Run:   runNew("full"),
+type newOptions struct {
+	title     string
+	global    bool
+	clipboard bool
+	file      string
+	smart     bool
+	model     string
+	diff      bool
 }
 
-var newAdrCmd = &cobra.Command{
-	Use:   "adr",
-	Short: "Capture an ADR only (no snippet)",
-	Run:   runNew("adr"),
-}
+func newNewCmd() *cobra.Command {
+	opts := &newOptions{}
 
-var newSnippetCmd = &cobra.Command{
-	Use:   "snippet",
-	Short: "Capture a snippet only (no ADR questions)",
-	Run:   runNew("snippet"),
+	cmd := &cobra.Command{
+		Use:   "new",
+		Short: "Capture a new record (snippet + ADR)",
+		Long:  "Capture a code snippet with architectural context.\nUse subcommands 'adr' or 'snippet' for specialized captures.",
+		Run:   runNew("full", opts),
+	}
+
+	adrCmd := &cobra.Command{
+		Use:   "adr",
+		Short: "Capture an ADR only (no snippet)",
+		Run:   runNew("adr", opts),
+	}
+
+	snippetCmd := &cobra.Command{
+		Use:   "snippet",
+		Short: "Capture a snippet only (no ADR questions)",
+		Run:   runNew("snippet", opts),
+	}
+
+	cmd.PersistentFlags().StringVar(&opts.title, "title", "", "Record title (skip for interactive wizard)")
+	cmd.PersistentFlags().BoolVarP(&opts.global, "global", "g", false, "Save to personal vault (~/.sadr/)")
+	cmd.PersistentFlags().BoolVarP(&opts.clipboard, "clipboard", "c", false, "Read snippet from clipboard")
+	cmd.PersistentFlags().StringVarP(&opts.file, "file", "f", "", "Read snippet from file")
+	cmd.PersistentFlags().BoolVarP(&opts.smart, "smart", "s", false, "AI suggests field values from snippet")
+	cmd.PersistentFlags().StringVar(&opts.model, "model", "", "Override AI model (auto-enables --smart)")
+	cmd.PersistentFlags().BoolVarP(&opts.diff, "diff", "d", false, "Read snippet from git diff")
+	cmd.MarkFlagsMutuallyExclusive("clipboard", "file", "diff")
+	cmd.AddCommand(adrCmd, snippetCmd)
+	return cmd
 }
 
 func loadFieldDefs(configPath string) ([]wizard.FieldDef, error) {
@@ -69,8 +86,8 @@ func loadFieldDefs(configPath string) ([]wizard.FieldDef, error) {
 	return fields, nil
 }
 
-func readSnippetFromSource() string {
-	if newClipboard {
+func readSnippetFromSource(opts *newOptions) string {
+	if opts.clipboard {
 		content, err := readClipboard()
 		if err != nil {
 			ui.Error(os.Stderr, fmt.Sprintf("Clipboard not available: %v", err))
@@ -83,8 +100,17 @@ func readSnippetFromSource() string {
 		return content
 	}
 
-	if newFile != "" {
-		content, err := os.ReadFile(newFile)
+	if opts.file != "" {
+		info, err := os.Stat(opts.file)
+		if err != nil {
+			ui.Error(os.Stderr, fmt.Sprintf("Failed to read file: %v", err))
+			return ""
+		}
+		if info.Size() > 10<<20 {
+			ui.Error(os.Stderr, "File exceeds 10 MB limit.")
+			return ""
+		}
+		content, err := os.ReadFile(opts.file)
 		if err != nil {
 			ui.Error(os.Stderr, fmt.Sprintf("Failed to read file: %v", err))
 			return ""
@@ -92,7 +118,7 @@ func readSnippetFromSource() string {
 		return strings.TrimSpace(string(content))
 	}
 
-	if newDiff {
+	if opts.diff {
 		cmd := exec.Command("git", "--no-pager", "diff", "HEAD")
 		output, err := cmd.Output()
 		if err != nil {
@@ -138,28 +164,125 @@ func readClipboard() (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
-func runNew(recordType string) func(cmd *cobra.Command, args []string) {
-	return func(cmd *cobra.Command, args []string) {
-		var recordsDir string
-		var configPath string
+func loadAISuggestions(opts *newOptions, snippet string, fieldDefs []wizard.FieldDef) map[string]string {
+	ui.Info(os.Stderr, "Analyzing snippet...")
 
-		paths, err := resolvePaths(newGlobal)
+	var docLanguage, aiKey, modelName string
+	var aiDepth bool
+
+	home, err := os.UserHomeDir()
+	if err == nil {
+		globalConfigPath := filepath.Join(home, ".sadr", "global-config.yaml")
+		if cfg, err := config.LoadGlobalFromFile(globalConfigPath); err == nil {
+			docLanguage = cfg.Language
+			aiKey = cfg.AI.APIKey
+			modelName = cfg.AI.Model
+			aiDepth = cfg.AI.AIDepth
+		}
+	}
+
+	if opts.model != "" {
+		modelName = opts.model
+	}
+
+	var fields []string
+	for _, fd := range fieldDefs {
+		if fd.Type != "select" && fd.Type != "multiselect" {
+			fields = append(fields, fd.Name)
+		}
+	}
+	if len(fields) == 0 {
+		fields = []string{"title", "tags"}
+	}
+
+	suggestions, err := ai.Suggest(snippet, fields, docLanguage, aiKey, modelName, aiDepth)
+	if err != nil {
+		ui.Error(os.Stderr, "AI API key not set or request failed. Falling back to manual mode.")
+		ui.Info(os.Stderr, "Set it up: https://ai.google.dev\n\n    Starting wizard in 3 seconds...")
+		ui.Pause(3.0)
+		return nil
+	}
+	return suggestions
+}
+
+func buildRecordFromWizard(result map[string]string, fieldDefs []wizard.FieldDef, recordType string, snippet string) (model.Record, error) {
+	r, err := model.NewRecordWithOptions(result["title"], recordType)
+	if err != nil {
+		return r, err
+	}
+
+	for _, fd := range fieldDefs {
+		if fd.Name != "title" && fd.Name != "snippet" {
+			r.FieldOrder = append(r.FieldOrder, strings.TrimSpace(fd.Name))
+		}
+	}
+
+	if snippet != "" {
+		r.Snippet = snippet
+	} else if result["snippet"] != "" {
+		r.Snippet = result["snippet"]
+	}
+
+	for key, value := range result {
+		key = strings.TrimSpace(key)
+		if key == "title" || key == "snippet" {
+			continue
+		}
+		if key == "file_ref" {
+			r.FileRef = value
+			continue
+		}
+		if value == "" {
+			continue
+		}
+
+		fieldType := "string"
+		for _, fd := range fieldDefs {
+			if strings.EqualFold(strings.TrimSpace(fd.Name), key) {
+				fieldType = fd.Type
+				break
+			}
+		}
+
+		if fieldType == "list" && (strings.Contains(value, ",") || strings.Contains(value, ";")) {
+			rawParts := strings.FieldsFunc(value, func(r rune) bool {
+				return r == ',' || r == ';'
+			})
+			var bullets []string
+			for _, p := range rawParts {
+				p = strings.TrimSpace(p)
+				if p != "" {
+					bullets = append(bullets, "- "+p)
+				}
+			}
+			value = strings.Join(bullets, "\n")
+		} else if fieldType == "select" {
+			value = fmt.Sprintf("[%s]", strings.TrimSpace(value))
+		}
+
+		r.Fields[key] = value
+	}
+
+	return r, nil
+}
+
+func runNew(recordType string, opts *newOptions) func(cmd *cobra.Command, args []string) {
+	return func(cmd *cobra.Command, args []string) {
+		paths, err := resolvePaths(opts.global)
 		if err != nil {
 			ui.Error(os.Stderr, err.Error())
 			return
 		}
-		recordsDir = paths.Records
-		configPath = filepath.Join(paths.Root, "config.yaml")
+		recordsDir := paths.Records
+		configPath := filepath.Join(paths.Root, "config.yaml")
 
-		var r model.Record
-
-		snippetFromSource := readSnippetFromSource()
-		if newDiff && snippetFromSource == "" {
+		snippetFromSource := readSnippetFromSource(opts)
+		if opts.diff && snippetFromSource == "" {
 			return
 		}
 		hasSnippet := snippetFromSource != ""
 
-		if newSmart && !hasSnippet {
+		if opts.smart && !hasSnippet {
 			ui.Info(os.Stderr, "Opening editor to capture snippet for AI analysis...")
 			ui.Pause(1.5)
 			content, editorErr := snippetCapturer()
@@ -171,19 +294,17 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 				ui.Info(os.Stderr, "--smart requires a snippet to analyze. Operation aborted.")
 				return
 			}
-
 			snippetFromSource = content
 			hasSnippet = true
 		}
 
-		if newModel != "" {
-			newSmart = true
+		if opts.model != "" {
+			opts.smart = true
 		}
 
-		if newTitle == "" {
-			var result map[string]string
-			var wizErr error
+		var r model.Record
 
+		if opts.title == "" {
 			fieldDefs, cfgErr := loadFieldDefs(configPath)
 			if cfgErr != nil {
 				ui.Error(os.Stderr, fmt.Sprintf("\nCONFIGURATION ERROR\n%v\n\nPlease fix your config.yaml and try again.\n", cfgErr))
@@ -191,119 +312,28 @@ func runNew(recordType string) func(cmd *cobra.Command, args []string) {
 			}
 
 			var suggestions map[string]string
-			if newSmart && hasSnippet {
-				ui.Info(os.Stderr, "Analyzing snippet...")
-
-				var docLanguage string
-				var aiKey string
-				var modelName string
-				var aiDepth bool
-
-				home, err := os.UserHomeDir()
-				if err == nil {
-					globalConfigPath := filepath.Join(home, ".sadr", "global-config.yaml")
-					if cfg, err := config.LoadGlobalFromFile(globalConfigPath); err == nil {
-						if cfg.Language != "" {
-							docLanguage = cfg.Language
-						}
-						aiKey = cfg.AI.APIKey
-						modelName = cfg.AI.Model
-						aiDepth = cfg.AI.AIDepth
-					}
-				}
-
-				if newModel != "" {
-					modelName = newModel
-				}
-
-				var fields []string
-				for _, fd := range fieldDefs {
-					if fd.Type != "select" && fd.Type != "multiselect" {
-						fields = append(fields, fd.Name)
-					}
-				}
-				if len(fields) == 0 {
-					fields = []string{"title", "tags", "context", "decision"}
-				}
-
-				suggestions, err = ai.Suggest(snippetFromSource, fields, docLanguage, aiKey, modelName, aiDepth)
-				if err != nil {
-					ui.Error(os.Stderr, "AI API key not set or request failed. Falling back to manual mode.")
-					ui.Info(os.Stderr, "Set it up: https://ai.google.dev\n\n    Starting wizard in 3 seconds...")
-					ui.Pause(3.0)
-					suggestions = nil
-				}
+			if opts.smart && hasSnippet {
+				suggestions = loadAISuggestions(opts, snippetFromSource, fieldDefs)
 			}
 
-			opts := wizard.Options{
+			wizOpts := wizard.Options{
 				SkipEditor:  hasSnippet,
 				Fields:      fieldDefs,
 				Suggestions: suggestions,
 			}
 			ui.Pause(1.5)
-			result, wizErr = wizardRunner(opts)
+			result, wizErr := wizardRunner(wizOpts)
 			if wizErr != nil {
 				return
 			}
 
-			r, err = model.NewRecordWithOptions(result["title"], recordType)
+			r, err = buildRecordFromWizard(result, fieldDefs, recordType, snippetFromSource)
 			if err != nil {
 				ui.Error(os.Stderr, err.Error())
 				return
 			}
-
-			for _, fd := range fieldDefs {
-				if fd.Name != "title" && fd.Name != "snippet" {
-					r.FieldOrder = append(r.FieldOrder, strings.TrimSpace(fd.Name))
-				}
-			}
-
-			if hasSnippet {
-				r.Snippet = snippetFromSource
-			} else if result["snippet"] != "" {
-				r.Snippet = result["snippet"]
-			}
-
-			for key, value := range result {
-				key = strings.TrimSpace(key)
-				if key == "title" || key == "snippet" {
-					continue
-				}
-				if key == "file_ref" {
-					r.FileRef = value
-					continue
-				}
-				if value != "" {
-					fieldType := "string"
-					for _, fd := range fieldDefs {
-						if strings.EqualFold(strings.TrimSpace(fd.Name), key) {
-							fieldType = fd.Type
-							break
-						}
-					}
-
-					if fieldType == "list" && (strings.Contains(value, ",") || strings.Contains(value, ";")) {
-						rawParts := strings.FieldsFunc(value, func(r rune) bool {
-							return r == ',' || r == ';'
-						})
-						var bullets []string
-						for _, p := range rawParts {
-							p = strings.TrimSpace(p)
-							if p != "" {
-								bullets = append(bullets, "- "+p)
-							}
-						}
-						value = strings.Join(bullets, "\n")
-					} else if fieldType == "select" {
-						value = fmt.Sprintf("[%s]", strings.TrimSpace(value))
-					} else if fieldType == "multiselect" {
-					}
-
-					r.Fields[key] = value
-				}
-			}
 		} else {
-			r, err = model.NewRecordWithOptions(newTitle, recordType)
+			r, err = model.NewRecordWithOptions(opts.title, recordType)
 			if err != nil {
 				ui.Error(os.Stderr, err.Error())
 				return
@@ -333,20 +363,12 @@ func captureSnippetFromEditorImpl() (string, error) {
 	_ = tmpFile.Close()
 	defer func() { _ = os.Remove(tmpName) }()
 
-	editor := os.Getenv("EDITOR")
+	editor := findEditor()
 	if editor == "" {
-		editor = os.Getenv("VISUAL")
-	}
-	if editor == "" {
-		editor = "vim"
+		return "", fmt.Errorf("no editor found. Set $EDITOR or $VISUAL")
 	}
 
-	c := exec.Command(editor, tmpName)
-	c.Stdin = os.Stdin
-	c.Stdout = os.Stdout
-	c.Stderr = os.Stderr
-
-	if err := c.Run(); err != nil {
+	if err := openEditorImpl(editor, tmpName); err != nil {
 		return "", err
 	}
 
@@ -359,15 +381,5 @@ func captureSnippetFromEditorImpl() (string, error) {
 }
 
 func init() {
-	newCmd.PersistentFlags().StringVar(&newTitle, "title", "", "Record title (skip for interactive wizard)")
-	newCmd.PersistentFlags().BoolVarP(&newGlobal, "global", "g", false, "Save to personal vault (~/.sadr/)")
-	newCmd.PersistentFlags().BoolVarP(&newClipboard, "clipboard", "c", false, "Read snippet from clipboard")
-	newCmd.PersistentFlags().StringVarP(&newFile, "file", "f", "", "Read snippet from file")
-	newCmd.PersistentFlags().BoolVarP(&newSmart, "smart", "s", false, "AI suggests field values from snippet")
-	newCmd.PersistentFlags().StringVar(&newModel, "model", "", "Override AI model (auto-enables --smart)")
-	newCmd.PersistentFlags().BoolVarP(&newDiff, "diff", "d", false, "Read snippet from git diff")
-	newCmd.MarkFlagsMutuallyExclusive("clipboard", "file", "diff")
-	newCmd.AddCommand(newAdrCmd)
-	newCmd.AddCommand(newSnippetCmd)
-	rootCmd.AddCommand(newCmd)
+	rootCmd.AddCommand(newNewCmd())
 }

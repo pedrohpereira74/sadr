@@ -3,6 +3,9 @@ package search
 import "strings"
 
 func HasAnyTag(recordTags string, filterTags string) bool {
+	if strings.TrimSpace(recordTags) == "" || strings.TrimSpace(filterTags) == "" {
+		return false
+	}
 	rTags := strings.Split(recordTags, ",")
 	fTags := strings.Split(filterTags, ",")
 

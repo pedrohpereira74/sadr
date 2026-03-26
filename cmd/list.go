@@ -11,75 +11,83 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var listType string
-var listTags string
-var listField string
-var listGlobal bool
+type listOptions struct {
+	recordType string
+	tags       string
+	field      string
+	global     bool
+}
 
-var listCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List all records",
-	Long:  "List all captured records. Can be filtered by tags or fields.",
-	Run: func(cmd *cobra.Command, args []string) {
-		recordsDir, err := resolveRecordsDir(listGlobal)
-		if err != nil {
-			ui.Error(os.Stderr, err.Error())
-			return
-		}
+func newListCmd() *cobra.Command {
+	opts := &listOptions{}
 
-		s := storage.NewStorage(recordsDir)
-		records, err := s.ListRecords()
-		if err != nil {
-			ui.Error(os.Stderr, fmt.Sprintf("Something went wrong: %v", err))
-			return
-		}
-
-		if listField != "" && len(strings.SplitN(listField, "=", 2)) != 2 {
-			ui.Error(os.Stderr, "Invalid field filter. Use --field key=value")
-			return
-		}
-
-		var filtered []struct{ Type, Title, Tags string }
-		for _, r := range records {
-			tags := r.Fields["tags"]
-			if tags == "" {
-				tags = "-"
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List all records",
+		Long:  "List all captured records. Can be filtered by tags or fields.",
+		Run: func(cmd *cobra.Command, args []string) {
+			recordsDir, err := resolveRecordsDir(opts.global)
+			if err != nil {
+				ui.Error(os.Stderr, err.Error())
+				return
 			}
 
-			match := true
-			if listType != "" && r.Type != listType {
-				match = false
+			s := storage.NewStorage(recordsDir)
+			records, err := s.ListRecords()
+			if err != nil {
+				ui.Error(os.Stderr, fmt.Sprintf("Something went wrong: %v", err))
+				return
 			}
-			if match && listTags != "" && !search.HasAnyTag(r.Fields["tags"], listTags) {
-				match = false
+
+			if opts.field != "" && len(strings.SplitN(opts.field, "=", 2)) != 2 {
+				ui.Error(os.Stderr, "Invalid field filter. Use --field key=value")
+				return
 			}
-			if match && listField != "" {
-				parts := strings.SplitN(listField, "=", 2)
-				if r.Fields[parts[0]] != parts[1] {
+
+			var filtered []struct{ Type, Title, Tags string }
+			for _, r := range records {
+				tags := r.Fields["tags"]
+				if tags == "" {
+					tags = "-"
+				}
+
+				match := true
+				if opts.recordType != "" && r.Type != opts.recordType {
 					match = false
+				}
+				if match && opts.tags != "" && !search.HasAnyTag(r.Fields["tags"], opts.tags) {
+					match = false
+				}
+				if match && opts.field != "" {
+					parts := strings.SplitN(opts.field, "=", 2)
+					if r.Fields[parts[0]] != parts[1] {
+						match = false
+					}
+				}
+
+				if match {
+					filtered = append(filtered, struct{ Type, Title, Tags string }{r.Type, r.Title, tags})
 				}
 			}
 
-			if match {
-				filtered = append(filtered, struct{ Type, Title, Tags string }{r.Type, r.Title, tags})
+			if len(filtered) == 0 {
+				ui.Info(os.Stderr, "Nothing here yet. Run 'sadr new' to capture your first snippet.")
+				return
 			}
-		}
 
-		if len(filtered) == 0 {
-			ui.Info(os.Stderr, "Nothing here yet. Run 'sadr new' to capture your first snippet.")
-			return
-		}
+			for _, item := range filtered {
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", item.Type, item.Title, item.Tags)
+			}
+		},
+	}
 
-		for _, item := range filtered {
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", item.Type, item.Title, item.Tags)
-		}
-	},
+	cmd.Flags().StringVar(&opts.recordType, "type", "", "Filter by type: full, snippet, adr")
+	cmd.Flags().StringVar(&opts.tags, "tags", "", "Filter by tags (comma-separated)")
+	cmd.Flags().StringVar(&opts.field, "field", "", "Filter by field value (key=value)")
+	cmd.Flags().BoolVarP(&opts.global, "global", "g", false, "List personal records from ~/.sadr/")
+	return cmd
 }
 
 func init() {
-	listCmd.Flags().StringVar(&listType, "type", "", "Filter by type: full, snippet, adr")
-	listCmd.Flags().StringVar(&listTags, "tags", "", "Filter by tags (comma-separated)")
-	listCmd.Flags().StringVar(&listField, "field", "", "Filter by field value (key=value)")
-	listCmd.Flags().BoolVarP(&listGlobal, "global", "g", false, "List personal records from ~/.sadr/")
-	rootCmd.AddCommand(listCmd)
+	rootCmd.AddCommand(newListCmd())
 }

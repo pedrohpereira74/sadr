@@ -95,8 +95,6 @@ func TestListFiltersByField(t *testing.T) {
 
 	var buf bytes.Buffer
 	rootCmd.SetOut(&buf)
-	listType = ""
-	listTags = ""
 	rootCmd.SetArgs([]string{"list", "--field", "tags=database,performance"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)

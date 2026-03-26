@@ -7,23 +7,11 @@ import (
 	"testing"
 
 	"github.com/pedrohpereira74/sadr/internal/storage"
-	"github.com/spf13/pflag"
 )
 
 func setupNewTest(t *testing.T) string {
 	t.Helper()
-	newTitle = ""
-	newGlobal = false
-	newClipboard = false
-	newFile = ""
-	newDiff = false
-	newSmart = false
-
-	// Reset cobra PersistentFlags Changed state to prevent
-	// MarkFlagsMutuallyExclusive from seeing stale flags from prior tests
-	newCmd.PersistentFlags().VisitAll(func(f *pflag.Flag) {
-		f.Changed = false
-	})
+	resetCmd(findSubCmd("new"))
 
 	dir, _ := os.MkdirTemp("", "sadr-test-*")
 	t.Cleanup(func() { os.RemoveAll(dir) })
@@ -94,7 +82,6 @@ func TestNewSnippetCreatesRecordWithTypeSnippet(t *testing.T) {
 		t.Errorf("expected type 'snippet', got '%s'", records[0].Type)
 	}
 }
-
 
 func TestNewGlobalSavesToHome(t *testing.T) {
 	home, _ := os.MkdirTemp("", "sadr-test-home-*")
