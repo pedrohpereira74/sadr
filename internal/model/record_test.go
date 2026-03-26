@@ -6,7 +6,7 @@ import (
 )
 
 func TestNewRecordHasTitle(t *testing.T) {
-	r, err := NewRecord("Use retry with exponential backoff")
+	r, err := NewRecordWithOptions("Use retry with exponential backoff", "full")
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -28,7 +28,7 @@ func TestNewRecordWithInvalidTitleReturnsError(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		_, err := NewRecord(tt.title)
+		_, err := NewRecordWithOptions(tt.title, "full")
 		if err == nil {
 			t.Errorf("expected error for title %q, got nil", tt.title)
 		}
@@ -37,7 +37,7 @@ func TestNewRecordWithInvalidTitleReturnsError(t *testing.T) {
 
 func TestNewRecordHasCreatedAt(t *testing.T) {
 	before := time.Now()
-	r, err := NewRecord("Use retry with exponential backoff")
+	r, err := NewRecordWithOptions("Use retry with exponential backoff", "full")
 	after := time.Now()
 
 	if err != nil {
@@ -49,7 +49,7 @@ func TestNewRecordHasCreatedAt(t *testing.T) {
 }
 
 func TestNewRecordDefaultTypeIsFull(t *testing.T) {
-	r, err := NewRecord("Use retry with exponential backoff")
+	r, err := NewRecordWithOptions("Use retry with exponential backoff", "full")
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -99,7 +99,7 @@ func TestNewRecordWithSnippet(t *testing.T) {
 }
 
 func TestNewRecordFieldsIsInitialized(t *testing.T) {
-	r, err := NewRecord("Use retry")
+	r, err := NewRecordWithOptions("Use retry", "full")
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -110,7 +110,7 @@ func TestNewRecordFieldsIsInitialized(t *testing.T) {
 }
 
 func TestRecordCanSetAndGetFields(t *testing.T) {
-	r, err := NewRecord("Use retry")
+	r, err := NewRecordWithOptions("Use retry", "full")
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -128,7 +128,7 @@ func TestRecordCanSetAndGetFields(t *testing.T) {
 }
 
 func TestNewRecordHasSchemaVersion(t *testing.T) {
-	r, err := NewRecord("Use retry")
+	r, err := NewRecordWithOptions("Use retry", "full")
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -140,7 +140,7 @@ func TestNewRecordHasSchemaVersion(t *testing.T) {
 }
 
 func TestNewRecordHasDefaultFileRef(t *testing.T) {
-	r, err := NewRecord("Use retry")
+	r, err := NewRecordWithOptions("Use retry", "full")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

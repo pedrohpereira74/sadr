@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -65,7 +66,7 @@ func (m fallbackModel) View() string {
 	return b.String()
 }
 
-func promptGlobalFallback() string {
+func promptGlobalFallbackImpl() string {
 	m := fallbackModel{
 		options: []string{"Yes, use global", "No, cancel"},
 	}
@@ -82,14 +83,14 @@ func handleGlobalFallback(paths discover.SadrPaths) {
 	if !paths.IsGlobal {
 		return
 	}
-	// Bypass interactive prompt during testing to prevent hangs
 	if os.Getenv("SADR_TEST") == "1" || flag.Lookup("test.v") != nil {
 		return
 	}
-	chosen := promptGlobalFallback()
-	if chosen == "yes" {
+	chosen := fallbackPrompter()
+	switch chosen {
+	case "yes":
 		return
-	} else if chosen == "no" || chosen == "" {
+	case "no", "":
 		ui.Success(os.Stderr, "Run 'sadr init' in your project to initialize a local Sadr project.")
 		os.Exit(0)
 	}
@@ -102,22 +103,39 @@ func findEditor() string {
 	if editor := os.Getenv("EDITOR"); editor != "" {
 		return editor
 	}
-	for _, fallback := range []string{"vim", "nano", "vi"} {
-		if _, err := exec.LookPath(fallback); err == nil {
-			return fallback
+	if runtime.GOOS == "windows" {
+		for _, fallback := range []string{"notepad", "code"} {
+			if _, err := exec.LookPath(fallback); err == nil {
+				if fallback == "code" {
+					return "code --wait"
+				}
+				return fallback
+			}
+		}
+	} else {
+		for _, fallback := range []string{"vim", "nano", "vi"} {
+			if _, err := exec.LookPath(fallback); err == nil {
+				return fallback
+			}
 		}
 	}
 	return ""
 }
 
-func openEditor(editor string, path string) {
-	c := exec.Command(editor, path)
+func openEditorImpl(editor string, path string) {
+	parts := strings.Fields(editor)
+	var c *exec.Cmd
+	if len(parts) > 1 {
+		c = exec.Command(parts[0], append(parts[1:], path)...)
+	} else {
+		c = exec.Command(editor, path)
+	}
 	c.Stdin = os.Stdin
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
 
 	if err := c.Run(); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, ":(  Editor exited with error: %v\n", err)
+		ui.Error(os.Stderr, fmt.Sprintf("Editor exited with error: %v", err))
 	}
 }
 

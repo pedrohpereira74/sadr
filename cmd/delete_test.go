@@ -19,7 +19,7 @@ func setupDeleteTest(t *testing.T) string {
 	}
 
 	s := storage.NewStorage(recordsDir)
-	r, _ := model.NewRecord("To be deleted")
+	r, _ := model.NewRecordWithOptions("To be deleted", "full")
 	_, _ = s.SaveRecord(r)
 
 	originalWd, _ := os.Getwd()

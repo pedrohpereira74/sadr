@@ -5,7 +5,17 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/spf13/pflag"
 )
+
+func resetConfigFlags() {
+	configCmd.Flags().VisitAll(func(f *pflag.Flag) {
+		f.Changed = false
+	})
+	configGlobal = false
+	configSetAPIKey = ""
+}
 
 func TestConfigOpensLocal(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "sadr-test-*")
@@ -26,6 +36,7 @@ func TestConfigOpensLocal(t *testing.T) {
 
 	t.Setenv("EDITOR", "sort")
 
+	resetConfigFlags()
 	rootCmd.SetArgs([]string{"config"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -39,6 +50,7 @@ func TestConfigGlobalDoesNotCreateDirectory(t *testing.T) {
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("EDITOR", "sort")
 
+	resetConfigFlags()
 	rootCmd.SetArgs([]string{"config", "--global"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -56,6 +68,7 @@ func TestConfigSetAPIKeyCreatesFile(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 
+	resetConfigFlags()
 	rootCmd.SetArgs([]string{"config", "--set-api-key", "test-key-123"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -85,6 +98,7 @@ func TestConfigSetAPIKeyUpdatesExistingFile(t *testing.T) {
 	initialContent := "editor: \"nano\"\napi_key: \"old-key\"\nsome_other_setting: true\n"
 	_ = os.WriteFile(configPath, []byte(initialContent), 0644)
 
+	resetConfigFlags()
 	rootCmd.SetArgs([]string{"config", "--set-api-key", "new-key-456"})
 	_ = rootCmd.Execute()
 

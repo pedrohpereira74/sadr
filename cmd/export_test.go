@@ -7,6 +7,7 @@ import (
 
 	"github.com/pedrohpereira74/sadr/internal/model"
 	"github.com/pedrohpereira74/sadr/internal/storage"
+	"github.com/spf13/pflag"
 )
 
 func setupExportTest(t *testing.T) string {
@@ -14,6 +15,11 @@ func setupExportTest(t *testing.T) string {
 	exportID = 0
 	exportAll = false
 	exportTags = ""
+
+	// Reset Cobra's Changed state to stop mutually exclusive flags from leaking
+	exportCmd.Flags().VisitAll(func(f *pflag.Flag) {
+		f.Changed = false
+	})
 
 	dir, _ := os.MkdirTemp("", "sadr-test-*")
 	t.Cleanup(func() { os.RemoveAll(dir) })
@@ -27,16 +33,16 @@ func setupExportTest(t *testing.T) string {
 	}
 
 	s := storage.NewStorage(recordsDir)
-	r1, _ := model.NewRecord("Use retry with backoff")
+	r1, _ := model.NewRecordWithOptions("Use retry with backoff", "full")
 	r1.Snippet = "client := retryablehttp.NewClient()"
 	r1.Fields["tags"] = "api,performance"
 	_, _ = s.SaveRecord(r1)
 
-	r2, _ := model.NewRecord("Redis cache strategy")
+	r2, _ := model.NewRecordWithOptions("Redis cache strategy", "full")
 	r2.Fields["tags"] = "database,performance"
 	_, _ = s.SaveRecord(r2)
 
-	r3, _ := model.NewRecord("Auth token rotation")
+	r3, _ := model.NewRecordWithOptions("Auth token rotation", "full")
 	r3.Fields["tags"] = "security,api"
 	_, _ = s.SaveRecord(r3)
 

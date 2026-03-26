@@ -79,15 +79,3 @@ func TestModelHasSnippetStep(t *testing.T) {
 	}
 }
 
-func TestQuickModelHasOnlyTitleAndTags(t *testing.T) {
-	m := NewQuickModel()
-	if len(m.steps) != 2 {
-		t.Fatalf("expected 2 steps, got %d", len(m.steps))
-	}
-	if m.steps[0].name != "title" {
-		t.Errorf("expected first step 'title', got '%s'", m.steps[0].name)
-	}
-	if m.steps[1].name != "tags" {
-		t.Errorf("expected second step 'tags', got '%s'", m.steps[1].name)
-	}
-}

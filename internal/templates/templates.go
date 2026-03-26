@@ -13,7 +13,7 @@ fields:
     required: true
     options: [architecture, api, database, security, performance, tooling, infrastructure, bugfix]
 
-quick_fields: [title, tags]
+
 `
 
 const ExtendedConfig = `# .sadr/config.yaml
@@ -44,14 +44,13 @@ fields:
     required: false
 
   - name: alternatives
-    type: text
+    type: list
     required: false
 
   - name: consequences
     type: text
     required: false
 
-quick_fields: [title, tags]
 `
 
 const GlobalConfig = `# Global sadr config — personal preferences
@@ -59,9 +58,11 @@ const GlobalConfig = `# Global sadr config — personal preferences
 
 editor: 
 
-language: english
+language: "english"
 
 ai:
-  provider: gemini
+  provider: "gemini"
   api_key: ""
+  model: "gemini-3-flash-preview"
+  ai_depth: true
 `

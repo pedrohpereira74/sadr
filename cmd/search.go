@@ -19,10 +19,15 @@ var searchGlobal bool
 var searchCmd = &cobra.Command{
 	Use:   "search [query]",
 	Short: "Search records by title, tags, or content",
+	Long:  "Search your records. Use --deep to search inside snippet bodies.",
 	Run: func(cmd *cobra.Command, args []string) {
 		recordsDir, err := resolveRecordsDir(searchGlobal)
 		if err != nil {
-			_, _ = fmt.Fprintln(os.Stderr, ":(  "+err.Error())
+			ui.Error(os.Stderr, err.Error())
+			return
+		}
+		if searchID > 0 && len(args) > 0 {
+			ui.Error(os.Stderr, "Cannot use --id and a search query at the same time.")
 			return
 		}
 
@@ -30,11 +35,11 @@ var searchCmd = &cobra.Command{
 			s := storage.NewStorage(recordsDir)
 			records, err := s.ListRecords()
 			if err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, ":(  Something went wrong: %v\n", err)
+				ui.Error(os.Stderr, fmt.Sprintf("Something went wrong: %v", err))
 				return
 			}
 			if searchID > len(records) {
-				_, _ = fmt.Fprintf(os.Stderr, ":(  Record #%d not found. You have %d records.\n", searchID, len(records))
+				ui.Error(os.Stderr, fmt.Sprintf("Record #%d not found. You have %d records.", searchID, len(records)))
 				return
 			}
 			r := records[searchID-1]
@@ -69,12 +74,12 @@ var searchCmd = &cobra.Command{
 		query := args[0]
 		results, err := search.Search(recordsDir, query, searchDeep)
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, ":(  Something went wrong: %v\n", err)
+			ui.Error(os.Stderr, fmt.Sprintf("Something went wrong: %v", err))
 			return
 		}
 
 		if len(results) == 0 {
-			_, _ = fmt.Fprintln(cmd.OutOrStderr(), ":(  0 results. Your search is sadr than your snippets.")
+			ui.Info(os.Stderr, "0 results. Your search is sadr than your snippets.")
 			return
 		}
 
@@ -92,5 +97,6 @@ func init() {
 	searchCmd.Flags().BoolVar(&searchDeep, "deep", false, "Search inside snippet content and fields")
 	searchCmd.Flags().IntVar(&searchID, "id", 0, "Show a specific record by its numeric ID")
 	searchCmd.Flags().BoolVarP(&searchGlobal, "global", "g", false, "Search personal records in ~/.sadr/")
+	searchCmd.MarkFlagsMutuallyExclusive("id", "deep")
 	rootCmd.AddCommand(searchCmd)
 }

@@ -75,7 +75,7 @@ func (m presetModel) View() string {
 	return b.String()
 }
 
-func selectPreset() string {
+func selectPresetImpl() string {
 	m := newPresetModel()
 	p := tea.NewProgram(m)
 	finalModel, err := p.Run()
@@ -92,6 +92,7 @@ func selectPreset() string {
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize a .sadr/ repository in the current directory or globally",
+	Long:  "Initialize a new .sadr/ directory in the current project, creating records, exports folders and a config.yaml file.",
 	Run: func(cmd *cobra.Command, args []string) {
 		home, errHome := os.UserHomeDir()
 		cwd, errCwd := os.Getwd()
@@ -106,7 +107,7 @@ var initCmd = &cobra.Command{
 
 			chosen := initPreset
 			if chosen == "" {
-				chosen = selectPreset()
+				chosen = presetSelector()
 				if chosen == "" {
 					ui.Info(os.Stderr, "Cancelled.")
 					return
@@ -149,13 +150,41 @@ var initCmd = &cobra.Command{
 		sadrDir := filepath.Join(cwd, ".sadr")
 
 		if _, err := os.Stat(sadrDir); !os.IsNotExist(err) {
-			ui.Info(os.Stderr, "Nice try... sadr already lives here.")
+			configPath := filepath.Join(sadrDir, "config.yaml")
+			if _, err := os.Stat(configPath); !os.IsNotExist(err) {
+				ui.Info(os.Stderr, "Nice try... sadr already lives here.")
+				return
+			}
+
+			// .sadr/ exists but config.yaml is missing — heal
+			_ = os.MkdirAll(filepath.Join(sadrDir, "records"), 0755)
+			_ = os.MkdirAll(filepath.Join(sadrDir, "exports"), 0755)
+
+			chosen := initPreset
+			if chosen == "" {
+				chosen = presetSelector()
+				if chosen == "" {
+					ui.Info(os.Stderr, "Cancelled.")
+					return
+				}
+			}
+
+			preset := templates.MinimalConfig
+			if chosen == "extended" {
+				preset = templates.ExtendedConfig
+			}
+			if err := os.WriteFile(configPath, []byte(preset), 0644); err != nil {
+				ui.Error(os.Stderr, fmt.Sprintf("Failed to create config: %v", err))
+				return
+			}
+
+			ui.Success(os.Stderr, "Healed! Recreated missing config.yaml.")
 			return
 		}
 
 		chosen := initPreset
 		if chosen == "" {
-			chosen = selectPreset()
+			chosen = presetSelector()
 			if chosen == "" {
 				ui.Info(os.Stderr, "Cancelled.")
 				return
@@ -190,7 +219,7 @@ var initCmd = &cobra.Command{
 
 		_, _ = fmt.Fprintln(os.Stderr, "    Done! Created .sadr/ in this directory.")
 		_, _ = fmt.Fprintf(os.Stderr, "    Config: .sadr/config.yaml (%s preset)\n", chosen)
-		_, _ = fmt.Fprintln(os.Stderr, "    Try it: run 'sadr new --quick' to capture your first snippet.")
+		_, _ = fmt.Fprintln(os.Stderr, "    Try it: run 'sadr new' to capture your first record.")
 	},
 }
 

@@ -10,6 +10,7 @@ import (
 	"github.com/pedrohpereira74/sadr/internal/model"
 	"github.com/pedrohpereira74/sadr/internal/search"
 	"github.com/pedrohpereira74/sadr/internal/storage"
+	"github.com/pedrohpereira74/sadr/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -21,10 +22,11 @@ var exportGlobal bool
 var exportCmd = &cobra.Command{
 	Use:   "export",
 	Short: "Export records to self-contained HTML",
+	Long:  "Export records into a single, styled HTML file. Use flags to filter by ID or tags.",
 	Run: func(cmd *cobra.Command, args []string) {
 		paths, err := resolvePaths(exportGlobal)
 		if err != nil {
-			_, _ = fmt.Fprintln(os.Stderr, ":(  "+err.Error())
+			ui.Error(os.Stderr, err.Error())
 			return
 		}
 		_ = os.MkdirAll(paths.Exports, 0755)
@@ -32,19 +34,19 @@ var exportCmd = &cobra.Command{
 		s := storage.NewStorage(paths.Records)
 		records, err := s.ListRecords()
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, ":(  Something went wrong: %v\n", err)
+			ui.Error(os.Stderr, fmt.Sprintf("Something went wrong: %v", err))
 			return
 		}
 
 		if exportID > 0 {
 			path, err := s.GetRecordPathByIndex(exportID - 1)
 			if err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, ":(  Record #%d not found or invalid.\n", exportID)
+				ui.Error(os.Stderr, fmt.Sprintf("Record #%d not found or invalid.", exportID))
 				return
 			}
 			r, err := s.LoadRecord(path)
 			if err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, ":(  Failed to read record %d: %v\n", exportID, err)
+				ui.Error(os.Stderr, fmt.Sprintf("Failed to read record %d: %v", exportID, err))
 				return
 			}
 			exportRecord(r, exportID, paths.Exports)
@@ -60,9 +62,9 @@ var exportCmd = &cobra.Command{
 				}
 			}
 			if count == 0 {
-				_, _ = fmt.Fprintln(os.Stderr, ":(  No records match those tags.")
+				ui.Info(os.Stderr, "No records match those tags.")
 			} else {
-				_, _ = fmt.Fprintf(os.Stderr, ":(  %d record(s) exported.\n", count)
+				ui.Success(os.Stderr, fmt.Sprintf("%d record(s) exported.", count))
 			}
 			return
 		}
@@ -71,11 +73,11 @@ var exportCmd = &cobra.Command{
 			for i, r := range records {
 				exportRecord(r, i+1, paths.Exports)
 			}
-			_, _ = fmt.Fprintf(os.Stderr, ":(  %d record(s) exported.\n", len(records))
+			ui.Success(os.Stderr, fmt.Sprintf("%d record(s) exported.", len(records)))
 			return
 		}
 
-		_, _ = fmt.Fprintln(os.Stderr, ":(  Provide --id <number>, --all, or --tags <list>.")
+		ui.Error(os.Stderr, "Provide --id <number>, --all, or --tags <list>.")
 	},
 }
 
@@ -120,30 +122,45 @@ pre code {
 	b.WriteString("</head><body>\n")
 	b.WriteString(fmt.Sprintf("<h1>%s</h1>\n", html.EscapeString(r.Title)))
 
+	written := map[string]bool{}
+	if tags, ok := r.Fields["tags"]; ok && tags != "" {
+		b.WriteString(fmt.Sprintf("<p><strong>Tags:</strong> %s</p>\n", html.EscapeString(tags)))
+		written["tags"] = true
+	}
+
 	if r.Snippet != "" {
 		b.WriteString("<h2>Snippet</h2>\n")
 		b.WriteString(fmt.Sprintf("<pre><code>%s</code></pre>\n", html.EscapeString(r.Snippet)))
 	}
 
+	for _, key := range r.FieldOrder {
+		value, ok := r.Fields[key]
+		if !ok || value == "" || written[key] {
+			continue
+		}
+		b.WriteString(fmt.Sprintf("<h2>%s</h2>\n<p>%s</p>\n", html.EscapeString(key), html.EscapeString(value)))
+		written[key] = true
+	}
 	for key, value := range r.Fields {
+		if value == "" || written[key] {
+			continue
+		}
 		b.WriteString(fmt.Sprintf("<h2>%s</h2>\n<p>%s</p>\n", html.EscapeString(key), html.EscapeString(value)))
 	}
 
 	b.WriteString("<script>hljs.highlightAll();</script>\n")
 	b.WriteString("</body></html>")
 
-	slug := strings.ToLower(r.Title)
-	slug = strings.ReplaceAll(slug, " ", "-")
+	slug := storage.Slugify(r.Title)
 	filename := fmt.Sprintf("sadr-%04d-%s.html", id, slug)
 	outputPath := filepath.Join(exportsDir, filename)
 
 	if err := os.WriteFile(outputPath, []byte(b.String()), 0644); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, ":(  Failed to export: %v\n", err)
+		ui.Error(os.Stderr, fmt.Sprintf("Failed to export: %v", err))
 		return
 	}
 
-	_, _ = fmt.Fprintf(os.Stderr,
-		":(  %s exported — From tribal knowledge to actual documentation.\n", filepath.Base(outputPath))
+	ui.Success(os.Stderr, fmt.Sprintf("%s exported — From tribal knowledge to actual documentation.", filepath.Base(outputPath)))
 }
 
 func init() {
@@ -152,5 +169,6 @@ func init() {
 	exportCmd.Flags().StringVar(&exportTags, "tags", "", "Export records matching tags (comma-separated)")
 	exportCmd.Flags().BoolVarP(
 		&exportGlobal, "global", "g", false, "Export personal records from ~/.sadr/")
+	exportCmd.MarkFlagsMutuallyExclusive("id", "all", "tags")
 	rootCmd.AddCommand(exportCmd)
 }

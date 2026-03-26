@@ -92,12 +92,22 @@ func TestInitDoesNotOverwrite(t *testing.T) {
 	if err := os.MkdirAll(sadrDir, 0755); err != nil {
 		t.Fatalf("failed to create dir: %v", err)
 	}
+	// Create the config so init sees it as fully initialized
+	if err := os.WriteFile(filepath.Join(sadrDir, "config.yaml"), []byte("fields: []"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
 	if err := os.Chdir(dir); err != nil {
 		t.Fatalf("failed to change dir: %v", err)
 	}
 
 	rootCmd.SetArgs([]string{"init", "--preset", "minimal"})
 	_ = rootCmd.Execute()
+
+	// Config should still have original content (not overwritten)
+	content, _ := os.ReadFile(filepath.Join(sadrDir, "config.yaml"))
+	if string(content) != "fields: []" {
+		t.Error("config.yaml was overwritten when it should have been preserved")
+	}
 }
 
 func TestInitAddsExportsToGitignore(t *testing.T) {
@@ -140,5 +150,36 @@ func TestInitDoesNotDuplicateGitignore(t *testing.T) {
 	count := strings.Count(string(content), ".sadr/exports/")
 	if count != 1 {
 		t.Errorf("expected 1 occurrence of .sadr/exports/, got %d", count)
+	}
+}
+
+func TestInitHealsWhenConfigMissing(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "sadr-test-*")
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	sadrDir := filepath.Join(dir, ".sadr")
+	if err := os.MkdirAll(sadrDir, 0755); err != nil {
+		t.Fatalf("failed to create dir: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("failed to change dir: %v", err)
+	}
+
+	// .sadr/ exists but config.yaml is missing — should heal
+	rootCmd.SetArgs([]string{"init", "--preset", "minimal"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	configPath := filepath.Join(sadrDir, "config.yaml")
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		t.Error("expected config.yaml to be recreated by healing")
+	}
+
+	// Also check that records/ and exports/ were created
+	if _, err := os.Stat(filepath.Join(sadrDir, "records")); os.IsNotExist(err) {
+		t.Error("expected records/ to exist after healing")
+	}
+	if _, err := os.Stat(filepath.Join(sadrDir, "exports")); os.IsNotExist(err) {
+		t.Error("expected exports/ to exist after healing")
 	}
 }

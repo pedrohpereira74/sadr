@@ -25,3 +25,15 @@ func TestHasAnyTagHandlesSpaces(t *testing.T) {
 		t.Error("expected match even with spaces")
 	}
 }
+
+func TestHasAnyTagCaseInsensitive(t *testing.T) {
+	if !HasAnyTag("API,Security", "api") {
+		t.Error("expected case-insensitive match for 'API' vs 'api'")
+	}
+	if !HasAnyTag("database", "DATABASE") {
+		t.Error("expected case-insensitive match for 'database' vs 'DATABASE'")
+	}
+	if !HasAnyTag("Api, Security", "security,tooling") {
+		t.Error("expected case-insensitive match for mixed case tags")
+	}
+}

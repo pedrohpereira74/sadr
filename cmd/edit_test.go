@@ -19,7 +19,7 @@ func setupEditTest(t *testing.T) string {
 	}
 
 	s := storage.NewStorage(recordsDir)
-	r, _ := model.NewRecord("Editable record")
+	r, _ := model.NewRecordWithOptions("Editable record", "full")
 	r.Fields["status"] = "proposed"
 	_, _ = s.SaveRecord(r)
 

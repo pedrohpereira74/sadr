@@ -4,11 +4,21 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/pedrohpereira74/sadr/internal/model"
+	"golang.org/x/text/runes"
+	"golang.org/x/text/transform"
+	"golang.org/x/text/unicode/norm"
 	"gopkg.in/yaml.v3"
+)
+
+var (
+	invalidSlugChars = regexp.MustCompile(`[^a-z0-9\-]`)
+	multipleDashes   = regexp.MustCompile(`-{2,}`)
 )
 
 type Storage struct {
@@ -57,7 +67,7 @@ func (s *Storage) SaveRecord(r model.Record) (string, error) {
 	content.Write(yamlBytes)
 	content.WriteString("---\n\n")
 
-	content.WriteString(fmt.Sprintf("# %s\n\n", r.Title))
+	fmt.Fprintf(&content, "# %s\n\n", r.Title)
 
 	if tagsStr, ok := r.Fields["tags"]; ok && tagsStr != "" {
 		tagsList := strings.Split(tagsStr, ",")
@@ -65,13 +75,12 @@ func (s *Storage) SaveRecord(r model.Record) (string, error) {
 		for _, t := range tagsList {
 			formattedTags = append(formattedTags, "`#"+strings.TrimSpace(t)+"`")
 		}
-		content.WriteString(fmt.Sprintf("**Tags:** %s\n\n", strings.Join(formattedTags, " ")))
+		fmt.Fprintf(&content, "**Tags:** %s\n\n", strings.Join(formattedTags, " "))
 	}
 
 	if r.Snippet != "" {
-		content.WriteString("## Snippet\n\n```\n")
-		content.WriteString(r.Snippet)
-		content.WriteString("\n```\n\n")
+		bt := determineBackticks(r.Snippet)
+		fmt.Fprintf(&content, "## Snippet\n\n%s\n%s\n%s\n\n", bt, strings.TrimSpace(r.Snippet), bt)
 	}
 
 	written := map[string]bool{"tags": true}
@@ -82,11 +91,7 @@ func (s *Storage) SaveRecord(r model.Record) (string, error) {
 			continue
 		}
 
-		capitalizedKey := key
-		if len(key) > 0 {
-			capitalizedKey = strings.ToUpper(key[:1]) + strings.ToLower(key[1:])
-		}
-		content.WriteString(fmt.Sprintf("## %s\n\n%s\n\n", capitalizedKey, strings.TrimSpace(value)))
+		fmt.Fprintf(&content, "## %s\n\n%s\n\n", capitalizeKey(key), strings.TrimSpace(value))
 		written[key] = true
 	}
 
@@ -95,14 +100,10 @@ func (s *Storage) SaveRecord(r model.Record) (string, error) {
 			continue
 		}
 
-		capitalizedKey := key
-		if len(key) > 0 {
-			capitalizedKey = strings.ToUpper(key[:1]) + strings.ToLower(key[1:])
-		}
-		content.WriteString(fmt.Sprintf("## %s\n\n%s\n\n", capitalizedKey, strings.TrimSpace(value)))
+		fmt.Fprintf(&content, "## %s\n\n%s\n\n", capitalizeKey(key), strings.TrimSpace(value))
 	}
 
-	slug := slugify(r.Title)
+	slug := Slugify(r.Title)
 	nextID := s.getMaxID() + 1
 	filename := fmt.Sprintf("sadr-%04d-%s.md", nextID, slug)
 	fullPath := filepath.Join(s.Dir, filename)
@@ -162,12 +163,19 @@ func (s *Storage) LoadRecord(path string) (model.Record, error) {
 	}
 
 	body := strings.TrimSpace(parts[2])
-	sections := splitSections(body)
+	sections, sectionOrder := splitSections(body)
 	for name, value := range sections {
 		if strings.ToLower(name) == "snippet" {
 			r.Snippet = extractCodeBlock(value)
 		} else {
 			r.Fields[strings.ToLower(name)] = strings.TrimSpace(value)
+		}
+	}
+
+	for _, name := range sectionOrder {
+		lower := strings.ToLower(name)
+		if lower != "snippet" {
+			r.FieldOrder = append(r.FieldOrder, lower)
 		}
 	}
 
@@ -188,7 +196,8 @@ func (s *Storage) ListRecords() ([]model.Record, error) {
 		path := filepath.Join(s.Dir, entry.Name())
 		r, err := s.LoadRecord(path)
 		if err != nil {
-			return nil, err
+			_, _ = fmt.Fprintf(os.Stderr, ":(  Skipping invalid record %s: %v\n", entry.Name(), err)
+			continue
 		}
 		records = append(records, r)
 	}
@@ -199,10 +208,23 @@ func (s *Storage) DeleteRecord(path string) error {
 	return os.Remove(path)
 }
 
-func slugify(title string) string {
+func capitalizeKey(key string) string {
+	if len(key) == 0 {
+		return key
+	}
+	return strings.ToUpper(key[:1]) + strings.ToLower(key[1:])
+}
+
+func Slugify(title string) string {
 	s := strings.ToLower(title)
+	
+	t := transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
+	s, _, _ = transform.String(t, s)
+
 	s = strings.ReplaceAll(s, " ", "-")
-	return s
+	s = invalidSlugChars.ReplaceAllString(s, "")
+	s = multipleDashes.ReplaceAllString(s, "-")
+	return strings.Trim(s, "-")
 }
 
 func (s *Storage) getMaxID() int {
@@ -243,43 +265,63 @@ func (s *Storage) GetRecordPathByIndex(idx int) (string, error) {
 	return filepath.Join(s.Dir, mdFiles[idx]), nil
 }
 
-func splitSections(body string) map[string]string {
+func determineBackticks(snippet string) string {
+	count := 3
+	for strings.Contains(snippet, strings.Repeat("`", count)) {
+		count++
+	}
+	return strings.Repeat("`", count)
+}
+
+func splitSections(body string) (map[string]string, []string) {
 	sections := map[string]string{}
+	var order []string
 	current := ""
 	var buf strings.Builder
 
+	inCodeBlock := false
+	codeBlockFence := ""
+
 	for _, line := range strings.Split(body, "\n") {
-		if strings.HasPrefix(line, "## ") {
+		trimmed := strings.TrimSpace(line)
+
+		if strings.HasPrefix(trimmed, "```") {
+			if !inCodeBlock {
+				inCodeBlock = true
+				codeBlockFence = trimmed
+			} else if strings.HasPrefix(trimmed, codeBlockFence) {
+				inCodeBlock = false
+			}
+		}
+
+		if !inCodeBlock && strings.HasPrefix(line, "## ") {
 			if current != "" {
 				sections[current] = buf.String()
 			}
 			current = strings.TrimPrefix(line, "## ")
+			order = append(order, current)
 			buf.Reset()
 		} else {
-			buf.WriteString(line + "\n")
+			if current != "" {
+				buf.WriteString(line + "\n")
+			}
 		}
 	}
 	if current != "" {
 		sections[current] = buf.String()
 	}
 
-	return sections
+	return sections, order
 }
 
 func extractCodeBlock(s string) string {
-	start := strings.Index(s, "```")
-	if start == -1 {
-		return strings.TrimSpace(s)
+	lines := strings.Split(strings.TrimSpace(s), "\n")
+	if len(lines) >= 2 {
+		first := strings.TrimSpace(lines[0])
+		last := strings.TrimSpace(lines[len(lines)-1])
+		if strings.HasPrefix(first, "```") && strings.HasPrefix(last, "```") && first == last {
+			return strings.Join(lines[1:len(lines)-1], "\n")
+		}
 	}
-	afterStart := s[start+3:]
-	newline := strings.Index(afterStart, "\n")
-	if newline == -1 {
-		return ""
-	}
-	code := afterStart[newline+1:]
-	end := strings.Index(code, "```")
-	if end == -1 {
-		return strings.TrimSpace(code)
-	}
-	return strings.TrimSpace(code[:end])
+	return strings.TrimSpace(s)
 }

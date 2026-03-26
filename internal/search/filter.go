@@ -9,7 +9,7 @@ func HasAnyTag(recordTags string, filterTags string) bool {
 	for _, ft := range fTags {
 		ft = strings.TrimSpace(ft)
 		for _, rt := range rTags {
-			if strings.TrimSpace(rt) == ft {
+			if strings.EqualFold(strings.TrimSpace(rt), ft) {
 				return true
 			}
 		}

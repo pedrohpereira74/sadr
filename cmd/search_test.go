@@ -20,7 +20,7 @@ func setupSearchTest(t *testing.T) string {
 	}
 
 	s := storage.NewStorage(recordsDir)
-	r, _ := model.NewRecord("Use retry with backoff")
+	r, _ := model.NewRecordWithOptions("Use retry with backoff", "full")
 	_, _ = s.SaveRecord(r)
 
 	originalWd, _ := os.Getwd()
@@ -53,15 +53,16 @@ func TestSearchNoResults(t *testing.T) {
 
 	var buf bytes.Buffer
 	rootCmd.SetOut(&buf)
-	rootCmd.SetErr(&buf)
 	rootCmd.SetArgs([]string{"search", "banana"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
+	// No stdout output expected for zero results
+	// The "no results" message goes to os.Stderr via ui.Info
 	output := buf.String()
-	if len(output) == 0 {
-		t.Error("expected 'no results' message, got empty")
+	if len(output) != 0 {
+		t.Errorf("expected no stdout output for zero results, got: %s", output)
 	}
 }
 

@@ -18,6 +18,7 @@ var configSetAPIKey string
 var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Open config in $EDITOR",
+	Long:  "Open the project's config.yaml. Use --global to edit your personal global configuration.",
 	Run: func(cmd *cobra.Command, args []string) {
 		if configSetAPIKey != "" {
 			home, err := os.UserHomeDir()
@@ -81,30 +82,25 @@ var configCmd = &cobra.Command{
 				return
 			}
 
-			openEditor(editor, globalConfig)
+			editorRunner(editor, globalConfig)
 			return
 		}
 
 		dir, _ := os.Getwd()
 		paths, err := discover.FindSadrDir(dir)
 		if err != nil {
-			ui.Error(os.Stderr, err.Error())
+			ui.Error(os.Stderr, "No local sadr project found. Use 'sadr config --global' to edit your personal config, or 'sadr init' to create a project here.")
 			return
 		}
 
 		localConfig := filepath.Join(paths.Root, "config.yaml")
-
-		if _, err := os.Stat(localConfig); os.IsNotExist(err) {
-			ui.Error(os.Stderr, "Config file missing. Run 'sadr init' to recreate.")
-			return
-		}
-
-		openEditor(editor, localConfig)
+		editorRunner(editor, localConfig)
 	},
 }
 
 func init() {
 	configCmd.Flags().BoolVar(&configGlobal, "global", false, "Open global config (creates ~/.sadr/ on first use)")
 	configCmd.Flags().StringVar(&configSetAPIKey, "set-api-key", "", "Set the Gemini API key in the global config directly")
+	configCmd.MarkFlagsMutuallyExclusive("global", "set-api-key")
 	rootCmd.AddCommand(configCmd)
 }

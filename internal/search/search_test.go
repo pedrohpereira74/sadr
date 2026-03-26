@@ -11,8 +11,8 @@ func TestSearchByTitle(t *testing.T) {
 	dir := t.TempDir()
 	s := storage.NewStorage(dir)
 
-	r1, _ := model.NewRecord("Use retry with backoff")
-	r2, _ := model.NewRecord("Redis cache strategy")
+	r1, _ := model.NewRecordWithOptions("Use retry with backoff", "full")
+	r2, _ := model.NewRecordWithOptions("Redis cache strategy", "full")
 
 	_, _ = s.SaveRecord(r1)
 	_, _ = s.SaveRecord(r2)
@@ -30,7 +30,7 @@ func TestSearchDeepFindsInSnippet(t *testing.T) {
 	dir := t.TempDir()
 	s := storage.NewStorage(dir)
 
-	r, _ := model.NewRecord("HTTP client setup")
+	r, _ := model.NewRecordWithOptions("HTTP client setup", "full")
 	r.Snippet = "retryablehttp.NewClient()"
 
 	_, _ = s.SaveRecord(r)
@@ -53,10 +53,10 @@ func TestSearchByTags(t *testing.T) {
 	dir := t.TempDir()
 	s := storage.NewStorage(dir)
 
-	r1, _ := model.NewRecord("Cache strategy")
+	r1, _ := model.NewRecordWithOptions("Cache strategy", "full")
 	r1.Fields["tags"] = "database,performance"
 
-	r2, _ := model.NewRecord("Auth flow")
+	r2, _ := model.NewRecordWithOptions("Auth flow", "full")
 	r2.Fields["tags"] = "security,api"
 
 	_, _ = s.SaveRecord(r1)
@@ -75,7 +75,7 @@ func TestSearchCaseInsensitive(t *testing.T) {
 	dir := t.TempDir()
 	s := storage.NewStorage(dir)
 
-	r, _ := model.NewRecord("Use Retry With Backoff")
+	r, _ := model.NewRecordWithOptions("Use Retry With Backoff", "full")
 	_, _ = s.SaveRecord(r)
 
 	results, err := Search(dir, "retry", false)

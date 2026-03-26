@@ -34,7 +34,3 @@ func NewRecordWithOptions(title string, recordType string) (Record, error) {
 			Fields:        map[string]string{}},
 		nil
 }
-
-func NewRecord(title string) (Record, error) {
-	return NewRecordWithOptions(title, "full")
-}

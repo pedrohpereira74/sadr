@@ -15,7 +15,7 @@ func newTestStorage(t *testing.T) *Storage {
 
 func TestSaveRecordCreatesFile(t *testing.T) {
 	s := newTestStorage(t)
-	r, _ := model.NewRecord("Use retry")
+	r, _ := model.NewRecordWithOptions("Use retry", "full")
 
 	path, err := s.SaveRecord(r)
 	if err != nil {
@@ -28,7 +28,7 @@ func TestSaveRecordCreatesFile(t *testing.T) {
 
 func TestSaveRecordCorrectFilename(t *testing.T) {
 	s := newTestStorage(t)
-	r, _ := model.NewRecord("Use retry")
+	r, _ := model.NewRecordWithOptions("Use retry", "full")
 
 	path, err := s.SaveRecord(r)
 	if err != nil {
@@ -44,8 +44,8 @@ func TestSaveRecordCorrectFilename(t *testing.T) {
 func TestSaveRecordVerifySequentialID(t *testing.T) {
 	s := newTestStorage(t)
 
-	r1, _ := model.NewRecord("first record")
-	r2, _ := model.NewRecord("second record")
+	r1, _ := model.NewRecordWithOptions("first record", "full")
+	r2, _ := model.NewRecordWithOptions("second record", "full")
 
 	_, _ = s.SaveRecord(r1)
 	path2, err := s.SaveRecord(r2)
@@ -62,7 +62,7 @@ func TestSaveRecordVerifySequentialID(t *testing.T) {
 func TestLoadRecordReadsFile(t *testing.T) {
 	s := newTestStorage(t)
 
-	r, _ := model.NewRecord("Use retry with backoff")
+	r, _ := model.NewRecordWithOptions("Use retry with backoff", "full")
 	r.Snippet = "client := retryablehttp.NewClient()"
 	r.FileRef = "internal/http/client.go"
 	r.Fields["status"] = "accepted"
@@ -91,8 +91,8 @@ func TestLoadRecordReadsFile(t *testing.T) {
 func TestListRecords(t *testing.T) {
 	s := newTestStorage(t)
 
-	r1, _ := model.NewRecord("First record")
-	r2, _ := model.NewRecord("Second record")
+	r1, _ := model.NewRecordWithOptions("First record", "full")
+	r2, _ := model.NewRecordWithOptions("Second record", "full")
 
 	_, _ = s.SaveRecord(r1)
 	_, _ = s.SaveRecord(r2)
@@ -109,7 +109,7 @@ func TestListRecords(t *testing.T) {
 func TestDeleteRecord(t *testing.T) {
 	s := newTestStorage(t)
 
-	r, _ := model.NewRecord("To be deleted")
+	r, _ := model.NewRecordWithOptions("To be deleted", "full")
 	path, _ := s.SaveRecord(r)
 
 	err := s.DeleteRecord(path)
@@ -119,5 +119,44 @@ func TestDeleteRecord(t *testing.T) {
 
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Errorf("expected file to be deleted at %s", path)
+	}
+}
+
+func TestSlugifyRemovesSpecialChars(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"Use Redis/Memcached", "use-redismemcached"},
+		{"What's next?", "whats-next"},
+		{"Hello World", "hello-world"},
+		{"API keys & secrets!", "api-keys-secrets"},
+		{"  spaces  ", "spaces"},
+		{"foo--bar", "foo-bar"},
+	}
+	for _, tt := range tests {
+		got := Slugify(tt.input)
+		if got != tt.want {
+			t.Errorf("Slugify(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestListRecordsSkipsInvalidFile(t *testing.T) {
+	s := newTestStorage(t)
+
+	r, _ := model.NewRecordWithOptions("Valid record", "full")
+	_, _ = s.SaveRecord(r)
+
+	// Write an invalid .md file
+	invalidPath := filepath.Join(s.Dir, "sadr-9999-bad.md")
+	_ = os.WriteFile(invalidPath, []byte("not valid frontmatter at all"), 0644)
+
+	records, err := s.ListRecords()
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if len(records) != 1 {
+		t.Errorf("expected 1 valid record, got %d", len(records))
 	}
 }

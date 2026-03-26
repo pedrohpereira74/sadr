@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/pedrohpereira74/sadr/internal/storage"
+	"github.com/pedrohpereira74/sadr/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -15,10 +16,11 @@ var deleteGlobal bool
 var deleteCmd = &cobra.Command{
 	Use:   "delete",
 	Short: "Delete a record",
+	Long:  "Permanently delete a record by its ID.",
 	Run: func(cmd *cobra.Command, args []string) {
 		recordsDir, err := resolveRecordsDir(deleteGlobal)
 		if err != nil {
-			_, _ = fmt.Fprintln(os.Stderr, ":(  "+err.Error())
+			ui.Error(os.Stderr, err.Error())
 			return
 		}
 
@@ -27,36 +29,36 @@ var deleteCmd = &cobra.Command{
 		if deleteID > 0 {
 			records, err := s.ListRecords()
 			if err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, ":(  Something went wrong: %v\n", err)
+				ui.Error(os.Stderr, fmt.Sprintf("Something went wrong: %v", err))
 				return
 			}
 			if deleteID > len(records) {
-				_, _ = fmt.Fprintf(os.Stderr, ":(  Record #%d not found. You have %d records.\n", deleteID, len(records))
+				ui.Error(os.Stderr, fmt.Sprintf("Record #%d not found. You have %d records.", deleteID, len(records)))
 				return
 			}
 
 			r := records[deleteID-1]
 
 			if !deleteConfirm {
-				_, _ = fmt.Fprintf(os.Stderr, ":(  Are you sure? This will make '%s' sadr... and gone. Use --confirm to proceed.\n", r.Title)
+				ui.Warning(os.Stderr, fmt.Sprintf("Are you sure? This will make '%s' sadr... and gone. Use --confirm to proceed.", r.Title))
 				return
 			}
 
 			path, err := s.GetRecordPathByIndex(deleteID - 1)
 			if err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, ":(  Something went wrong: %v\n", err)
+				ui.Error(os.Stderr, fmt.Sprintf("Something went wrong: %v", err))
 				return
 			}
 			if err := s.DeleteRecord(path); err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, ":(  Failed to delete: %v\n", err)
+				ui.Error(os.Stderr, fmt.Sprintf("Failed to delete: %v", err))
 				return
 			}
 
-			_, _ = fmt.Fprintf(os.Stderr, ":(  %s deleted — This will make your snippet sadr... and gone.\n", r.Title)
+			ui.Success(os.Stderr, fmt.Sprintf("%s deleted — This will make your snippet sadr... and gone.", r.Title))
 			return
 		}
 
-		_, _ = fmt.Fprintln(os.Stderr, ":(  Provide --id <number> to delete a record.")
+		ui.Error(os.Stderr, "Provide --id <number> to delete a record.")
 	},
 }
 

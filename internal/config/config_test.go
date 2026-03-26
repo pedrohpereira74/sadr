@@ -31,26 +31,6 @@ fields:
 	}
 }
 
-func TestLoadfromStringParseQuickFields(t *testing.T) {
-	yamlData := `
-fields:
-  - name: title
-    type: text
-    required: true
-  - name: tags
-    type: multiselect
-    required: true
-    options: [proposed, accepted]
-quick_fields: [title, tags]
-`
-	cfg, err := LoadFromString(yamlData)
-	if err != nil {
-		t.Fatalf("unexpeted error: %v", err)
-	}
-	if len(cfg.QuickFields) != 2 {
-		t.Fatalf("expected 2 quick fields, got %d", len(cfg.QuickFields))
-	}
-}
 
 func TestLoadFromStringParseFieldDefault(t *testing.T) {
 	yamlData := `
@@ -100,10 +80,10 @@ fields:
 
 func TestLoadGlobalFromStringParseAIConfig(t *testing.T) {
 	yamlData := `
-editor: vim
+editor: "vim"
 ai:
-  provider: gemini
-  api_key_env: GEMINI_API_KEY
+  provider: "gemini"
+  api_key_env: "GEMINI_API_KEY"
 `
 	cfg, err := LoadGlobalFromString(yamlData)
 	if err != nil {
@@ -176,7 +156,7 @@ fields:
   - name: title
     type: text
     required: true
-quick_fields: [title]
+
 `
 	err := os.WriteFile(path, []byte(content), 0644)
 	if err != nil {
@@ -196,10 +176,10 @@ func TestLoadGlobalFromFileReadsYAML(t *testing.T) {
 	dir := t.TempDir()
 	path := dir + "/config.yaml"
 	content := `
-editor: vim
+editor: "vim"
 ai:
-  provider: gemini
-  api_key_env: GEMINI_API_KEY
+  provider: "gemini"
+  api_key_env: "GEMINI_API_KEY"
 `
 	err := os.WriteFile(path, []byte(content), 0644)
 	if err != nil {

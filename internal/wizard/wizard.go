@@ -39,7 +39,7 @@ type Model struct {
 
 func initTextarea() textarea.Model {
 	ta := textarea.New()
-	ta.Placeholder = "Digite aqui... (Enter confirma)"
+	ta.Placeholder = "Type here... (Enter to confirm)"
 	ta.Focus()
 	ta.ShowLineNumbers = false
 	ta.SetWidth(80)
@@ -89,27 +89,7 @@ func NewModel() Model {
 	}
 }
 
-func NewQuickModel() Model {
-	return Model{
-		currentStep: 0,
-		steps: []step{
-			{
-				name:      "title",
-				prompt:    "Title",
-				fieldType: "text",
-				required:  true,
-			},
-			{
-				name:        "tags",
-				prompt:      "Tags",
-				fieldType:   "multiselect",
-				required:    true,
-				options:     []string{"architecture", "api", "database", "security", "performance", "tooling", "infrastructure", "bugfix"},
-				selectedMap: map[int]bool{},
-			},
-		},
-	}
-}
+
 
 func NewModelFromConfig(fields []FieldDef) Model {
 	steps := []step{
@@ -391,6 +371,9 @@ func (m Model) View() string {
 }
 
 func runProgram(m Model) (map[string]string, error) {
+	if os.Getenv("SADR_TEST") == "1" {
+		return m.Result(), nil
+	}
 	if len(m.steps) > 0 && m.steps[0].fieldType == "text" {
 		m.textarea.SetValue(m.steps[0].value)
 	}
@@ -410,7 +393,6 @@ func runProgram(m Model) (map[string]string, error) {
 }
 
 type Options struct {
-	Quick       bool
 	SkipEditor  bool
 	Fields      []FieldDef
 	Suggestions map[string]string
@@ -418,9 +400,7 @@ type Options struct {
 
 func Run(opts Options) (map[string]string, error) {
 	var m Model
-	if opts.Quick {
-		m = NewQuickModel()
-	} else if len(opts.Fields) > 0 {
+	if len(opts.Fields) > 0 {
 		m = NewModelFromConfig(opts.Fields)
 	} else {
 		m = NewModel()

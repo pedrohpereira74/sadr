@@ -10,14 +10,19 @@ import (
 	"strings"
 )
 
-const DefaultModel = "gemini-3-flash-preview"
+const (
+	DefaultModel = "gemini-3-flash-preview"
 
-func BuildPrompt(snippet string, fields []string, language string) string {
-	if language == "" {
-		language = "English"
-	}
+	basePersona = "You are an expert Software Architect and Code Documentation Assistant."
 
-	return fmt.Sprintf(`You are an expert Software Architect and Code Documentation Assistant.
+	staffPersona = "You are a Staff-level Software Engineer and Tech Lead performing a deep code review."
+
+	depthInstructions = `
+DEPTH INSTRUCTIONS - APPLY ONLY TO PERTINENT FIELDS:
+5. For "text" fields: Write DETAILED, thorough explanations. Minimum 2-3 sentences. Analyze trade-offs, hidden coupling, performance implications, and architectural debt. Be precise and opinionated. Justify your reasoning with concrete technical arguments.
+6. For "list" fields: Return items separated by commas with NO bullet points. You MUST use descriptive full phrases, not single words or identifiers (e.g. "Implementing a dedicated Auth microservice, Using a standard OAuth flow").`
+
+	promptTemplate = `%s
 Your task is to analyze the provided code snippet and extract or deduce the requested metadata.
 
 CRITICAL RULES - FAILURE TO COMPLY WILL BREAK THE SYSTEM:
@@ -27,11 +32,27 @@ CRITICAL RULES - FAILURE TO COMPLY WILL BREAK THE SYSTEM:
 [%s]
 DO NOT translate, rename, add, or omit any keys. The keys must remain exactly as listed above.
 4. CONTENT LANGUAGE: The VALUES inside the JSON must be written in: %s.
-
+%s
 CODE SNIPPET TO ANALYZE:
 ---
 %s
----`, strings.Join(fields, ", "), language, snippet)
+---`
+)
+
+func BuildPrompt(snippet string, fields []string, language string, depth bool) string {
+	if language == "" {
+		language = "English"
+	}
+
+	persona := basePersona
+	depthBlock := ""
+
+	if depth {
+		persona = staffPersona
+		depthBlock = depthInstructions
+	}
+
+	return fmt.Sprintf(promptTemplate, persona, strings.Join(fields, ", "), language, depthBlock, snippet)
 }
 
 func ParseResponse(response string) (map[string]string, error) {
@@ -67,18 +88,22 @@ func ParseResponse(response string) (map[string]string, error) {
 	return result, nil
 }
 
-func Suggest(snippet string, fields []string, language string, apiKey string) (map[string]string, error) {
+func Suggest(snippet string, fields []string, language string, apiKey string, model string, depth bool) (map[string]string, error) {
 	if apiKey == "" {
 		apiKey = os.Getenv("AI_API_KEY")
 	}
 	if apiKey == "" {
-		apiKey = os.Getenv("GEMINI_API_KEY") // legacy fallback
+		apiKey = os.Getenv("GEMINI_API_KEY")
 	}
 	if apiKey == "" {
 		return nil, fmt.Errorf("AI API key not set in global config or environment")
 	}
 
-	prompt := BuildPrompt(snippet, fields, language)
+	if model == "" {
+		model = DefaultModel
+	}
+
+	prompt := BuildPrompt(snippet, fields, language, depth)
 
 	reqBody := map[string]interface{}{
 		"contents": []map[string]interface{}{
@@ -95,7 +120,7 @@ func Suggest(snippet string, fields []string, language string, apiKey string) (m
 		return nil, err
 	}
 
-	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", DefaultModel, apiKey)
+	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", model, apiKey)
 
 	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonBody))
 	if err != nil {

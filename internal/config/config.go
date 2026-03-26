@@ -9,8 +9,7 @@ import (
 )
 
 type Config struct {
-	Fields      []Field  `yaml:"fields"`
-	QuickFields []string `yaml:"quick_fields"`
+	Fields []Field `yaml:"fields"`
 }
 
 type GlobalConfig struct {
@@ -21,6 +20,8 @@ type GlobalConfig struct {
 type AIConfig struct {
 	Provider string `yaml:"provider"`
 	APIKey   string `yaml:"api_key"`
+	Model    string `yaml:"model"`
+	AIDepth  bool   `yaml:"ai_depth"`
 }
 
 type Field struct {

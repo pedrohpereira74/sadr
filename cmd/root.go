@@ -10,7 +10,7 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "sadr",
 	Short: ":( sadr — snippets + architecture decision records",
-	Long:  "Capture code with context. Because snippets without a \"why\" are sadr.",
+	Long:  "Capture code with context. Because snippets without a \"why\" are sadr.\nA tool to document decisions alongside code snippets.",
 }
 
 func init() {
@@ -27,12 +27,12 @@ Available Commands:
 
   new         Capture a new record (snippet + ADR)
               --title <string>     Record title (skip for interactive wizard)
-              -q, --quick          Only ask quick_fields (title + tags)
+
               -g, --global         Save to personal vault (~/.sadr/)
               -c, --clipboard      Read snippet from clipboard
               -f, --file <string>  Read snippet from file
               -s, --smart          AI suggests field values from snippet
-              --diff               Read snippet from git diff
+              -d, --diff           Read snippet from git diff
 
     new adr       Capture an ADR only (no snippet)
     new snippet   Capture a snippet only (no ADR questions)
@@ -69,7 +69,7 @@ Available Commands:
 
 Examples:
   sadr init                          Initialize sadr in current project
-  sadr new --quick                   Quick capture (title + tags only)
+
   sadr new --smart --clipboard       AI-assisted capture from clipboard
   sadr new --smart --diff            AI-assisted capture from git diff
   sadr new snippet --file "<file>"   Capture a snippet from file

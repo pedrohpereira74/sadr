@@ -7,17 +7,23 @@ import (
 	"testing"
 
 	"github.com/pedrohpereira74/sadr/internal/storage"
+	"github.com/spf13/pflag"
 )
 
 func setupNewTest(t *testing.T) string {
 	t.Helper()
 	newTitle = ""
-	newQuick = false
 	newGlobal = false
 	newClipboard = false
 	newFile = ""
 	newDiff = false
 	newSmart = false
+
+	// Reset cobra PersistentFlags Changed state to prevent
+	// MarkFlagsMutuallyExclusive from seeing stale flags from prior tests
+	newCmd.PersistentFlags().VisitAll(func(f *pflag.Flag) {
+		f.Changed = false
+	})
 
 	dir, _ := os.MkdirTemp("", "sadr-test-*")
 	t.Cleanup(func() { os.RemoveAll(dir) })
@@ -89,21 +95,6 @@ func TestNewSnippetCreatesRecordWithTypeSnippet(t *testing.T) {
 	}
 }
 
-func TestNewQuickOnlyAsksQuickFields(t *testing.T) {
-	dir := setupNewTest(t)
-
-	rootCmd.SetArgs([]string{"new", "--quick", "--title", "Quick record"})
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	recordsDir := filepath.Join(dir, ".sadr", "records")
-	s := storage.NewStorage(recordsDir)
-	records, _ := s.ListRecords()
-	if len(records) != 1 {
-		t.Fatalf("expected 1 record, got %d", len(records))
-	}
-}
 
 func TestNewGlobalSavesToHome(t *testing.T) {
 	home, _ := os.MkdirTemp("", "sadr-test-home-*")
@@ -229,6 +220,10 @@ func TestNewSmartWithoutSnippetAborts(t *testing.T) {
 
 	rootCmd.SetArgs([]string{"new", "--smart"})
 	t.Setenv("EDITOR", "sort")
+
+	oldSnippetCapturer := snippetCapturer
+	snippetCapturer = func() (string, error) { return "", nil }
+	defer func() { snippetCapturer = oldSnippetCapturer }()
 
 	_ = rootCmd.Execute()
 

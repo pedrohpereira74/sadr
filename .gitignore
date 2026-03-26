@@ -1,1 +1,5 @@
 .sadr/exports/
+.idea/
+dist/
+*.test
+*.txt

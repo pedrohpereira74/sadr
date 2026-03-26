@@ -19,22 +19,23 @@ var listGlobal bool
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all records",
+	Long:  "List all captured records. Can be filtered by tags or fields.",
 	Run: func(cmd *cobra.Command, args []string) {
 		recordsDir, err := resolveRecordsDir(listGlobal)
 		if err != nil {
-			_, _ = fmt.Fprintln(os.Stderr, ":(  "+err.Error())
+			ui.Error(os.Stderr, err.Error())
 			return
 		}
 
 		s := storage.NewStorage(recordsDir)
 		records, err := s.ListRecords()
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, ":(  Something went wrong: %v\n", err)
+			ui.Error(os.Stderr, fmt.Sprintf("Something went wrong: %v", err))
 			return
 		}
 
 		if listField != "" && len(strings.SplitN(listField, "=", 2)) != 2 {
-			_, _ = fmt.Fprintln(os.Stderr, ":(  Invalid field filter. Use --field key=value")
+			ui.Error(os.Stderr, "Invalid field filter. Use --field key=value")
 			return
 		}
 

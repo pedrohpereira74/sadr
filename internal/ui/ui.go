@@ -43,7 +43,7 @@ func Warning(w io.Writer, msg string) {
 }
 
 func Pause(seconds float64) {
-	if os.Getenv("SADR_TEST") == "1" || flag.Lookup("test.v") != nil {
+	if os.Getenv("SADR_TEST") == "1" || flag.Lookup("test.v") != nil || os.Getenv("GO_WANT_HELPER_PROCESS") == "1" {
 		return
 	}
 	time.Sleep(time.Duration(seconds * float64(time.Second)))

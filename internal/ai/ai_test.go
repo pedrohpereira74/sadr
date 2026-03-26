@@ -9,7 +9,7 @@ func TestBuildPrompt(t *testing.T) {
 	fields := []string{"title", "tags", "context", "decision"}
 	language := "english"
 
-	prompt := BuildPrompt(snippet, fields, language)
+	prompt := BuildPrompt(snippet, fields, language, false)
 
 	if prompt == "" {
 		t.Fatal("expected non-empty prompt")
