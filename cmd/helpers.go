@@ -55,7 +55,7 @@ func (m fallbackModel) View() string {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString("\n:(  No local Sadr project found. Fallback to global at ~/.sadr?\n\n")
+	b.WriteString("\n:(  No local sadr project found. Fallback to global at ~/.sadr?\n\n")
 	for i, opt := range m.options {
 		cursor := "  "
 		if i == m.cursor {
