@@ -2,7 +2,7 @@
 
 **Capture code with context. Because snippets without a "why" are actually sad.**
 
-Sadr is a CLI tool that blends a snippet manager with Architectural Decision Records (ADR). It helps you capture code snippets directly from your clipboard, a file, or git diffs, and forces you to explain the *context*, *decisions*, and *trade-offs* behind that code.
+sadr is a CLI tool that blends a snippet manager with Architectural Decision Records (ADR). It helps you capture code snippets directly from your clipboard, a file, or git diffs, and forces you to explain the *context*, *decisions*, and *trade-offs* behind that code.
 
 
 ## ✨ Features
@@ -15,10 +15,10 @@ Sadr is a CLI tool that blends a snippet manager with Architectural Decision Rec
 
 ## 🚀 Installation
 
-Sadr provides pre-compiled binaries for all major platforms. Choose your preferred method:
+sadr provides pre-compiled binaries for all major platforms. Choose your preferred method:
 
 ### 🌟 Native Script (Universal)
-The easiest way to install Sadr on macOS or Linux is via our universal installer script:
+The easiest way to install sadr on macOS or Linux is via our universal installer script:
 ```bash
 curl -sSfL https://raw.githubusercontent.com/pedrohpereira74/sadr/master/install.sh | sh
 ```
