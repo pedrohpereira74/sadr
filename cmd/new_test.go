@@ -176,6 +176,8 @@ func TestNewFromDiff(t *testing.T) {
 	dir := setupNewTest(t)
 
 	_ = exec.Command("git", "init").Run()
+	_ = exec.Command("git", "config", "user.email", "test@example.com").Run()
+	_ = exec.Command("git", "config", "user.name", "Test User").Run()
 	_ = os.WriteFile(filepath.Join(dir, "file.go"), []byte("package main"), 0644)
 	_ = exec.Command("git", "add", ".").Run()
 	_ = exec.Command("git", "commit", "-m", "initial").Run()
@@ -201,6 +203,8 @@ func TestNewFromDiffEmpty(t *testing.T) {
 	dir := setupNewTest(t)
 
 	_ = exec.Command("git", "init").Run()
+	_ = exec.Command("git", "config", "user.email", "test@example.com").Run()
+	_ = exec.Command("git", "config", "user.name", "Test User").Run()
 	_ = os.WriteFile(filepath.Join(dir, "file.go"), []byte("package main"), 0644)
 	_ = exec.Command("git", "add", ".").Run()
 	_ = exec.Command("git", "commit", "-m", "initial").Run()
