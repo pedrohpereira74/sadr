@@ -19,7 +19,6 @@ func Search(dir string, query string, deep bool) ([]model.Record, error) {
 	var results []model.Record
 
 	for _, r := range records {
-		// Sempre busca em título e tags
 		title := strings.ToLower(r.Title)
 		tags := strings.ToLower(r.Fields["tags"])
 

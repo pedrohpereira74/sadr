@@ -7,19 +7,11 @@ import (
 
 	"github.com/pedrohpereira74/sadr/internal/model"
 	"github.com/pedrohpereira74/sadr/internal/storage"
-	"github.com/spf13/pflag"
 )
 
 func setupExportTest(t *testing.T) string {
 	t.Helper()
-	exportID = 0
-	exportAll = false
-	exportTags = ""
-
-	// Reset Cobra's Changed state to stop mutually exclusive flags from leaking
-	exportCmd.Flags().VisitAll(func(f *pflag.Flag) {
-		f.Changed = false
-	})
+	resetCmd(findSubCmd("export"))
 
 	dir, _ := os.MkdirTemp("", "sadr-test-*")
 	t.Cleanup(func() { os.RemoveAll(dir) })

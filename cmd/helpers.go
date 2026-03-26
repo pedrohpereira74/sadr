@@ -55,7 +55,7 @@ func (m fallbackModel) View() string {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString("\n:(  No local Sadr project found. Fallback to global at ~/.sadr?\n\n")
+	b.WriteString("\n:(  No local sadr project found. Fallback to global at ~/.sadr?\n\n")
 	for i, opt := range m.options {
 		cursor := "  "
 		if i == m.cursor {
@@ -122,7 +122,7 @@ func findEditor() string {
 	return ""
 }
 
-func openEditorImpl(editor string, path string) {
+func openEditorImpl(editor string, path string) error {
 	parts := strings.Fields(editor)
 	var c *exec.Cmd
 	if len(parts) > 1 {
@@ -134,14 +134,15 @@ func openEditorImpl(editor string, path string) {
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
 
-	if err := c.Run(); err != nil {
-		ui.Error(os.Stderr, fmt.Sprintf("Editor exited with error: %v", err))
-	}
+	return c.Run()
 }
 
 func resolveRecordsDir(global bool) (string, error) {
 	if global {
-		home, _ := os.UserHomeDir()
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("could not find home directory: %v", err)
+		}
 		recordsDir := filepath.Join(home, ".sadr", "records")
 		if _, err := os.Stat(recordsDir); os.IsNotExist(err) {
 			return "", fmt.Errorf("Global storage not found. Run 'sadr config --global' first")
@@ -149,7 +150,10 @@ func resolveRecordsDir(global bool) (string, error) {
 		return recordsDir, nil
 	}
 
-	dir, _ := os.Getwd()
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("could not get working directory: %v", err)
+	}
 	paths, err := discover.FindSadrDir(dir)
 	if err != nil {
 		return "", err
@@ -160,7 +164,10 @@ func resolveRecordsDir(global bool) (string, error) {
 
 func resolvePaths(global bool) (discover.SadrPaths, error) {
 	if global {
-		home, _ := os.UserHomeDir()
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return discover.SadrPaths{}, fmt.Errorf("could not find home directory: %v", err)
+		}
 		root := filepath.Join(home, ".sadr")
 		if _, err := os.Stat(root); os.IsNotExist(err) {
 			return discover.SadrPaths{}, fmt.Errorf("Global storage not found. Run 'sadr config --global' first")
@@ -172,7 +179,10 @@ func resolvePaths(global bool) (discover.SadrPaths, error) {
 		}, nil
 	}
 
-	dir, _ := os.Getwd()
+	dir, err := os.Getwd()
+	if err != nil {
+		return discover.SadrPaths{}, fmt.Errorf("could not get working directory: %v", err)
+	}
 	paths, err := discover.FindSadrDir(dir)
 	if err != nil {
 		return paths, err

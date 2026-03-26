@@ -89,8 +89,6 @@ func NewModel() Model {
 	}
 }
 
-
-
 func NewModelFromConfig(fields []FieldDef) Model {
 	steps := []step{
 		{

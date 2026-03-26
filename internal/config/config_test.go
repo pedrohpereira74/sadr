@@ -18,7 +18,7 @@ fields:
 `
 	cfg, err := LoadFromString(yamlData)
 	if err != nil {
-		t.Fatalf("unexpeted error: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(cfg.Fields) != 2 {
 		t.Fatalf("expected 2 fields, got %d", len(cfg.Fields))
@@ -43,7 +43,7 @@ fields:
 `
 	cfg, err := LoadFromString(yamlData)
 	if err != nil {
-		t.Fatalf("unexpeted error: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(cfg.Fields) != 1 {
 		t.Fatalf("expected 1 field, got %d", len(cfg.Fields))

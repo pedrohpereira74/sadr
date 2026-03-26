@@ -34,8 +34,7 @@ func setupEditTest(t *testing.T) string {
 func TestEditFindsRecord(t *testing.T) {
 	dir := setupEditTest(t)
 
-	os.Setenv("EDITOR", "sort")
-	defer os.Unsetenv("EDITOR")
+	t.Setenv("EDITOR", "sort")
 
 	rootCmd.SetArgs([]string{"edit", "--id", "1"})
 	if err := rootCmd.Execute(); err != nil {
