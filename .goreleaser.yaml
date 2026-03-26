@@ -18,7 +18,8 @@ builds:
       - arm64
 
 archives:
-  - format: tar.gz
+  - formats:
+      - tar.gz
     # this name template makes the OS and Arch look clean
     name_template: >-
       {{ .ProjectName }}_
@@ -29,7 +30,8 @@ archives:
       {{- if .Arm }}v{{ .Arm }}{{ end }}
     format_overrides:
       - goos: windows
-        format: zip
+        formats:
+          - zip
 
 nfpms:
   - file_name_template: '{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}'
@@ -42,7 +44,7 @@ nfpms:
       - deb
       - rpm
 
-brews:
+homebrews:
   - repository:
       owner: pedrohpereira74
       name: homebrew-tap
