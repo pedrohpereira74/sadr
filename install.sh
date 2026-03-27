@@ -25,7 +25,7 @@ case $OS in
 esac
 
 # 2. Get latest version from GitHub API
-VERSION=$(curl -s "https://api.github.com/repos/$OWNER/$REPO/releases/latest" | grep -Po '"tag_name": "v\K[^"]*')
+VERSION=$(curl -s "https://api.github.com/repos/$OWNER/$REPO/releases/latest" | awk -F'"' '/"tag_name":/ {print $4}' | sed 's/^v//')
 
 if [ -z "$VERSION" ]; then
     echo "Could not find latest version. Check internet connection."
