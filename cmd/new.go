@@ -143,12 +143,14 @@ func readClipboard() (string, error) {
 	case "darwin":
 		cmd = exec.Command("pbpaste")
 	case "linux":
-		if _, err := exec.LookPath("xclip"); err == nil {
+		if _, err := exec.LookPath("wl-paste"); err == nil {
+			cmd = exec.Command("wl-paste", "--no-newline")
+		} else if _, err := exec.LookPath("xclip"); err == nil {
 			cmd = exec.Command("xclip", "-selection", "clipboard", "-o")
 		} else if _, err := exec.LookPath("xsel"); err == nil {
 			cmd = exec.Command("xsel", "--clipboard", "--output")
 		} else {
-			return "", fmt.Errorf("install xclip or xsel to use --clipboard")
+			return "", fmt.Errorf("install wl-clipboard (Wayland) or xclip/xsel (X11) to use --clipboard")
 		}
 	case "windows":
 		cmd = exec.Command("powershell", "-command", "Get-Clipboard")
