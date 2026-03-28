@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/pedrohpereira74/sadr/internal/ui"
 	"github.com/pedrohpereira74/sadr/internal/wizard"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -20,8 +21,10 @@ func TestMain(m *testing.M) {
 	presetSelector = func() string { return "minimal" }
 	fallbackPrompter = func() string { return "yes" }
 	snippetCapturer = func() (string, error) { return "mock snippet", nil }
+	clipboardReader = func() (string, error) { return "mock clipboard", nil }
+	confirmOverwrite = func() string { return "yes" }
 
-	os.Setenv("SADR_TEST", "1")
+	ui.PauseFn = func(_ float64) {}
 
 	os.Exit(m.Run())
 }

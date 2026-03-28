@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -16,6 +17,7 @@ type listOptions struct {
 	tags       string
 	field      string
 	global     bool
+	format     string
 }
 
 func newListCmd() *cobra.Command {
@@ -26,26 +28,30 @@ func newListCmd() *cobra.Command {
 		Short: "List all records",
 		Long:  "List all captured records. Can be filtered by tags or fields.",
 		Run: func(cmd *cobra.Command, args []string) {
-			recordsDir, err := resolveRecordsDir(opts.global)
+			paths, err := resolvePaths(opts.global)
 			if err != nil {
 				ui.Error(os.Stderr, err.Error())
 				return
 			}
 
-			s := storage.NewStorage(recordsDir)
-			records, err := s.ListRecords()
+			s := storage.NewStorage(paths.Records)
+			entries, err := s.ListRecordEntries()
 			if err != nil {
-				ui.Error(os.Stderr, fmt.Sprintf("Something went wrong: %v", err))
+				ui.Error(os.Stderr, fmt.Sprintf("something went wrong: %v", err))
 				return
 			}
 
 			if opts.field != "" && len(strings.SplitN(opts.field, "=", 2)) != 2 {
-				ui.Error(os.Stderr, "Invalid field filter. Use --field key=value")
+				ui.Error(os.Stderr, "invalid field filter. use --field key=value")
 				return
 			}
 
-			var filtered []struct{ Type, Title, Tags string }
-			for _, r := range records {
+			var filtered []struct {
+				FileID     int
+				Type, Title, Tags string
+			}
+			for _, e := range entries {
+				r := e.Record
 				tags := r.Fields["tags"]
 				if tags == "" {
 					tags = "-"
@@ -66,17 +72,37 @@ func newListCmd() *cobra.Command {
 				}
 
 				if match {
-					filtered = append(filtered, struct{ Type, Title, Tags string }{r.Type, r.Title, tags})
+					filtered = append(filtered, struct {
+						FileID     int
+						Type, Title, Tags string
+					}{e.FileID, r.Type, r.Title, tags})
 				}
 			}
 
 			if len(filtered) == 0 {
-				ui.Info(os.Stderr, "Nothing here yet. Run 'sadr new' to capture your first snippet.")
+				ui.Info(os.Stderr, "nothing here yet. run 'sadr new' to capture your first snippet.")
+				return
+			}
+
+			if opts.format == "json" {
+				type jsonEntry struct {
+					ID    int    `json:"id"`
+					Type  string `json:"type"`
+					Title string `json:"title"`
+					Tags  string `json:"tags"`
+				}
+				var entries []jsonEntry
+				for _, item := range filtered {
+					entries = append(entries, jsonEntry{item.FileID, item.Type, item.Title, item.Tags})
+				}
+				enc := json.NewEncoder(cmd.OutOrStdout())
+				enc.SetIndent("", "  ")
+				_ = enc.Encode(entries)
 				return
 			}
 
 			for _, item := range filtered {
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", item.Type, item.Title, item.Tags)
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "#%d\t%s\t%s\t%s\n", item.FileID, item.Type, item.Title, item.Tags)
 			}
 		},
 	}
@@ -85,6 +111,7 @@ func newListCmd() *cobra.Command {
 	cmd.Flags().StringVar(&opts.tags, "tags", "", "Filter by tags (comma-separated)")
 	cmd.Flags().StringVar(&opts.field, "field", "", "Filter by field value (key=value)")
 	cmd.Flags().BoolVarP(&opts.global, "global", "g", false, "List personal records from ~/.sadr/")
+	cmd.Flags().StringVar(&opts.format, "format", "", "Output format: json")
 	return cmd
 }
 

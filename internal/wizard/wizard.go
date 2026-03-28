@@ -10,6 +10,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+var programRunner = runProgramImpl
+
 type editorFinishedMsg struct {
 	content string
 	err     error
@@ -368,10 +370,7 @@ func (m Model) View() string {
 	return b.String()
 }
 
-func runProgram(m Model) (map[string]string, error) {
-	if os.Getenv("SADR_TEST") == "1" {
-		return m.Result(), nil
-	}
+func runProgramImpl(m Model) (map[string]string, error) {
 	if len(m.steps) > 0 && m.steps[0].fieldType == "text" {
 		m.textarea.SetValue(m.steps[0].value)
 	}
@@ -412,7 +411,7 @@ func Run(opts Options) (map[string]string, error) {
 		applySuggestions(&m, opts.Suggestions)
 	}
 
-	return runProgram(m)
+	return programRunner(m)
 }
 
 func applySuggestions(m *Model, suggestions map[string]string) {

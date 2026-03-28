@@ -17,6 +17,26 @@ type configOptions struct {
 	setAPIKey string
 }
 
+func confirmOverwriteImpl() string {
+	return runSelect("API key is already configured. overwrite?", []selectOption{
+		{Label: "yes, overwrite", Value: "yes"},
+		{Label: "no, keep existing", Value: "no"},
+	})
+}
+
+func extractAPIKey(content string) string {
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "api_key:") && !strings.HasPrefix(trimmed, "api_key_env:") {
+			val := strings.TrimPrefix(trimmed, "api_key:")
+			val = strings.TrimSpace(val)
+			val = strings.Trim(val, "\"")
+			return val
+		}
+	}
+	return ""
+}
+
 func newConfigCmd() *cobra.Command {
 	opts := &configOptions{}
 
@@ -28,7 +48,7 @@ func newConfigCmd() *cobra.Command {
 			if opts.setAPIKey != "" {
 				home, err := os.UserHomeDir()
 				if err != nil {
-					ui.Error(os.Stderr, fmt.Sprintf("Failed to get home directory: %v", err))
+					ui.Error(os.Stderr, fmt.Sprintf("failed to get home directory: %v", err))
 					return
 				}
 
@@ -40,20 +60,31 @@ func newConfigCmd() *cobra.Command {
 				var newContent string
 
 				if err != nil && !os.IsNotExist(err) {
-					ui.Error(os.Stderr, fmt.Sprintf("Failed to read config: %v", err))
+					ui.Error(os.Stderr, fmt.Sprintf("failed to read config: %v", err))
 					return
 				}
 
+				sanitized := strings.NewReplacer("\"", "", "\n", "", "\r", "").Replace(opts.setAPIKey)
+
+				if err == nil {
+					if existing := extractAPIKey(string(content)); existing != "" {
+						if confirmOverwrite() != "yes" {
+							ui.Info(os.Stderr, "cancelled. existing API key left unchanged.")
+							return
+						}
+					}
+				}
+
 				if err != nil {
-					newContent = strings.Replace(templates.GlobalConfig, `api_key: ""`+"\n", fmt.Sprintf("api_key: \"%s\"\n", opts.setAPIKey), 1)
+					newContent = strings.Replace(templates.GlobalConfig, `api_key: ""`+"\n", fmt.Sprintf("api_key: \"%s\"\n", sanitized), 1)
 				} else {
 					lines := strings.Split(string(content), "\n")
 					found := false
 					for i, line := range lines {
 						trimmed := strings.TrimSpace(line)
-						if strings.HasPrefix(trimmed, "api_key:") || strings.HasPrefix(trimmed, "api_key_env:") {
+						if strings.HasPrefix(trimmed, "api_key:") && !strings.HasPrefix(trimmed, "api_key_env:") {
 							prefix := line[:len(line)-len(trimmed)]
-							lines[i] = prefix + fmt.Sprintf("api_key: \"%s\"", opts.setAPIKey)
+							lines[i] = prefix + fmt.Sprintf("api_key: \"%s\"", sanitized)
 							found = true
 							break
 						}
@@ -62,60 +93,60 @@ func newConfigCmd() *cobra.Command {
 						if len(lines) > 0 && lines[len(lines)-1] != "" {
 							lines = append(lines, "")
 						}
-						lines = append(lines, fmt.Sprintf("ai:\n  api_key: \"%s\"", opts.setAPIKey))
+						lines = append(lines, fmt.Sprintf("ai:\n  api_key: \"%s\"", sanitized))
 					}
 					newContent = strings.Join(lines, "\n")
 				}
 
 				if err := os.WriteFile(configPath, []byte(newContent), 0600); err != nil {
-					ui.Error(os.Stderr, fmt.Sprintf("Failed to save API key: %v", err))
+					ui.Error(os.Stderr, fmt.Sprintf("failed to save API key: %v", err))
 					return
 				}
 
-				ui.Success(os.Stderr, "API Key saved globally. The --smart mode is now fully armed and operational.")
+				ui.Success(os.Stderr, "API key saved globally. the --smart mode is now fully armed and operational.")
 				return
 			}
 
 			editor := findEditor()
 			if editor == "" {
-				ui.Error(os.Stderr, "No editor found. Set $EDITOR or add 'editor' to ~/.sadr/global-config.yaml")
+				ui.Error(os.Stderr, "no editor found. set $EDITOR or add 'editor' to ~/.sadr/global-config.yaml")
 				return
 			}
 
 			if opts.global {
 				home, err := os.UserHomeDir()
 				if err != nil {
-					ui.Error(os.Stderr, fmt.Sprintf("Could not find home directory: %v", err))
+					ui.Error(os.Stderr, fmt.Sprintf("could not find home directory: %v", err))
 					return
 				}
 				globalDir := filepath.Join(home, ".sadr")
 				globalConfig := filepath.Join(globalDir, "global-config.yaml")
 
 				if _, err := os.Stat(globalConfig); os.IsNotExist(err) {
-					ui.Error(os.Stderr, "Global config not found. Please run 'sadr init --global' to configure it.")
+					ui.Error(os.Stderr, "global config not found. run 'sadr init --global' to configure it.")
 					return
 				}
 
 				if err := editorRunner(editor, globalConfig); err != nil {
-					ui.Error(os.Stderr, fmt.Sprintf("Editor exited with error: %v", err))
+					ui.Error(os.Stderr, fmt.Sprintf("editor exited with error: %v", err))
 				}
 				return
 			}
 
 			dir, err := os.Getwd()
 			if err != nil {
-				ui.Error(os.Stderr, fmt.Sprintf("Could not get working directory: %v", err))
+				ui.Error(os.Stderr, fmt.Sprintf("could not get working directory: %v", err))
 				return
 			}
 			paths, err := discover.FindSadrDir(dir)
 			if err != nil {
-				ui.Error(os.Stderr, "No local sadr project found. Use 'sadr config --global' to edit your personal config, or 'sadr init' to create a project here.")
+				ui.Error(os.Stderr, "no local sadr project found. use 'sadr config --global' to edit your personal config, or 'sadr init' to create a project here.")
 				return
 			}
 
 			localConfig := filepath.Join(paths.Root, "config.yaml")
 			if err := editorRunner(editor, localConfig); err != nil {
-				ui.Error(os.Stderr, fmt.Sprintf("Editor exited with error: %v", err))
+				ui.Error(os.Stderr, fmt.Sprintf("editor exited with error: %v", err))
 			}
 		},
 	}

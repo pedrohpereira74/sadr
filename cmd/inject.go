@@ -5,9 +5,11 @@ import (
 )
 
 var (
-	editorRunner func(string, string) error = openEditorImpl
-	wizardRunner = wizard.Run
-	presetSelector = selectPresetImpl
-	fallbackPrompter = promptGlobalFallbackImpl
-	snippetCapturer = captureSnippetFromEditorImpl
+	editorRunner     func(string, string) error = openEditorImpl
+	wizardRunner                                = wizard.Run
+	presetSelector                              = selectPresetImpl
+	fallbackPrompter                            = promptGlobalFallbackImpl
+	snippetCapturer                             = captureSnippetFromEditorImpl
+	clipboardReader                             = readClipboardImpl
+	confirmOverwrite                            = confirmOverwriteImpl
 )

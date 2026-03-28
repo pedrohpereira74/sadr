@@ -1,6 +1,8 @@
 package ai
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -28,5 +30,104 @@ func TestParseResponseWithArrays(t *testing.T) {
 	}
 	if result["tags"] != "api, performance" {
 		t.Errorf("expected 'api, performance', got '%s'", result["tags"])
+	}
+}
+
+type testRoundTripper struct {
+	handler http.HandlerFunc
+}
+
+func (t *testRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	rec := httptest.NewRecorder()
+	t.handler(rec, req)
+	return rec.Result(), nil
+}
+
+func mockClient(handler http.HandlerFunc) *http.Client {
+	return &http.Client{Transport: &testRoundTripper{handler: handler}}
+}
+
+func TestSuggestValidResponse(t *testing.T) {
+	old := httpClient
+	httpClient = mockClient(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(`{"candidates":[{"content":{"parts":[{"text":"{\"title\":\"Use retry\"}"}]}}]}`))
+	})
+	defer func() { httpClient = old }()
+
+	result, err := Suggest("some code", []string{"title"}, "english", "fake-key", "", false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result["title"] != "Use retry" {
+		t.Errorf("expected 'Use retry', got '%s'", result["title"])
+	}
+}
+
+func TestSuggestAPIError(t *testing.T) {
+	old := httpClient
+	httpClient = mockClient(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(403)
+		_, _ = w.Write([]byte(`{"error":"forbidden"}`))
+	})
+	defer func() { httpClient = old }()
+
+	_, err := Suggest("code", []string{"title"}, "english", "bad-key", "", false)
+	if err == nil {
+		t.Fatal("expected error for non-200 response")
+	}
+}
+
+func TestSuggestEmptyResponse(t *testing.T) {
+	old := httpClient
+	httpClient = mockClient(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(`{"candidates":[]}`))
+	})
+	defer func() { httpClient = old }()
+
+	_, err := Suggest("code", []string{"title"}, "english", "fake-key", "", false)
+	if err == nil {
+		t.Fatal("expected error for empty candidates")
+	}
+}
+
+func TestSuggestInvalidJSON(t *testing.T) {
+	old := httpClient
+	httpClient = mockClient(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(`not json at all`))
+	})
+	defer func() { httpClient = old }()
+
+	_, err := Suggest("code", []string{"title"}, "english", "fake-key", "", false)
+	if err == nil {
+		t.Fatal("expected error for invalid JSON response body")
+	}
+}
+
+func TestSuggestMissingAPIKey(t *testing.T) {
+	t.Setenv("AI_API_KEY", "")
+	t.Setenv("GEMINI_API_KEY", "")
+
+	_, err := Suggest("code", []string{"title"}, "english", "", "", false)
+	if err == nil {
+		t.Fatal("expected error when no API key is provided")
+	}
+}
+
+func TestSuggestSetsAuthHeader(t *testing.T) {
+	var gotKey string
+	old := httpClient
+	httpClient = mockClient(func(w http.ResponseWriter, r *http.Request) {
+		gotKey = r.Header.Get("x-goog-api-key")
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(`{"candidates":[{"content":{"parts":[{"text":"{\"title\":\"x\"}"}]}}]}`))
+	})
+	defer func() { httpClient = old }()
+
+	_, _ = Suggest("code", []string{"title"}, "english", "my-secret-key", "", false)
+	if gotKey != "my-secret-key" {
+		t.Errorf("expected API key header 'my-secret-key', got '%s'", gotKey)
 	}
 }

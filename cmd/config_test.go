@@ -105,3 +105,61 @@ func TestConfigSetAPIKeyUpdatesExistingFile(t *testing.T) {
 		t.Errorf("expected original content to be preserved, got:\n%s", strContent)
 	}
 }
+
+func TestConfigSetAPIKeyCancelledOnOverwrite(t *testing.T) {
+	home, _ := os.MkdirTemp("", "sadr-test-home-*")
+	t.Cleanup(func() { os.RemoveAll(home) })
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	globalDir := filepath.Join(home, ".sadr")
+	_ = os.MkdirAll(globalDir, 0755)
+	configPath := filepath.Join(globalDir, "global-config.yaml")
+	_ = os.WriteFile(configPath, []byte("api_key: \"existing-key\"\n"), 0644)
+
+	old := confirmOverwrite
+	confirmOverwrite = func() string { return "no" }
+	t.Cleanup(func() { confirmOverwrite = old })
+
+	resetCmd(findSubCmd("config"))
+	rootCmd.SetArgs([]string{"config", "--set-api-key", "new-key"})
+	_ = rootCmd.Execute()
+
+	content, _ := os.ReadFile(configPath)
+	if !strings.Contains(string(content), "existing-key") {
+		t.Error("expected existing key to be preserved when user cancels")
+	}
+	if strings.Contains(string(content), "new-key") {
+		t.Error("expected new key NOT to be written when user cancels")
+	}
+}
+
+func TestConfigSetAPIKeyNoPromptWhenEmpty(t *testing.T) {
+	home, _ := os.MkdirTemp("", "sadr-test-home-*")
+	t.Cleanup(func() { os.RemoveAll(home) })
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	globalDir := filepath.Join(home, ".sadr")
+	_ = os.MkdirAll(globalDir, 0755)
+	configPath := filepath.Join(globalDir, "global-config.yaml")
+	_ = os.WriteFile(configPath, []byte("api_key: \"\"\n"), 0644)
+
+	prompted := false
+	old := confirmOverwrite
+	confirmOverwrite = func() string { prompted = true; return "no" }
+	t.Cleanup(func() { confirmOverwrite = old })
+
+	resetCmd(findSubCmd("config"))
+	rootCmd.SetArgs([]string{"config", "--set-api-key", "fresh-key"})
+	_ = rootCmd.Execute()
+
+	if prompted {
+		t.Error("should not prompt when existing key is empty")
+	}
+
+	content, _ := os.ReadFile(configPath)
+	if !strings.Contains(string(content), "fresh-key") {
+		t.Error("expected new key to be written without prompting")
+	}
+}

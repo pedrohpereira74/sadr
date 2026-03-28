@@ -18,10 +18,11 @@ type GlobalConfig struct {
 	AI       AIConfig `yaml:"ai"`
 }
 type AIConfig struct {
-	Provider string `yaml:"provider"`
-	APIKey   string `yaml:"api_key"`
-	Model    string `yaml:"model"`
-	AIDepth  bool   `yaml:"ai_depth"`
+	Provider  string `yaml:"provider"`
+	APIKey    string `yaml:"api_key"`
+	APIKeyEnv string `yaml:"api_key_env"`
+	Model     string `yaml:"model"`
+	AIDepth   bool   `yaml:"ai_depth"`
 }
 
 type Field struct {

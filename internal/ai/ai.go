@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 const (
@@ -88,6 +89,8 @@ func ParseResponse(response string) (map[string]string, error) {
 	return result, nil
 }
 
+var httpClient = &http.Client{Timeout: 30 * time.Second}
+
 func Suggest(snippet string, fields []string, language string, apiKey string, model string, depth bool) (map[string]string, error) {
 	if apiKey == "" {
 		apiKey = os.Getenv("AI_API_KEY")
@@ -129,7 +132,7 @@ func Suggest(snippet string, fields []string, language string, apiKey string, mo
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-goog-api-key", apiKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("API request failed: %v", err)
 	}

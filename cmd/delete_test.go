@@ -33,7 +33,7 @@ func setupDeleteTest(t *testing.T) string {
 func TestDeleteRemovesRecord(t *testing.T) {
 	dir := setupDeleteTest(t)
 
-	rootCmd.SetArgs([]string{"delete", "--id", "1", "--confirm"})
+	rootCmd.SetArgs([]string{"delete", "--id", "1", "--force"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
