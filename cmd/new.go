@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -88,13 +90,13 @@ func loadFieldDefs(configPath string) ([]wizard.FieldDef, error) {
 
 func readSnippetFromSource(opts *newOptions) string {
 	if opts.clipboard {
-		content, err := readClipboard()
+		content, err := clipboardReader()
 		if err != nil {
-			ui.Error(os.Stderr, fmt.Sprintf("Clipboard not available: %v", err))
+			ui.Error(os.Stderr, fmt.Sprintf("clipboard not available: %v", err))
 			return ""
 		}
 		if content == "" {
-			ui.Info(os.Stderr, "Clipboard is empty.")
+			ui.Info(os.Stderr, "clipboard is empty.")
 			return ""
 		}
 		return content
@@ -103,16 +105,16 @@ func readSnippetFromSource(opts *newOptions) string {
 	if opts.file != "" {
 		info, err := os.Stat(opts.file)
 		if err != nil {
-			ui.Error(os.Stderr, fmt.Sprintf("Failed to read file: %v", err))
+			ui.Error(os.Stderr, fmt.Sprintf("failed to read file: %v", err))
 			return ""
 		}
 		if info.Size() > 10<<20 {
-			ui.Error(os.Stderr, "File exceeds 10 MB limit.")
+			ui.Error(os.Stderr, "file exceeds 10 MB limit.")
 			return ""
 		}
 		content, err := os.ReadFile(opts.file)
 		if err != nil {
-			ui.Error(os.Stderr, fmt.Sprintf("Failed to read file: %v", err))
+			ui.Error(os.Stderr, fmt.Sprintf("failed to read file: %v", err))
 			return ""
 		}
 		return strings.TrimSpace(string(content))
@@ -122,12 +124,12 @@ func readSnippetFromSource(opts *newOptions) string {
 		cmd := exec.Command("git", "--no-pager", "diff", "HEAD")
 		output, err := cmd.Output()
 		if err != nil {
-			ui.Error(os.Stderr, fmt.Sprintf("Git diff failed: %v", err))
+			ui.Error(os.Stderr, fmt.Sprintf("git diff failed: %v", err))
 			return ""
 		}
 		content := strings.TrimSpace(string(output))
 		if content == "" {
-			ui.Info(os.Stderr, "Git diff is empty. Stage or commit something first.")
+			ui.Info(os.Stderr, "git diff is empty. stage or commit something first.")
 			return ""
 		}
 		return content
@@ -136,7 +138,7 @@ func readSnippetFromSource(opts *newOptions) string {
 	return ""
 }
 
-func readClipboard() (string, error) {
+func readClipboardImpl() (string, error) {
 	var cmd *exec.Cmd
 
 	switch runtime.GOOS {
@@ -166,8 +168,8 @@ func readClipboard() (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
-func loadAISuggestions(opts *newOptions, snippet string, fieldDefs []wizard.FieldDef) map[string]string {
-	ui.Info(os.Stderr, "Analyzing snippet...")
+func loadAISuggestions(opts *newOptions, snippet string, fieldDefs []wizard.FieldDef) (map[string]string, error) {
+	ui.Info(os.Stderr, "analyzing snippet...")
 
 	var docLanguage, aiKey, modelName string
 	var aiDepth bool
@@ -178,6 +180,9 @@ func loadAISuggestions(opts *newOptions, snippet string, fieldDefs []wizard.Fiel
 		if cfg, err := config.LoadGlobalFromFile(globalConfigPath); err == nil {
 			docLanguage = cfg.Language
 			aiKey = cfg.AI.APIKey
+			if aiKey == "" && cfg.AI.APIKeyEnv != "" {
+				aiKey = os.Getenv(cfg.AI.APIKeyEnv)
+			}
 			modelName = cfg.AI.Model
 			aiDepth = cfg.AI.AIDepth
 		}
@@ -190,21 +195,33 @@ func loadAISuggestions(opts *newOptions, snippet string, fieldDefs []wizard.Fiel
 	var fields []string
 	for _, fd := range fieldDefs {
 		if fd.Type != "select" && fd.Type != "multiselect" {
-			fields = append(fields, fd.Name)
+			hint := fd.Name
+			if fd.Type == "text" || fd.Type == "list" {
+				hint = fmt.Sprintf("%s (%s)", fd.Name, fd.Type)
+			}
+			fields = append(fields, hint)
 		}
 	}
 	if len(fields) == 0 {
 		fields = []string{"title", "tags"}
 	}
 
-	suggestions, err := ai.Suggest(snippet, fields, docLanguage, aiKey, modelName, aiDepth)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
+	suggestions, err := ai.Suggest(ctx, snippet, fields, docLanguage, aiKey, modelName, aiDepth)
 	if err != nil {
-		ui.Error(os.Stderr, "AI API key not set or request failed. Falling back to manual mode.")
-		ui.Info(os.Stderr, "Set it up: https://ai.google.dev\n\n    Starting wizard in 3 seconds...")
+		if ctx.Err() != nil {
+			fmt.Fprintln(os.Stderr)
+			ui.Info(os.Stderr, "cancelled.")
+			return nil, fmt.Errorf("cancelled")
+		}
+		ui.Error(os.Stderr, "AI API key not set or request failed. falling back to manual mode.")
+		ui.Info(os.Stderr, "set it up: https://ai.google.dev\n\n    starting wizard in 3 seconds...")
 		ui.Pause(3.0)
-		return nil
+		return nil, nil
 	}
-	return suggestions
+	return suggestions, nil
 }
 
 func buildRecordFromWizard(result map[string]string, fieldDefs []wizard.FieldDef, recordType string, snippet string) (model.Record, error) {
@@ -285,15 +302,15 @@ func runNew(recordType string, opts *newOptions) func(cmd *cobra.Command, args [
 		hasSnippet := snippetFromSource != ""
 
 		if opts.smart && !hasSnippet {
-			ui.Info(os.Stderr, "Opening editor to capture snippet for AI analysis...")
+			ui.Info(os.Stderr, "opening editor to capture snippet for AI analysis...")
 			ui.Pause(1.5)
 			content, editorErr := snippetCapturer()
 			if editorErr != nil {
-				ui.Error(os.Stderr, fmt.Sprintf("Failed to open editor: %v", editorErr))
+				ui.Error(os.Stderr, fmt.Sprintf("failed to open editor: %v", editorErr))
 				return
 			}
 			if strings.TrimSpace(content) == "" {
-				ui.Info(os.Stderr, "--smart requires a snippet to analyze. Operation aborted.")
+				ui.Info(os.Stderr, "--smart requires a snippet to analyze. operation aborted.")
 				return
 			}
 			snippetFromSource = content
@@ -310,12 +327,16 @@ func runNew(recordType string, opts *newOptions) func(cmd *cobra.Command, args [
 			fieldDefs, cfgErr := loadFieldDefs(configPath)
 			if cfgErr != nil {
 				ui.Error(os.Stderr, fmt.Sprintf("\nCONFIGURATION ERROR\n%v\n\nPlease fix your config.yaml and try again.\n", cfgErr))
-				os.Exit(1)
+				return
 			}
 
 			var suggestions map[string]string
 			if opts.smart && hasSnippet {
-				suggestions = loadAISuggestions(opts, snippetFromSource, fieldDefs)
+				var aiErr error
+				suggestions, aiErr = loadAISuggestions(opts, snippetFromSource, fieldDefs)
+				if aiErr != nil {
+					return
+				}
 			}
 
 			wizOpts := wizard.Options{
@@ -326,6 +347,9 @@ func runNew(recordType string, opts *newOptions) func(cmd *cobra.Command, args [
 			ui.Pause(1.5)
 			result, wizErr := wizardRunner(wizOpts)
 			if wizErr != nil {
+				if wizErr.Error() == "cancelled" {
+					ui.Info(os.Stderr, "cancelled.")
+				}
 				return
 			}
 
@@ -348,11 +372,11 @@ func runNew(recordType string, opts *newOptions) func(cmd *cobra.Command, args [
 		s := storage.NewStorage(recordsDir)
 		path, err := s.SaveRecord(r)
 		if err != nil {
-			ui.Error(os.Stderr, fmt.Sprintf("Failed to save: %v", err))
+			ui.Error(os.Stderr, fmt.Sprintf("failed to save: %v", err))
 			return
 		}
 
-		ui.Success(os.Stderr, fmt.Sprintf("%s saved — Congrats, your code can now defend itself in a code review.", filepath.Base(path)))
+		ui.Success(os.Stderr, fmt.Sprintf("%s saved — congrats, your code can now defend itself in a code review.", filepath.Base(path)))
 	}
 }
 

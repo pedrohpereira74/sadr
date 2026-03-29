@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -18,6 +17,10 @@ func init() {
 
 func SetTTY(v bool) {
 	isTTY = v
+}
+
+var PauseFn = func(seconds float64) {
+	time.Sleep(time.Duration(seconds * float64(time.Second)))
 }
 
 func Info(w io.Writer, msg string) {
@@ -39,12 +42,9 @@ func Success(w io.Writer, msg string) {
 }
 
 func Warning(w io.Writer, msg string) {
-	_, _ = fmt.Fprintf(w, ":(  Warning: %s\n", msg)
+	_, _ = fmt.Fprintf(w, ":(  %s\n", msg)
 }
 
 func Pause(seconds float64) {
-	if os.Getenv("SADR_TEST") == "1" || flag.Lookup("test.v") != nil || os.Getenv("GO_WANT_HELPER_PROCESS") == "1" {
-		return
-	}
-	time.Sleep(time.Duration(seconds * float64(time.Second)))
+	PauseFn(seconds)
 }

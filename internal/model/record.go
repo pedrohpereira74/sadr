@@ -7,6 +7,7 @@ import (
 )
 
 const SchemaVersion = 1
+const NoFileRef = "N/A"
 
 type Record struct {
 	Title         string
@@ -30,7 +31,7 @@ func NewRecordWithOptions(title string, recordType string) (Record, error) {
 			Type:          recordType,
 			CreatedAt:     time.Now(),
 			SchemaVersion: SchemaVersion,
-			FileRef:       "N/A",
+			FileRef:       NoFileRef,
 			Fields:        map[string]string{}},
 		nil
 }

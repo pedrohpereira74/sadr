@@ -113,6 +113,7 @@ func TestInitDoesNotOverwrite(t *testing.T) {
 func TestInitAddsExportsToGitignore(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "sadr-test-*")
 	t.Cleanup(func() { os.RemoveAll(dir) })
+	_ = os.Mkdir(filepath.Join(dir, ".git"), 0755)
 	if err := os.Chdir(dir); err != nil {
 		t.Fatalf("failed to change dir: %v", err)
 	}
@@ -134,6 +135,7 @@ func TestInitAddsExportsToGitignore(t *testing.T) {
 func TestInitDoesNotDuplicateGitignore(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "sadr-test-*")
 	t.Cleanup(func() { os.RemoveAll(dir) })
+	_ = os.Mkdir(filepath.Join(dir, ".git"), 0755)
 	if err := os.Chdir(dir); err != nil {
 		t.Fatalf("failed to change dir: %v", err)
 	}

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -24,6 +25,12 @@ var (
 
 type Storage struct {
 	Dir string
+}
+
+type RecordEntry struct {
+	Record model.Record
+	FileID int
+	Path   string
 }
 
 func NewStorage(dir string) *Storage {
@@ -45,15 +52,33 @@ func (s *Storage) SaveRecord(r model.Record) (string, error) {
 	formatBody(&content, r)
 
 	slug := Slugify(r.Title)
+	data := []byte(content.String())
 	nextID := s.getMaxID() + 1
-	filename := fmt.Sprintf("sadr-%04d-%s.md", nextID, slug)
-	fullPath := filepath.Join(s.Dir, filename)
 
-	if err := os.WriteFile(fullPath, []byte(content.String()), 0644); err != nil {
-		return "", err
+	for attempts := 0; attempts < 100; attempts++ {
+		filename := fmt.Sprintf("sadr-%04d-%s.md", nextID, slug)
+		fullPath := filepath.Join(s.Dir, filename)
+		f, err := os.OpenFile(fullPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+		if err != nil {
+			if os.IsExist(err) {
+				nextID++
+				continue
+			}
+			return "", err
+		}
+		_, writeErr := f.Write(data)
+		closeErr := f.Close()
+		if writeErr != nil {
+			_ = os.Remove(fullPath)
+			return "", writeErr
+		}
+		if closeErr != nil {
+			return "", closeErr
+		}
+		return fullPath, nil
 	}
 
-	return fullPath, nil
+	return "", fmt.Errorf("failed to create record file after 100 attempts")
 }
 
 func buildFrontmatter(r model.Record) map[string]interface{} {
@@ -108,11 +133,15 @@ func formatBody(content *strings.Builder, r model.Record) {
 		written[key] = true
 	}
 
-	for key, value := range r.Fields {
-		if value == "" || written[key] {
-			continue
+	var remaining []string
+	for key := range r.Fields {
+		if !written[key] && r.Fields[key] != "" {
+			remaining = append(remaining, key)
 		}
-		fmt.Fprintf(content, "## %s\n\n%s\n\n", capitalizeKey(key), strings.TrimSpace(value))
+	}
+	sort.Strings(remaining)
+	for _, key := range remaining {
+		fmt.Fprintf(content, "## %s\n\n%s\n\n", capitalizeKey(key), strings.TrimSpace(r.Fields[key]))
 	}
 }
 
@@ -149,9 +178,19 @@ func (s *Storage) LoadRecord(path string) (model.Record, error) {
 	case int64:
 		schemaVersion = int(sv)
 	}
+
+	if schemaVersion > model.SchemaVersion {
+		return model.Record{}, fmt.Errorf("record was created with a newer version of sadr (schema %d > %d)", schemaVersion, model.SchemaVersion)
+	}
+
 	title, _ := front["title"].(string)
 	recordType, _ := front["type"].(string)
 	fileRef, _ := front["file_ref"].(string)
+
+	validTypes := map[string]bool{"full": true, "snippet": true, "adr": true}
+	if !validTypes[recordType] {
+		_, _ = fmt.Fprintf(os.Stderr, ":(  Warning: record has unknown type '%s'\n", recordType)
+	}
 
 	r := model.Record{
 		Title:         title,
@@ -173,24 +212,27 @@ func (s *Storage) LoadRecord(path string) (model.Record, error) {
 	body := strings.TrimSpace(parts[2])
 	sections, sectionOrder := splitSections(body)
 	for name, value := range sections {
-		if strings.ToLower(name) == "snippet" {
+		normalized := strings.ToLower(name)
+		normalized = strings.ReplaceAll(normalized, " ", "_")
+		if normalized == "snippet" {
 			r.Snippet = extractCodeBlock(value)
 		} else {
-			r.Fields[strings.ToLower(name)] = strings.TrimSpace(value)
+			r.Fields[normalized] = strings.TrimSpace(value)
 		}
 	}
 
 	for _, name := range sectionOrder {
-		lower := strings.ToLower(name)
-		if lower != "snippet" {
-			r.FieldOrder = append(r.FieldOrder, lower)
+		normalized := strings.ToLower(name)
+		normalized = strings.ReplaceAll(normalized, " ", "_")
+		if normalized != "snippet" {
+			r.FieldOrder = append(r.FieldOrder, normalized)
 		}
 	}
 
 	return r, nil
 }
 
-func (s *Storage) ListRecords() ([]model.Record, error) {
+func (s *Storage) ListRecordEntries() ([]RecordEntry, error) {
 	entries, err := os.ReadDir(s.Dir)
 	if err != nil {
 		return nil, err
@@ -200,7 +242,7 @@ func (s *Storage) ListRecords() ([]model.Record, error) {
 		return strings.Compare(a.Name(), b.Name())
 	})
 
-	var records []model.Record
+	var records []RecordEntry
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
 			continue
@@ -211,33 +253,100 @@ func (s *Storage) ListRecords() ([]model.Record, error) {
 			_, _ = fmt.Fprintf(os.Stderr, ":(  Skipping invalid record %s: %v\n", entry.Name(), err)
 			continue
 		}
-		records = append(records, r)
+		records = append(records, RecordEntry{
+			Record: r,
+			FileID: ParseFileID(entry.Name()),
+			Path:   path,
+		})
 	}
 	return records, nil
+}
+
+func (s *Storage) ListRecords() ([]model.Record, error) {
+	entries, err := s.ListRecordEntries()
+	if err != nil {
+		return nil, err
+	}
+	var records []model.Record
+	for _, e := range entries {
+		records = append(records, e.Record)
+	}
+	return records, nil
+}
+
+func (s *Storage) GetRecordByFileID(id int) (model.Record, string, error) {
+	prefix := fmt.Sprintf("sadr-%04d-", id)
+	entries, err := os.ReadDir(s.Dir)
+	if err != nil {
+		return model.Record{}, "", err
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasPrefix(entry.Name(), prefix) && strings.HasSuffix(entry.Name(), ".md") {
+			path := filepath.Join(s.Dir, entry.Name())
+			r, err := s.LoadRecord(path)
+			if err != nil {
+				return model.Record{}, "", err
+			}
+			return r, path, nil
+		}
+	}
+	return model.Record{}, "", fmt.Errorf("record #%d not found", id)
 }
 
 func (s *Storage) DeleteRecord(path string) error {
 	return os.Remove(path)
 }
 
+func ParseFileID(filename string) int {
+	if !strings.HasPrefix(filename, "sadr-") {
+		return 0
+	}
+	parts := strings.SplitN(filename, "-", 3)
+	if len(parts) < 2 {
+		return 0
+	}
+	var id int
+	fmt.Sscanf(parts[1], "%d", &id)
+	return id
+}
+
 func capitalizeKey(key string) string {
 	if len(key) == 0 {
 		return key
 	}
-	runes := []rune(key)
-	return strings.ToUpper(string(runes[0])) + strings.ToLower(string(runes[1:]))
+	words := strings.FieldsFunc(key, func(r rune) bool {
+		return r == '_' || r == ' '
+	})
+	for i, w := range words {
+		if len(w) > 0 {
+			r := []rune(w)
+			words[i] = strings.ToUpper(string(r[0])) + string(r[1:])
+		}
+	}
+	return strings.Join(words, " ")
 }
 
 func Slugify(title string) string {
 	s := strings.ToLower(title)
-	
+
 	t := transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
 	s, _, _ = transform.String(t, s)
 
 	s = strings.ReplaceAll(s, " ", "-")
 	s = invalidSlugChars.ReplaceAllString(s, "")
 	s = multipleDashes.ReplaceAllString(s, "-")
-	return strings.Trim(s, "-")
+	s = strings.Trim(s, "-")
+	if s == "" {
+		return "untitled"
+	}
+
+	const maxSlugLen = 80
+	if len(s) > maxSlugLen {
+		s = s[:maxSlugLen]
+		s = strings.TrimRight(s, "-")
+	}
+
+	return s
 }
 
 func (s *Storage) getMaxID() int {
@@ -248,34 +357,13 @@ func (s *Storage) getMaxID() int {
 	maxID := 0
 	for _, entry := range entries {
 		if !entry.IsDir() && strings.HasPrefix(entry.Name(), "sadr-") && strings.HasSuffix(entry.Name(), ".md") {
-			parts := strings.Split(entry.Name(), "-")
-			if len(parts) >= 2 {
-				var id int
-				_, err := fmt.Sscanf(parts[1], "%d", &id)
-				if err == nil && id > maxID {
-					maxID = id
-				}
+			id := ParseFileID(entry.Name())
+			if id > maxID {
+				maxID = id
 			}
 		}
 	}
 	return maxID
-}
-
-func (s *Storage) GetRecordPathByIndex(idx int) (string, error) {
-	entries, err := os.ReadDir(s.Dir)
-	if err != nil {
-		return "", err
-	}
-	var mdFiles []string
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".md") {
-			mdFiles = append(mdFiles, entry.Name())
-		}
-	}
-	if idx < 0 || idx >= len(mdFiles) {
-		return "", fmt.Errorf("record bounds error")
-	}
-	return filepath.Join(s.Dir, mdFiles[idx]), nil
 }
 
 func determineBackticks(snippet string) string {

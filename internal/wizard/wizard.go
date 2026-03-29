@@ -10,6 +10,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+var programRunner = runProgramImpl
+
 type editorFinishedMsg struct {
 	content string
 	err     error
@@ -315,7 +317,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) View() string {
 	if m.quitting {
-		return ":(  Cancelled.\n"
+		return ""
 	}
 	if m.Completed() {
 		return ":(  Done!\n"
@@ -339,39 +341,34 @@ func (m Model) View() string {
 		b.WriteString("  Press Enter to open editor\n")
 	}
 
-	if current.fieldType == "select" {
-		b.WriteString("  ↑/↓ to navigate, Enter to confirm\n\n")
-		for i, opt := range current.options {
-			cursor := "  "
-			if i == current.cursorPos {
-				cursor = "> "
-			}
-			b.WriteString(fmt.Sprintf("  %s%s\n", cursor, opt))
+	if current.fieldType == "select" || current.fieldType == "multiselect" {
+		hint := "  ↑/↓ to navigate, enter to confirm"
+		if current.fieldType == "multiselect" {
+			hint = "  ↑/↓ to navigate, space to toggle, enter to confirm"
 		}
-	}
+		b.WriteString(hint + "\n\n")
 
-	if current.fieldType == "multiselect" {
-		b.WriteString("  Space to toggle, Enter to confirm\n\n")
 		for i, opt := range current.options {
 			cursor := "  "
 			if i == current.cursorPos {
 				cursor = "> "
 			}
-			checked := "[ ]"
-			if current.selectedMap[i] {
-				checked = "[x]"
+			if current.fieldType == "multiselect" {
+				checked := "[ ]"
+				if current.selectedMap[i] {
+					checked = "[x]"
+				}
+				b.WriteString(fmt.Sprintf("  %s%s %s\n", cursor, checked, opt))
+			} else {
+				b.WriteString(fmt.Sprintf("  %s%s\n", cursor, opt))
 			}
-			b.WriteString(fmt.Sprintf("  %s%s %s\n", cursor, checked, opt))
 		}
 	}
 
 	return b.String()
 }
 
-func runProgram(m Model) (map[string]string, error) {
-	if os.Getenv("SADR_TEST") == "1" {
-		return m.Result(), nil
-	}
+func runProgramImpl(m Model) (map[string]string, error) {
 	if len(m.steps) > 0 && m.steps[0].fieldType == "text" {
 		m.textarea.SetValue(m.steps[0].value)
 	}
@@ -412,7 +409,7 @@ func Run(opts Options) (map[string]string, error) {
 		applySuggestions(&m, opts.Suggestions)
 	}
 
-	return runProgram(m)
+	return programRunner(m)
 }
 
 func applySuggestions(m *Model, suggestions map[string]string) {

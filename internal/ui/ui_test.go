@@ -49,3 +49,29 @@ func TestErrorAlwaysShows(t *testing.T) {
 		t.Error("expected error to show even when not TTY")
 	}
 }
+
+func TestPauseCallsInjectedFn(t *testing.T) {
+	called := false
+	old := PauseFn
+	PauseFn = func(_ float64) { called = true }
+	defer func() { PauseFn = old }()
+
+	Pause(1.0)
+
+	if !called {
+		t.Error("expected PauseFn to be called by Pause")
+	}
+}
+
+func TestPausePassesSeconds(t *testing.T) {
+	var got float64
+	old := PauseFn
+	PauseFn = func(s float64) { got = s }
+	defer func() { PauseFn = old }()
+
+	Pause(2.5)
+
+	if got != 2.5 {
+		t.Errorf("expected 2.5 seconds, got %f", got)
+	}
+}

@@ -41,6 +41,7 @@ Available Commands:
               --type <string>      Filter by type: full, snippet, adr
               --tags <string>      Filter by tags (comma-separated)
               --field <string>     Filter by field value (key=value)
+              --format <string>    Output format: json
               -g, --global         List personal records from ~/.sadr/
 
   search      Search records by title, tags, or content
@@ -54,7 +55,7 @@ Available Commands:
 
   delete      Delete a record
               --id <int>           Record ID to delete
-              --confirm            Skip confirmation
+              --force              Skip confirmation
               -g, --global         Delete personal record from ~/.sadr/
 
   export      Export records to self-contained HTML

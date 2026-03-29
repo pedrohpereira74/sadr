@@ -7,6 +7,16 @@ import (
 	"github.com/pedrohpereira74/sadr/internal/storage"
 )
 
+func loadRecords(t *testing.T, dir string) []model.Record {
+	t.Helper()
+	s := storage.NewStorage(dir)
+	records, err := s.ListRecords()
+	if err != nil {
+		t.Fatalf("failed to load records: %v", err)
+	}
+	return records
+}
+
 func TestSearchByTitle(t *testing.T) {
 	dir := t.TempDir()
 	s := storage.NewStorage(dir)
@@ -17,10 +27,8 @@ func TestSearchByTitle(t *testing.T) {
 	_, _ = s.SaveRecord(r1)
 	_, _ = s.SaveRecord(r2)
 
-	results, err := Search(dir, "retry", false)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	records := loadRecords(t, dir)
+	results := Search(records, "retry", false)
 	if len(results) != 1 {
 		t.Errorf("expected 1 result, got %d", len(results))
 	}
@@ -35,15 +43,13 @@ func TestSearchDeepFindsInSnippet(t *testing.T) {
 
 	_, _ = s.SaveRecord(r)
 
-	shallow, _ := Search(dir, "retryablehttp", false)
+	records := loadRecords(t, dir)
+	shallow := Search(records, "retryablehttp", false)
 	if len(shallow) != 0 {
 		t.Errorf("expected 0 results without deep, got %d", len(shallow))
 	}
 
-	deep, err := Search(dir, "retryablehttp", true)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	deep := Search(records, "retryablehttp", true)
 	if len(deep) != 1 {
 		t.Errorf("expected 1 result with deep, got %d", len(deep))
 	}
@@ -62,10 +68,8 @@ func TestSearchByTags(t *testing.T) {
 	_, _ = s.SaveRecord(r1)
 	_, _ = s.SaveRecord(r2)
 
-	results, err := Search(dir, "security", false)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	records := loadRecords(t, dir)
+	results := Search(records, "security", false)
 	if len(results) != 1 {
 		t.Errorf("expected 1 result, got %d", len(results))
 	}
@@ -78,10 +82,8 @@ func TestSearchCaseInsensitive(t *testing.T) {
 	r, _ := model.NewRecordWithOptions("Use Retry With Backoff", "full")
 	_, _ = s.SaveRecord(r)
 
-	results, err := Search(dir, "retry", false)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	records := loadRecords(t, dir)
+	results := Search(records, "retry", false)
 	if len(results) != 1 {
 		t.Errorf("expected 1 result, got %d", len(results))
 	}

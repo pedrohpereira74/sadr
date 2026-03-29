@@ -2,12 +2,14 @@ package ai
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 const (
@@ -32,6 +34,11 @@ CRITICAL RULES - FAILURE TO COMPLY WILL BREAK THE SYSTEM:
 [%s]
 DO NOT translate, rename, add, or omit any keys. The keys must remain exactly as listed above.
 4. CONTENT LANGUAGE: The VALUES inside the JSON must be written in: %s.
+5. TITLE LENGTH: If a "title" key is present, it MUST be a short, concise phrase of at most 10 words. Do NOT write full sentences or descriptions as titles.
+6. FIELD TYPES: Some keys above may include a type hint in parentheses, e.g. "consequences (text)". Use ONLY the key name (without the hint) in the JSON output. Respect the type:
+   - "(text)": Write complete, flowing prose. Use full sentences separated by periods. Do NOT use comma-separated lists.
+   - "(list)": Return items separated by commas with NO bullet points.
+   If no type hint is given, default to text behavior.
 %s
 CODE SNIPPET TO ANALYZE:
 ---
@@ -88,7 +95,9 @@ func ParseResponse(response string) (map[string]string, error) {
 	return result, nil
 }
 
-func Suggest(snippet string, fields []string, language string, apiKey string, model string, depth bool) (map[string]string, error) {
+var httpClient = &http.Client{Timeout: 30 * time.Second}
+
+func Suggest(ctx context.Context, snippet string, fields []string, language string, apiKey string, model string, depth bool) (map[string]string, error) {
 	if apiKey == "" {
 		apiKey = os.Getenv("AI_API_KEY")
 	}
@@ -122,14 +131,14 @@ func Suggest(snippet string, fields []string, language string, apiKey string, mo
 
 	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent", model)
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-goog-api-key", apiKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("API request failed: %v", err)
 	}

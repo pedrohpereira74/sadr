@@ -3,6 +3,7 @@ package storage
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/pedrohpereira74/sadr/internal/model"
@@ -133,6 +134,8 @@ func TestSlugifyRemovesSpecialChars(t *testing.T) {
 		{"API keys & secrets!", "api-keys-secrets"},
 		{"  spaces  ", "spaces"},
 		{"foo--bar", "foo-bar"},
+		{strings.Repeat("a", 200), strings.Repeat("a", 80)},
+		{strings.Repeat("word ", 30), "word-word-word-word-word-word-word-word-word-word-word-word-word-word-word-word"},
 	}
 	for _, tt := range tests {
 		got := Slugify(tt.input)
@@ -158,5 +161,99 @@ func TestListRecordsSkipsInvalidFile(t *testing.T) {
 	}
 	if len(records) != 1 {
 		t.Errorf("expected 1 valid record, got %d", len(records))
+	}
+}
+
+func TestParseFileID(t *testing.T) {
+	tests := []struct {
+		filename string
+		want     int
+	}{
+		{"sadr-0001-use-retry.md", 1},
+		{"sadr-0042-redis-cache.md", 42},
+		{"sadr-0100-big.md", 100},
+		{"not-a-record.md", 0},
+		{"sadr-bad-name.md", 0},
+	}
+	for _, tt := range tests {
+		got := ParseFileID(tt.filename)
+		if got != tt.want {
+			t.Errorf("ParseFileID(%q) = %d, want %d", tt.filename, got, tt.want)
+		}
+	}
+}
+
+func TestGetRecordByFileID(t *testing.T) {
+	s := newTestStorage(t)
+
+	r1, _ := model.NewRecordWithOptions("First record", "full")
+	r2, _ := model.NewRecordWithOptions("Second record", "full")
+
+	_, _ = s.SaveRecord(r1)
+	_, _ = s.SaveRecord(r2)
+
+	r, path, err := s.GetRecordByFileID(2)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if r.Title != "Second record" {
+		t.Errorf("expected title 'Second record', got '%s'", r.Title)
+	}
+	if path == "" {
+		t.Error("expected non-empty path")
+	}
+}
+
+func TestGetRecordByFileIDNotFound(t *testing.T) {
+	s := newTestStorage(t)
+
+	r, _ := model.NewRecordWithOptions("Only record", "full")
+	_, _ = s.SaveRecord(r)
+
+	_, _, err := s.GetRecordByFileID(99)
+	if err == nil {
+		t.Error("expected error for non-existent ID, got nil")
+	}
+}
+
+func TestListRecordEntries(t *testing.T) {
+	s := newTestStorage(t)
+
+	r1, _ := model.NewRecordWithOptions("First", "full")
+	r2, _ := model.NewRecordWithOptions("Second", "full")
+
+	_, _ = s.SaveRecord(r1)
+	_, _ = s.SaveRecord(r2)
+
+	entries, err := s.ListRecordEntries()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(entries))
+	}
+	if entries[0].FileID != 1 {
+		t.Errorf("expected first entry FileID 1, got %d", entries[0].FileID)
+	}
+	if entries[1].FileID != 2 {
+		t.Errorf("expected second entry FileID 2, got %d", entries[1].FileID)
+	}
+}
+
+func TestCapitalizeKey(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"context", "Context"},
+		{"file_ref", "File Ref"},
+		{"api_key", "Api Key"},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		got := capitalizeKey(tt.input)
+		if got != tt.want {
+			t.Errorf("capitalizeKey(%q) = %q, want %q", tt.input, got, tt.want)
+		}
 	}
 }

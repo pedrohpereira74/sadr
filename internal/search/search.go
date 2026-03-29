@@ -4,17 +4,9 @@ import (
 	"strings"
 
 	"github.com/pedrohpereira74/sadr/internal/model"
-	"github.com/pedrohpereira74/sadr/internal/storage"
 )
 
-func Search(dir string, query string, deep bool) ([]model.Record, error) {
-	s := storage.NewStorage(dir)
-
-	records, err := s.ListRecords()
-	if err != nil {
-		return nil, err
-	}
-
+func Search(records []model.Record, query string, deep bool) []model.Record {
 	query = strings.ToLower(query)
 	var results []model.Record
 
@@ -46,5 +38,5 @@ func Search(dir string, query string, deep bool) ([]model.Record, error) {
 		}
 	}
 
-	return results, nil
+	return results
 }

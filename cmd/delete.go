@@ -10,9 +10,9 @@ import (
 )
 
 type deleteOptions struct {
-	id      int
-	confirm bool
-	global  bool
+	rawID  string
+	force  bool
+	global bool
 }
 
 func newDeleteCmd() *cobra.Command {
@@ -23,52 +23,56 @@ func newDeleteCmd() *cobra.Command {
 		Short: "Delete a record",
 		Long:  "Permanently delete a record by its ID.",
 		Run: func(cmd *cobra.Command, args []string) {
-			recordsDir, err := resolveRecordsDir(opts.global)
+			id, err := parseID(opts.rawID)
 			if err != nil {
 				ui.Error(os.Stderr, err.Error())
 				return
 			}
 
-			s := storage.NewStorage(recordsDir)
+			paths, err := resolvePaths(opts.global)
+			if err != nil {
+				ui.Error(os.Stderr, err.Error())
+				return
+			}
+			recordsDir := paths.Records
 
-			if opts.id > 0 {
-				records, err := s.ListRecords()
-				if err != nil {
-					ui.Error(os.Stderr, fmt.Sprintf("Something went wrong: %v", err))
-					return
-				}
-				if opts.id > len(records) {
-					ui.Error(os.Stderr, fmt.Sprintf("Record #%d not found. You have %d records.", opts.id, len(records)))
-					return
-				}
-
-				r := records[opts.id-1]
-
-				if !opts.confirm {
-					ui.Warning(os.Stderr, fmt.Sprintf("Are you sure? This will make '%s' sadr... and gone. Use --confirm to proceed.", r.Title))
-					return
-				}
-
-				path, err := s.GetRecordPathByIndex(opts.id - 1)
-				if err != nil {
-					ui.Error(os.Stderr, fmt.Sprintf("Something went wrong: %v", err))
-					return
-				}
-				if err := s.DeleteRecord(path); err != nil {
-					ui.Error(os.Stderr, fmt.Sprintf("Failed to delete: %v", err))
-					return
-				}
-
-				ui.Success(os.Stderr, fmt.Sprintf("%s deleted — This will make your snippet sadr... and gone.", r.Title))
+			if id <= 0 {
+				ui.Error(os.Stderr, "provide --id <number> to delete a record.")
 				return
 			}
 
-			ui.Error(os.Stderr, "Provide --id <number> to delete a record.")
+			s := storage.NewStorage(recordsDir)
+			r, path, err := s.GetRecordByFileID(id)
+			if err != nil {
+				ui.Error(os.Stderr, fmt.Sprintf("record #%d not found.", id))
+				return
+			}
+
+			if !opts.force {
+				chosen := runSelect(
+					fmt.Sprintf("delete '%s'? this cannot be undone.", r.Title),
+					[]selectOption{
+						{Label: "yes, delete", Value: "yes"},
+						{Label: "no, cancel", Value: "no"},
+					},
+				)
+				if chosen != "yes" {
+					ui.Info(os.Stderr, "cancelled.")
+					return
+				}
+			}
+
+			if err := s.DeleteRecord(path); err != nil {
+				ui.Error(os.Stderr, fmt.Sprintf("failed to delete: %v", err))
+				return
+			}
+
+			ui.Success(os.Stderr, fmt.Sprintf("%s deleted — this will make your snippet sadr... and gone.", r.Title))
 		},
 	}
 
-	cmd.Flags().IntVar(&opts.id, "id", 0, "Record ID to delete")
-	cmd.Flags().BoolVar(&opts.confirm, "confirm", false, "Skip confirmation")
+	cmd.Flags().StringVar(&opts.rawID, "id", "", "Record ID to delete")
+	cmd.Flags().BoolVar(&opts.force, "force", false, "Skip confirmation")
 	cmd.Flags().BoolVarP(&opts.global, "global", "g", false, "Delete personal record from ~/.sadr/")
 	return cmd
 }
