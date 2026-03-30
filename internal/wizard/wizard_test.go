@@ -83,8 +83,6 @@ func TestModelHasSnippetStep(t *testing.T) {
 	}
 }
 
-// --- NewModelFromConfig ---
-
 func TestNewModelFromConfigTextFields(t *testing.T) {
 	fields := []FieldDef{
 		{Name: "title", Type: "text", Required: true},
@@ -93,17 +91,23 @@ func TestNewModelFromConfigTextFields(t *testing.T) {
 	}
 	m := NewModelFromConfig(fields)
 
-	// snippet editor + 3 fields
-	if len(m.steps) != 4 {
-		t.Fatalf("expected 4 steps, got %d", len(m.steps))
+	if len(m.steps) != 5 {
+		t.Fatalf("expected 5 steps, got %d", len(m.steps))
 	}
 	if m.steps[0].fieldType != "editor" {
 		t.Errorf("expected first step to be editor, got '%s'", m.steps[0].fieldType)
 	}
-	for i := 1; i <= 3; i++ {
-		if m.steps[i].fieldType != "text" {
-			t.Errorf("step %d: expected 'text', got '%s'", i, m.steps[i].fieldType)
-		}
+	if m.steps[1].name != "title" || m.steps[1].fieldType != "text" {
+		t.Errorf("expected step 1 to be title/text, got '%s'/'%s'", m.steps[1].name, m.steps[1].fieldType)
+	}
+	if m.steps[2].fieldType != "filepicker" {
+		t.Errorf("expected step 2 to be filepicker, got '%s'", m.steps[2].fieldType)
+	}
+	if m.steps[3].name != "context" || m.steps[3].fieldType != "text" {
+		t.Errorf("expected step 3 to be context/text, got '%s'/'%s'", m.steps[3].name, m.steps[3].fieldType)
+	}
+	if m.steps[4].name != "alternatives" || m.steps[4].fieldType != "text" {
+		t.Errorf("expected step 4 to be alternatives/text, got '%s'/'%s'", m.steps[4].name, m.steps[4].fieldType)
 	}
 }
 
@@ -112,6 +116,7 @@ func TestNewModelFromConfigSelectField(t *testing.T) {
 		{Name: "status", Type: "select", Required: false, Options: []string{"proposed", "accepted"}, Default: "proposed"},
 	}
 	m := NewModelFromConfig(fields)
+	m = removeEditorSteps(m)
 
 	if len(m.steps) != 2 {
 		t.Fatalf("expected 2 steps, got %d", len(m.steps))
@@ -146,22 +151,170 @@ func TestNewModelFromConfigMultiselectField(t *testing.T) {
 	}
 }
 
-func TestNewModelFromConfigFilepathField(t *testing.T) {
-	fields := []FieldDef{
-		{Name: "file_ref", Type: "filepath", Required: false},
+func TestNewModelFileRefIsFilepicker(t *testing.T) {
+	m := NewModel()
+	last := m.steps[len(m.steps)-1]
+	if last.fieldType != "filepicker" {
+		t.Errorf("expected last step to be filepicker, got '%s'", last.fieldType)
 	}
-	m := NewModelFromConfig(fields)
-
-	s := m.steps[1]
-	if s.fieldType != "text" {
-		t.Errorf("expected 'text' for filepath, got '%s'", s.fieldType)
-	}
-	if !strings.Contains(s.prompt, ":skip") {
-		t.Errorf("expected filepath prompt to mention :skip, got '%s'", s.prompt)
+	if last.name != "file_ref" {
+		t.Errorf("expected last step name 'file_ref', got '%s'", last.name)
 	}
 }
 
-// --- removeEditorSteps ---
+func TestNewModelFromConfigFileRefAfterTitleTags(t *testing.T) {
+	fields := []FieldDef{
+		{Name: "title", Type: "text", Required: true},
+		{Name: "context", Type: "text", Required: false},
+	}
+	m := NewModelFromConfig(fields)
+
+	if m.steps[2].fieldType != "filepicker" {
+		t.Errorf("expected file_ref after title, got '%s'", m.steps[2].fieldType)
+	}
+	if m.steps[2].name != "file_ref" {
+		t.Errorf("expected step name 'file_ref', got '%s'", m.steps[2].name)
+	}
+	if m.steps[3].name != "context" {
+		t.Errorf("expected context to be last, got '%s'", m.steps[3].name)
+	}
+}
+
+func TestRemoveFileRefSteps(t *testing.T) {
+	m := NewModel()
+	before := len(m.steps)
+
+	m = removeFileRefSteps(m)
+	for _, s := range m.steps {
+		if s.fieldType == "filepicker" {
+			t.Error("found filepicker step after removal")
+		}
+	}
+	if len(m.steps) >= before {
+		t.Errorf("expected fewer steps after removal, got %d (was %d)", len(m.steps), before)
+	}
+}
+
+func TestFilepickerSkipCommand(t *testing.T) {
+	m := NewModel()
+	m = removeEditorSteps(m)
+	m.textarea = initTextarea()
+
+	fpIdx := 0
+	for i := range m.steps {
+		if m.steps[i].fieldType == "filepicker" {
+			m.currentStep = i
+			fpIdx = i
+			break
+		}
+	}
+
+	for _, r := range ":skip" {
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		m = updated.(Model)
+	}
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	final := updated.(Model)
+
+	if final.steps[fpIdx].value != "N/A" {
+		t.Errorf("expected 'N/A' after :skip on filepicker, got '%s'", final.steps[fpIdx].value)
+	}
+}
+
+func TestFilepickerTabDoesNotSkip(t *testing.T) {
+	m := NewModel()
+	m = removeEditorSteps(m)
+	m.textarea = initTextarea()
+
+	fpIdx := 0
+	for i := range m.steps {
+		if m.steps[i].fieldType == "filepicker" {
+			m.currentStep = i
+			fpIdx = i
+			break
+		}
+	}
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	final := updated.(Model)
+
+	if final.currentStep != fpIdx {
+		t.Errorf("expected to stay at filepicker step (required), but advanced to %d", final.currentStep)
+	}
+}
+
+func TestFilepickerMultiSelect(t *testing.T) {
+	m := NewModel()
+	m = removeEditorSteps(m)
+	m.textarea = initTextarea()
+
+	fpIdx := 0
+	for i := range m.steps {
+		if m.steps[i].fieldType == "filepicker" {
+			m.currentStep = i
+			fpIdx = i
+			break
+		}
+	}
+
+	m.steps[fpIdx].allFiles = []string{"src/a.go", "src/b.go", "src/c.go"}
+	m.steps[fpIdx].filtered = []string{"src/a.go", "src/b.go", "src/c.go"}
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	m = updated.(Model)
+
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = updated.(Model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	m = updated.(Model)
+
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	final := updated.(Model)
+
+	if final.steps[fpIdx].value != "src/a.go,src/b.go" {
+		t.Errorf("expected 'src/a.go,src/b.go', got '%s'", final.steps[fpIdx].value)
+	}
+}
+
+func TestFilepickerPreSelected(t *testing.T) {
+	m := NewModel()
+	m = removeEditorSteps(m)
+	m.textarea = initTextarea()
+
+	preFiles := []string{"handler.go", "model.go"}
+	applyPreSelectedFiles(&m, preFiles)
+
+	fpIdx := 0
+	for i := range m.steps {
+		if m.steps[i].fieldType == "filepicker" {
+			fpIdx = i
+			break
+		}
+	}
+
+	if len(m.steps[fpIdx].suggestedFiles) != 2 {
+		t.Fatalf("expected 2 suggested files, got %d", len(m.steps[fpIdx].suggestedFiles))
+	}
+
+	m.steps[fpIdx].allFiles = []string{"handler.go", "model.go", "main.go", "utils.go"}
+	suggested := map[string]bool{}
+	for _, f := range m.steps[fpIdx].suggestedFiles {
+		suggested[f] = true
+	}
+	for i, f := range m.steps[fpIdx].allFiles {
+		if suggested[f] {
+			m.steps[fpIdx].selectedMap[i] = true
+		}
+	}
+
+	if !m.steps[fpIdx].selectedMap[0] || !m.steps[fpIdx].selectedMap[1] {
+		t.Error("expected handler.go and model.go to be selected")
+	}
+	if m.steps[fpIdx].selectedMap[2] || m.steps[fpIdx].selectedMap[3] {
+		t.Error("expected main.go and utils.go to NOT be selected")
+	}
+}
 
 func TestRemoveEditorSteps(t *testing.T) {
 	m := NewModel()
@@ -177,8 +330,6 @@ func TestRemoveEditorSteps(t *testing.T) {
 		t.Errorf("expected fewer steps after removal, got %d (was %d)", len(m.steps), before)
 	}
 }
-
-// --- applySuggestions ---
 
 func TestApplySuggestionsText(t *testing.T) {
 	m := NewModel()
@@ -207,7 +358,7 @@ func TestApplySuggestionsMultiselect(t *testing.T) {
 	}
 	applySuggestions(&m, suggestions)
 
-	tagsStep := m.steps[1] // tags is index 1 after removing editor
+	tagsStep := m.steps[1]
 	if !tagsStep.selectedMap[1] {
 		t.Error("expected 'api' (index 1) to be selected")
 	}
@@ -235,8 +386,6 @@ func TestApplySuggestionsCaseInsensitive(t *testing.T) {
 	}
 }
 
-// --- Update: CtrlC quits ---
-
 func TestUpdateCtrlCQuits(t *testing.T) {
 	m := NewModel()
 	m = removeEditorSteps(m)
@@ -251,41 +400,36 @@ func TestUpdateCtrlCQuits(t *testing.T) {
 	}
 }
 
-// --- Update: select navigation ---
-
 func TestUpdateSelectNavigation(t *testing.T) {
 	fields := []FieldDef{
 		{Name: "status", Type: "select", Required: true, Options: []string{"proposed", "accepted", "deprecated"}},
 	}
 	m := NewModelFromConfig(fields)
 	m = removeEditorSteps(m)
+	m = removeFileRefSteps(m)
 
 	if m.steps[0].cursorPos != 0 {
 		t.Fatalf("expected initial cursor 0, got %d", m.steps[0].cursorPos)
 	}
 
-	// Move down
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m = updated.(Model)
 	if m.steps[0].cursorPos != 1 {
 		t.Errorf("expected cursor 1 after down, got %d", m.steps[0].cursorPos)
 	}
 
-	// Move down again
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m = updated.(Model)
 	if m.steps[0].cursorPos != 2 {
 		t.Errorf("expected cursor 2 after second down, got %d", m.steps[0].cursorPos)
 	}
 
-	// Move down at boundary — should stay
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m = updated.(Model)
 	if m.steps[0].cursorPos != 2 {
 		t.Errorf("expected cursor to stay at 2, got %d", m.steps[0].cursorPos)
 	}
 
-	// Move up
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
 	m = updated.(Model)
 	if m.steps[0].cursorPos != 1 {
@@ -299,12 +443,11 @@ func TestUpdateSelectEnterConfirms(t *testing.T) {
 	}
 	m := NewModelFromConfig(fields)
 	m = removeEditorSteps(m)
+	m = removeFileRefSteps(m)
 
-	// Move down to "accepted"
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m = updated.(Model)
 
-	// Enter to confirm
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
 
@@ -316,8 +459,6 @@ func TestUpdateSelectEnterConfirms(t *testing.T) {
 	}
 }
 
-// --- Update: multiselect ---
-
 func TestUpdateMultiselectToggle(t *testing.T) {
 	fields := []FieldDef{
 		{Name: "tags", Type: "multiselect", Required: true, Options: []string{"api", "db", "security"}},
@@ -325,14 +466,12 @@ func TestUpdateMultiselectToggle(t *testing.T) {
 	m := NewModelFromConfig(fields)
 	m = removeEditorSteps(m)
 
-	// Toggle first option (space)
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeySpace})
 	m = updated.(Model)
 	if !m.steps[0].selectedMap[0] {
 		t.Error("expected option 0 to be selected after space")
 	}
 
-	// Toggle again to deselect
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeySpace})
 	m = updated.(Model)
 	if m.steps[0].selectedMap[0] {
@@ -347,11 +486,9 @@ func TestUpdateMultiselectEnterConfirms(t *testing.T) {
 	m := NewModelFromConfig(fields)
 	m = removeEditorSteps(m)
 
-	// Select "api" (index 0)
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeySpace})
 	m = updated.(Model)
 
-	// Move to "security" (index 2) and select
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m = updated.(Model)
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
@@ -359,7 +496,6 @@ func TestUpdateMultiselectEnterConfirms(t *testing.T) {
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeySpace})
 	m = updated.(Model)
 
-	// Confirm
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
 
@@ -368,8 +504,6 @@ func TestUpdateMultiselectEnterConfirms(t *testing.T) {
 	}
 }
 
-// --- Update: Tab skips optional ---
-
 func TestUpdateTabSkipsOptional(t *testing.T) {
 	fields := []FieldDef{
 		{Name: "context", Type: "text", Required: false},
@@ -377,16 +511,19 @@ func TestUpdateTabSkipsOptional(t *testing.T) {
 	}
 	m := NewModelFromConfig(fields)
 	m = removeEditorSteps(m)
+	m = removeFileRefSteps(m)
 
-	// Tab on optional field
+	m.currentStep = 1
+	m.textarea = initTextarea()
+
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m = updated.(Model)
 
-	if m.steps[0].value != "N/A" {
-		t.Errorf("expected 'N/A' after tab skip, got '%s'", m.steps[0].value)
+	if m.steps[1].value != "N/A" {
+		t.Errorf("expected 'N/A' after tab skip, got '%s'", m.steps[1].value)
 	}
-	if m.currentStep != 1 {
-		t.Errorf("expected to advance to step 1, got %d", m.currentStep)
+	if m.currentStep != 2 {
+		t.Errorf("expected to advance to step 2, got %d", m.currentStep)
 	}
 }
 
@@ -405,8 +542,6 @@ func TestUpdateTabDoesNotSkipRequired(t *testing.T) {
 	}
 }
 
-// --- Update: text enter with empty required ---
-
 func TestUpdateTextEnterEmptyRequired(t *testing.T) {
 	fields := []FieldDef{
 		{Name: "title", Type: "text", Required: true},
@@ -414,7 +549,6 @@ func TestUpdateTextEnterEmptyRequired(t *testing.T) {
 	m := NewModelFromConfig(fields)
 	m = removeEditorSteps(m)
 
-	// Enter with empty textarea should not advance
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
 
@@ -422,8 +556,6 @@ func TestUpdateTextEnterEmptyRequired(t *testing.T) {
 		t.Errorf("expected to stay at step 0 with empty required text, got %d", m.currentStep)
 	}
 }
-
-// --- Update: editorFinishedMsg ---
 
 func TestUpdateEditorFinishedAdvances(t *testing.T) {
 	m := NewModel()
@@ -441,8 +573,6 @@ func TestUpdateEditorFinishedAdvances(t *testing.T) {
 	}
 }
 
-// --- Update: WindowSizeMsg ---
-
 func TestUpdateWindowSizeMsg(t *testing.T) {
 	m := NewModel()
 	m = removeEditorSteps(m)
@@ -457,8 +587,6 @@ func TestUpdateWindowSizeMsg(t *testing.T) {
 	}
 }
 
-// --- Update: completed model quits ---
-
 func TestUpdateCompletedModelQuits(t *testing.T) {
 	m := NewModel()
 	m.currentStep = len(m.steps)
@@ -468,8 +596,6 @@ func TestUpdateCompletedModelQuits(t *testing.T) {
 		t.Error("expected Quit command for completed model")
 	}
 }
-
-// --- View ---
 
 func TestViewQuitting(t *testing.T) {
 	m := NewModel()
@@ -506,6 +632,13 @@ func TestViewSelectStep(t *testing.T) {
 	m := NewModelFromConfig(fields)
 	m = removeEditorSteps(m)
 
+	for i, s := range m.steps {
+		if s.fieldType == "select" {
+			m.currentStep = i
+			break
+		}
+	}
+
 	view := m.View()
 	if !strings.Contains(view, "proposed") {
 		t.Errorf("expected 'proposed' in view, got '%s'", view)
@@ -526,7 +659,7 @@ func TestViewMultiselectStep(t *testing.T) {
 	if !strings.Contains(view, "[ ]") {
 		t.Errorf("expected unchecked checkbox in view, got '%s'", view)
 	}
-	if !strings.Contains(view, "space to toggle") {
+	if !strings.Contains(view, "space toggle") {
 		t.Errorf("expected multiselect instructions in view, got '%s'", view)
 	}
 }
@@ -567,6 +700,13 @@ func TestViewOptionalHint(t *testing.T) {
 	}
 	m := NewModelFromConfig(fields)
 	m = removeEditorSteps(m)
+
+	for i, s := range m.steps {
+		if s.fieldType == "text" {
+			m.currentStep = i
+			break
+		}
+	}
 
 	view := m.View()
 	if !strings.Contains(view, "(tab to skip)") {
@@ -635,8 +775,6 @@ func TestRunDefaultModel(t *testing.T) {
 	}
 }
 
-// --- Update: KeyEnter on editor step ---
-
 func TestUpdateKeyEnterOnEditorSpawnsProcess(t *testing.T) {
 	m := NewModel()
 	m.textarea = initTextarea()
@@ -662,8 +800,6 @@ func TestUpdateKeyEnterOnEditorSetsTempFile(t *testing.T) {
 	}
 }
 
-// --- Update: default case space rune toggles multiselect ---
-
 func TestUpdateDefaultSpaceRuneTogglesMultiselect(t *testing.T) {
 	fields := []FieldDef{
 		{Name: "tags", Type: "multiselect", Required: true, Options: []string{"api", "db", "security"}},
@@ -679,7 +815,6 @@ func TestUpdateDefaultSpaceRuneTogglesMultiselect(t *testing.T) {
 		t.Error("expected option 0 to be selected after space rune via default case")
 	}
 
-	// Toggle off
 	updated, _ = m.Update(spaceRune)
 	m = updated.(Model)
 
@@ -687,8 +822,6 @@ func TestUpdateDefaultSpaceRuneTogglesMultiselect(t *testing.T) {
 		t.Error("expected option 0 to be deselected after second space rune")
 	}
 }
-
-// --- Init ---
 
 func TestInitReturnsNil(t *testing.T) {
 	m := NewModel()
