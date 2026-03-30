@@ -241,3 +241,78 @@ func TestNewSmartWithoutAPIKeyStillCreatesRecord(t *testing.T) {
 		t.Errorf("expected 1 record (fallback to manual), got %d", len(entries))
 	}
 }
+
+func TestExtractFilesFromDiff(t *testing.T) {
+	diff := `diff --git a/src/handlers/auth.go b/src/handlers/auth.go
+index 1234567..abcdefg 100644
+--- a/src/handlers/auth.go
++++ b/src/handlers/auth.go
+@@ -1,3 +1,5 @@
+ package handlers`
+
+	result := extractFilesFromDiff(diff)
+	if len(result) != 1 || result[0] != "src/handlers/auth.go" {
+		t.Errorf("expected ['src/handlers/auth.go'], got %v", result)
+	}
+}
+
+func TestExtractFilesFromDiffEmpty(t *testing.T) {
+	result := extractFilesFromDiff("")
+	if len(result) != 0 {
+		t.Errorf("expected empty slice, got %v", result)
+	}
+}
+
+func TestExtractFilesFromDiffMultipleFiles(t *testing.T) {
+	diff := `diff --git a/file1.go b/file1.go
+index 1234567..abcdefg 100644
+diff --git a/file2.go b/file2.go
+index 1234567..abcdefg 100644`
+
+	result := extractFilesFromDiff(diff)
+	if len(result) != 2 {
+		t.Fatalf("expected 2 files, got %d", len(result))
+	}
+	if result[0] != "file1.go" || result[1] != "file2.go" {
+		t.Errorf("expected ['file1.go', 'file2.go'], got %v", result)
+	}
+}
+
+func TestNewFromFileSetsFileRef(t *testing.T) {
+	dir := setupNewTest(t)
+
+	snippetFile := filepath.Join(dir, "src", "main.go")
+	if err := os.MkdirAll(filepath.Dir(snippetFile), 0755); err != nil {
+		t.Fatalf("failed to create dir: %v", err)
+	}
+	if err := os.WriteFile(snippetFile, []byte("package main"), 0644); err != nil {
+		t.Fatalf("failed to write snippet file: %v", err)
+	}
+
+	rootCmd.SetArgs([]string{"new", "--title", "Test file ref", "--file", snippetFile})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	recordsDir := filepath.Join(dir, ".sadr", "records")
+	s := storage.NewStorage(recordsDir)
+	records, _ := s.ListRecords()
+	if len(records) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(records))
+	}
+	if records[0].FileRef == "" || records[0].FileRef == "N/A" {
+		t.Errorf("expected file_ref to be set from --file, got '%s'", records[0].FileRef)
+	}
+}
+
+func TestExtractFilesFromDiffDeduplicates(t *testing.T) {
+	diff := `diff --git a/file1.go b/file1.go
+index 1234567..abcdefg 100644
+diff --git a/file1.go b/file1.go
+index 1234567..abcdefg 100644`
+
+	result := extractFilesFromDiff(diff)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 file (deduplicated), got %d", len(result))
+	}
+}

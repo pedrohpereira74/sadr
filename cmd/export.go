@@ -15,10 +15,11 @@ import (
 )
 
 type exportOptions struct {
-	rawID  string
-	all    bool
-	tags   string
-	global bool
+	rawID   string
+	all     bool
+	tags    string
+	global  bool
+	adrOnly bool
 }
 
 func newExportCmd() *cobra.Command {
@@ -53,7 +54,7 @@ func newExportCmd() *cobra.Command {
 					ui.Error(os.Stderr, fmt.Sprintf("record #%d not found.", id))
 					return
 				}
-				exportRecord(r, id, paths.Exports)
+				exportRecord(r, id, paths.Exports, opts.adrOnly)
 				return
 			}
 
@@ -67,7 +68,7 @@ func newExportCmd() *cobra.Command {
 				count := 0
 				for _, e := range entries {
 					if search.HasAnyTag(e.Record.Fields["tags"], opts.tags) {
-						exportRecord(e.Record, e.FileID, paths.Exports)
+						exportRecord(e.Record, e.FileID, paths.Exports, opts.adrOnly)
 						count++
 					}
 				}
@@ -81,7 +82,7 @@ func newExportCmd() *cobra.Command {
 
 			if opts.all {
 				for _, e := range entries {
-					exportRecord(e.Record, e.FileID, paths.Exports)
+					exportRecord(e.Record, e.FileID, paths.Exports, opts.adrOnly)
 				}
 				ui.Success(os.Stderr, fmt.Sprintf("%d record(s) exported.", len(entries)))
 				return
@@ -95,17 +96,22 @@ func newExportCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.all, "all", false, "Export all records")
 	cmd.Flags().StringVar(&opts.tags, "tags", "", "Export records matching tags (comma-separated)")
 	cmd.Flags().BoolVarP(&opts.global, "global", "g", false, "Export personal records from ~/.sadr/")
+	cmd.Flags().BoolVar(&opts.adrOnly, "adr", false, "Export only ADR fields (no snippet)")
 	cmd.MarkFlagsMutuallyExclusive("id", "all", "tags")
 	return cmd
 }
 
-func exportRecord(r model.Record, id int, exportsDir string) {
+func exportRecord(r model.Record, id int, exportsDir string, adrOnly bool) {
 	data := templates.ExportData{
 		Title:      r.Title,
 		Type:       r.Type,
 		FileRef:    r.FileRef,
 		HasFileRef: r.FileRef != model.NoFileRef && r.FileRef != "",
 		Snippet:    r.Snippet,
+	}
+
+	if adrOnly {
+		data.Snippet = ""
 	}
 
 	written := map[string]bool{}

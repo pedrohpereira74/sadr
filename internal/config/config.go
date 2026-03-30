@@ -72,7 +72,6 @@ func validate(cfg Config) error {
 		"select",
 		"multitext",
 		"multiselect",
-		"filepath",
 		"list",
 	}
 	for _, field := range cfg.Fields {

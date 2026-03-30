@@ -285,6 +285,61 @@ func buildRecordFromWizard(result map[string]string, fieldDefs []wizard.FieldDef
 	return r, nil
 }
 
+func extractFilesFromDiff(diffContent string) []string {
+	seen := map[string]bool{}
+	var files []string
+	for _, line := range strings.Split(diffContent, "\n") {
+		if strings.HasPrefix(line, "diff --git ") {
+			parts := strings.Fields(line)
+			if len(parts) >= 4 {
+				bPath := parts[3]
+				if strings.HasPrefix(bPath, "b/") {
+					path := bPath[2:]
+					if !seen[path] {
+						seen[path] = true
+						files = append(files, path)
+					}
+				}
+			}
+		}
+	}
+	return files
+}
+
+func listUntrackedFiles() []string {
+	cmd := exec.Command("git", "ls-files", "--others", "--exclude-standard")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+	var files []string
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		if line != "" {
+			files = append(files, line)
+		}
+	}
+	return files
+}
+
+func collectChangedFiles(diffContent string) []string {
+	seen := map[string]bool{}
+	var files []string
+
+	for _, f := range extractFilesFromDiff(diffContent) {
+		if !seen[f] {
+			seen[f] = true
+			files = append(files, f)
+		}
+	}
+	for _, f := range listUntrackedFiles() {
+		if !seen[f] {
+			seen[f] = true
+			files = append(files, f)
+		}
+	}
+	return files
+}
+
 func runNew(recordType string, opts *newOptions) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
 		paths, err := resolvePaths(opts.global)
@@ -321,6 +376,22 @@ func runNew(recordType string, opts *newOptions) func(cmd *cobra.Command, args [
 			opts.smart = true
 		}
 
+		projectRoot := filepath.Dir(paths.Root)
+
+		autoFileRef := ""
+		var preSelectedFiles []string
+		if opts.file != "" {
+			rel, relErr := filepath.Rel(projectRoot, opts.file)
+			if relErr == nil {
+				autoFileRef = rel
+			} else {
+				autoFileRef = opts.file
+			}
+		}
+		if opts.diff && snippetFromSource != "" {
+			preSelectedFiles = collectChangedFiles(snippetFromSource)
+		}
+
 		var r model.Record
 
 		if opts.title == "" {
@@ -340,9 +411,12 @@ func runNew(recordType string, opts *newOptions) func(cmd *cobra.Command, args [
 			}
 
 			wizOpts := wizard.Options{
-				SkipEditor:  hasSnippet,
-				Fields:      fieldDefs,
-				Suggestions: suggestions,
+				SkipEditor:       hasSnippet,
+				SkipFileRef:      autoFileRef != "" || opts.global,
+				Fields:           fieldDefs,
+				Suggestions:      suggestions,
+				ProjectRoot:      projectRoot,
+				PreSelectedFiles: preSelectedFiles,
 			}
 			ui.Pause(1.5)
 			result, wizErr := wizardRunner(wizOpts)
@@ -351,6 +425,10 @@ func runNew(recordType string, opts *newOptions) func(cmd *cobra.Command, args [
 					ui.Info(os.Stderr, "cancelled.")
 				}
 				return
+			}
+
+			if autoFileRef != "" {
+				result["file_ref"] = autoFileRef
 			}
 
 			r, err = buildRecordFromWizard(result, fieldDefs, recordType, snippetFromSource)
@@ -366,6 +444,9 @@ func runNew(recordType string, opts *newOptions) func(cmd *cobra.Command, args [
 			}
 			if hasSnippet {
 				r.Snippet = snippetFromSource
+			}
+			if autoFileRef != "" {
+				r.FileRef = autoFileRef
 			}
 		}
 
