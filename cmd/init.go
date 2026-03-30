@@ -87,7 +87,8 @@ func initGlobal(opts *initOptions) {
 		}
 	}
 
-	ui.Success(os.Stderr, "global sadr workspace and personal project initialized at ~/.sadr")
+	ui.Success(os.Stderr, "done! global workspace and personal project initialized at ~/.sadr")
+	ui.Info(os.Stderr, "now run 'sadr init' inside your project to start capturing.")
 }
 
 func initHeal(sadrDir string, opts *initOptions) {
@@ -139,12 +140,8 @@ func initFresh(cwd string, opts *initOptions) {
 
 	addToGitignore(cwd)
 
-	ui.Info(os.Stderr, "sadr: therapy for snippets that lost their meaning.\n")
-	ui.Pause(1.5)
-
-	_, _ = fmt.Fprintln(os.Stderr, "    Done! Created .sadr/ in this directory.")
-	_, _ = fmt.Fprintf(os.Stderr, "    Config: .sadr/config.yaml (%s preset)\n", chosen)
-	_, _ = fmt.Fprintln(os.Stderr, "    Try it: run 'sadr new' to capture your first record.")
+	ui.Success(os.Stderr, "done! created .sadr in this directory.")
+	ui.Info(os.Stderr, "try it: run 'sadr new' to capture your first record.")
 }
 
 func newInitCmd() *cobra.Command {
