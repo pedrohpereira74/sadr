@@ -94,7 +94,4 @@ sadr uses three configuration files:
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request. Testing the UI components can be done by running the tests with the interactive TTY detection disabled:
-```bash
-SADR_TEST=1 go test ./...
-```
+Contributions are welcome! Please feel free to submit a Pull Request.
