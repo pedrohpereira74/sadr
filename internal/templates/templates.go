@@ -174,8 +174,10 @@ h2 { margin-top: 2em; color: #333; }
 var markdownTmpl = template.Must(template.New("markdown").Parse(markdownHTML))
 
 func RenderMarkdownHTML(title, content string) (string, error) {
+	// goldmark.New() defaults to safe mode: raw HTML in markdown is stripped.
+	// template.HTML cast is safe here because goldmark sanitizes the output.
 	var mdBuf bytes.Buffer
-	if err := goldmark.Convert([]byte(content), &mdBuf); err != nil {
+	if err := goldmark.New().Convert([]byte(content), &mdBuf); err != nil {
 		return "", fmt.Errorf("failed to convert markdown: %v", err)
 	}
 

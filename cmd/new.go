@@ -76,7 +76,7 @@ func resolveConfigPath(configsDir, configFlag string) (string, error) {
 
 	entries, err := os.ReadDir(configsDir)
 	if err != nil {
-		return "", nil
+		return "", fmt.Errorf("configs directory not found. run 'sadr init' first")
 	}
 	var configs []string
 	for _, e := range entries {
@@ -86,7 +86,7 @@ func resolveConfigPath(configsDir, configFlag string) (string, error) {
 	}
 
 	if len(configs) == 0 {
-		return "", nil
+		return "", fmt.Errorf("no config files found in .sadr/configs/. run 'sadr init' first")
 	}
 
 	if len(configs) == 1 {
@@ -453,7 +453,7 @@ func runNew(recordType string, opts *newOptions) func(cmd *cobra.Command, args [
 		if opts.title == "" {
 			fieldDefs, cfgErr := loadFieldDefs(configPath)
 			if cfgErr != nil {
-				ui.Error(os.Stderr, fmt.Sprintf("\nconfiguration error\n%v\n\nfix your config.yaml and try again.\n", cfgErr))
+				ui.Error(os.Stderr, fmt.Sprintf("\nconfiguration error\n%v\n\nfix your config file at %q and try again.\n", cfgErr, configPath))
 				return
 			}
 

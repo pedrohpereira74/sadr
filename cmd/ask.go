@@ -59,7 +59,16 @@ func runAsk(opts *askOptions) {
 		return
 	}
 
-	projectRoot := filepath.Dir(paths.Root)
+	var projectRoot string
+	if paths.IsGlobal {
+		projectRoot, err = os.Getwd()
+		if err != nil {
+			ui.Error(os.Stderr, fmt.Sprintf("failed to determine working directory: %v", err))
+			return
+		}
+	} else {
+		projectRoot = filepath.Dir(paths.Root)
+	}
 
 	var entries []storage.RecordEntry
 	var entryErr error

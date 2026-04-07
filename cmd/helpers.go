@@ -432,7 +432,7 @@ func resolvePaths(global bool) (discover.SadrPaths, error) {
 		return paths, err
 	}
 	if err := handleGlobalFallback(paths); err != nil {
-		return discover.SadrPaths{}, nil
+		return discover.SadrPaths{}, err
 	}
 
 	if !paths.IsGlobal {
