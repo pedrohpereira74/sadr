@@ -92,7 +92,8 @@ func TestFindTestFileNotFound(t *testing.T) {
 
 func TestSourceCodeEnricherAbsolutePathIgnored(t *testing.T) {
 	root := t.TempDir()
-	record := model.Record{FileRef: "/etc/passwd", Fields: map[string]string{}}
+	absPath, _ := filepath.Abs(filepath.Join(string(os.PathSeparator), "etc", "passwd"))
+	record := model.Record{FileRef: absPath, Fields: map[string]string{}}
 	e := Enricher{}
 	ctx := e.Enrich(enricher.RecordContext{}, record, root)
 	if len(ctx.SourceFiles) != 0 {
@@ -102,7 +103,7 @@ func TestSourceCodeEnricherAbsolutePathIgnored(t *testing.T) {
 
 func TestSourceCodeEnricherPathTraversalIgnored(t *testing.T) {
 	root := t.TempDir()
-	record := model.Record{FileRef: "../secret.go", Fields: map[string]string{}}
+	record := model.Record{FileRef: filepath.Join("..", "secret.go"), Fields: map[string]string{}}
 	e := Enricher{}
 	ctx := e.Enrich(enricher.RecordContext{}, record, root)
 	if len(ctx.SourceFiles) != 0 {
