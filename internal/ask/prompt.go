@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/pedrohpereira74/sadr/internal/compress"
 	"github.com/pedrohpereira74/sadr/internal/enricher"
-	"github.com/pedrohpereira74/sadr/internal/enricher/sourcecode"
 )
 
 type Persona struct {
@@ -54,15 +54,15 @@ RECORDS AND CONTEXT:
 		}
 
 		if withSnippet && ctx.RecordSnippet != "" {
-			fmt.Fprintf(&b, "Snippet:\n```\n%s\n```\n", sourcecode.ZipSnippet(ctx.RecordSnippet))
+			fmt.Fprintf(&b, "Snippet:\n```\n%s\n```\n", compress.ZipSnippet(ctx.RecordSnippet))
 		}
 
 		for _, sf := range ctx.SourceFiles {
 			if sf.SourceCode != "" {
-				fmt.Fprintf(&b, "<file_ref path=%q>\n%s\n</file_ref>\n", sf.SourcePath, sourcecode.ZipSourceCode(sf.SourceCode))
+				fmt.Fprintf(&b, "<file_ref path=%q>\n%s\n</file_ref>\n", sf.SourcePath, compress.ZipSourceCode(sf.SourceCode))
 			}
 			if sf.TestCode != "" {
-				fmt.Fprintf(&b, "<file_ref path=%q>\n%s\n</file_ref>\n", sf.TestPath, sourcecode.ZipSourceCode(sf.TestCode))
+				fmt.Fprintf(&b, "<file_ref path=%q>\n%s\n</file_ref>\n", sf.TestPath, compress.ZipSourceCode(sf.TestCode))
 			}
 		}
 

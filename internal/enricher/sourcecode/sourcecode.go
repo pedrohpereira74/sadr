@@ -3,61 +3,11 @@ package sourcecode
 import (
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/pedrohpereira74/sadr/internal/enricher"
 	"github.com/pedrohpereira74/sadr/internal/model"
 )
-
-var (
-	reLineComments  = regexp.MustCompile(`(?m)^\s*(//|#).*$`)
-	reBlockComments = regexp.MustCompile(`(?s)/\*.*?\*/`)
-	reEmptyLines    = regexp.MustCompile(`(?m)^\s*$\n`)
-	reIndentation   = regexp.MustCompile(`[ \t]+`)
-)
-
-func ZipSourceCode(raw string) string {
-	s := strings.ReplaceAll(raw, "\r", "")
-	s = reLineComments.ReplaceAllString(s, "")
-	s = reBlockComments.ReplaceAllString(s, "")
-	s = reEmptyLines.ReplaceAllString(s, "")
-	s = reIndentation.ReplaceAllString(s, " ")
-	return strings.TrimSpace(s)
-}
-
-func ZipSnippet(raw string) string {
-	s := ZipSourceCode(raw)
-	if !isDiff(s) {
-		return s
-	}
-	var out []string
-	for line := range strings.SplitSeq(s, "\n") {
-		if strings.HasPrefix(line, "diff ") {
-			parts := strings.Fields(line)
-			if len(parts) >= 4 {
-				out = append(out, "--- "+strings.TrimPrefix(parts[len(parts)-1], "b/"))
-			}
-			continue
-		}
-		if strings.HasPrefix(line, "index ") || strings.HasPrefix(line, "--- ") || strings.HasPrefix(line, "+++ ") {
-			continue
-		}
-		if strings.HasPrefix(line, "@@") {
-			out = append(out, line)
-			continue
-		}
-		if strings.HasPrefix(line, "+") || strings.HasPrefix(line, "-") {
-			out = append(out, line)
-			continue
-		}
-	}
-	return strings.Join(out, "\n")
-}
-
-func isDiff(s string) bool {
-	return strings.HasPrefix(s, "diff ") || strings.Contains(s, "\ndiff ")
-}
 
 const maxFileBytes = 32 * 1024
 

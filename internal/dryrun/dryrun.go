@@ -3,8 +3,8 @@ package dryrun
 import (
 	"fmt"
 
+	"github.com/pedrohpereira74/sadr/internal/compress"
 	"github.com/pedrohpereira74/sadr/internal/enricher"
-	"github.com/pedrohpereira74/sadr/internal/enricher/sourcecode"
 )
 
 func EstimateTokens(text string) int {
@@ -25,17 +25,17 @@ func ContextsPayloadSize(contexts []enricher.RecordContext, withSnippet bool) in
 	for _, ctx := range contexts {
 		size += len(ctx.RecordTitle)
 		if withSnippet && ctx.RecordSnippet != "" {
-			size += len(sourcecode.ZipSnippet(ctx.RecordSnippet))
+			size += len(compress.ZipSnippet(ctx.RecordSnippet))
 		}
 		for _, v := range ctx.RecordFields {
 			size += len(v)
 		}
 		for _, sf := range ctx.SourceFiles {
 			if sf.SourceCode != "" {
-				size += len(sourcecode.ZipSourceCode(sf.SourceCode))
+				size += len(compress.ZipSourceCode(sf.SourceCode))
 			}
 			if sf.TestCode != "" {
-				size += len(sourcecode.ZipSourceCode(sf.TestCode))
+				size += len(compress.ZipSourceCode(sf.TestCode))
 			}
 		}
 	}
