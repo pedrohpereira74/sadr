@@ -27,7 +27,8 @@ func (e Enricher) Enrich(ctx enricher.RecordContext, record model.Record, projec
 		}
 
 		fullPath := filepath.Join(projectRoot, p)
-		if !strings.HasPrefix(filepath.Clean(fullPath), filepath.Clean(projectRoot)+string(filepath.Separator)) {
+		rel, err := filepath.Rel(projectRoot, fullPath)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 			continue
 		}
 

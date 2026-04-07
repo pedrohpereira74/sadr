@@ -76,7 +76,10 @@ func resolveConfigPath(configsDir, configFlag string) (string, error) {
 
 	entries, err := os.ReadDir(configsDir)
 	if err != nil {
-		return "", fmt.Errorf("configs directory not found. run 'sadr init' first")
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("configs directory not found. run 'sadr init' first")
+		}
+		return "", fmt.Errorf("failed to read configs directory %q: %w", configsDir, err)
 	}
 	var configs []string
 	for _, e := range entries {
@@ -86,7 +89,7 @@ func resolveConfigPath(configsDir, configFlag string) (string, error) {
 	}
 
 	if len(configs) == 0 {
-		return "", fmt.Errorf("no config files found in .sadr/configs/. run 'sadr init' first")
+		return "", fmt.Errorf("no config files found in %q. run 'sadr init' first", configsDir)
 	}
 
 	if len(configs) == 1 {

@@ -105,9 +105,9 @@ func initGlobal(opts *initOptions) {
 	}
 
 	for _, dir := range []string{
-		filepath.Join(sadrDir, cfg.Username, "records"),
-		filepath.Join(sadrDir, cfg.Username, "exports"),
-		filepath.Join(sadrDir, cfg.Username, "answers"),
+		filepath.Join(sadrDir, "records"),
+		filepath.Join(sadrDir, "exports"),
+		filepath.Join(sadrDir, "answers"),
 	} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			ui.Error(os.Stderr, fmt.Sprintf("failed to create %s: %v", dir, err))
