@@ -102,7 +102,6 @@ func newExportCmd() *cobra.Command {
 	return cmd
 }
 
-
 func exportRecord(r model.Record, id int, exportsDir string, adrOnly bool) {
 	data := templates.ExportData{
 		Title:      r.Title,

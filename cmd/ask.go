@@ -11,6 +11,7 @@ import (
 
 	"github.com/pedrohpereira74/sadr/internal/ask"
 	"github.com/pedrohpereira74/sadr/internal/config"
+	"github.com/pedrohpereira74/sadr/internal/dryrun"
 	"github.com/pedrohpereira74/sadr/internal/enricher"
 	"github.com/pedrohpereira74/sadr/internal/enricher/sourcecode"
 	"github.com/pedrohpereira74/sadr/internal/search"
@@ -95,7 +96,7 @@ func runAsk(opts *askOptions) {
 		}
 	}
 
-	askCfg := loadAskConfig(paths.Root)
+	askCfg := loadAskConfig(paths.ConfigsDir)
 	cutoff := parseRangeCutoff(askCfg.Range)
 
 	var askFiltered []storage.RecordEntry
@@ -146,21 +147,10 @@ func runAsk(opts *askOptions) {
 		contexts = append(contexts, ctx)
 	}
 
-	var payloadSize int
-	payloadSize += len(persona.Name) + len(persona.Instruction)
-	payloadSize += len(question)
-	payloadSize += 300
-	for _, ctx := range contexts {
-		payloadSize += len(ctx.RecordTitle)
-		if opts.complete {
-			payloadSize += len(sourcecode.ZipSnippet(ctx.RecordSnippet))
-		}
-		for _, v := range ctx.RecordFields {
-			payloadSize += len(v)
-		}
-	}
+	payloadSize := len(persona.Name) + len(persona.Instruction) + len(question) + 300
+	payloadSize += dryrun.ContextsPayloadSize(contexts, opts.complete)
 	tokenEstimate := payloadSize / 4
-	estimate := fmt.Sprintf("dry run: %d records, ~%dKB payload, ~%d tokens estimated.", len(filtered), payloadSize/1024, tokenEstimate)
+	estimate := dryrun.FormatEstimate(len(filtered), payloadSize, tokenEstimate)
 
 	if opts.dryRun {
 		ui.Info(os.Stderr, estimate)
@@ -215,8 +205,8 @@ func runAsk(opts *askOptions) {
 	ui.Success(os.Stderr, fmt.Sprintf("answer saved to %s", filepath.Base(outputPath)))
 }
 
-func loadAskConfig(sadrRoot string) config.AskConfig {
-	cfg, err := config.LoadFromFile(filepath.Join(sadrRoot, "config.yaml"))
+func loadAskConfig(configsDir string) config.AskConfig {
+	cfg, err := config.LoadFromFile(filepath.Join(configsDir, "default-config.yaml"))
 	if err != nil {
 		return config.AskConfig{Limit: 50, Range: "6m"}
 	}

@@ -51,11 +51,10 @@ Available Commands:
               --force              Skip confirmation
               -g, --global         Delete personal record from ~/.sadr/
 
-  export      Export records or reports to self-contained HTML
+  export      Export records to self-contained HTML
               --id <int>           Record ID to export
               --all                Export all records
               --tags <string>      Export records matching tags (comma-separated)
-              --report             Export a report (use with --id)
               -g, --global         Export personal records from ~/.sadr/
 
   report      AI-powered analysis of your architecture decisions
@@ -89,7 +88,6 @@ Examples:
   sadr search --id 3                 View record #3 in detail
   sadr edit --id 2                   Edit record #2 in your editor
   sadr export --all                  Export all records to HTML
-  sadr export --report --id 1        Export report #1 to HTML
   sadr report --role "tech lead"     AI analysis with Tech Lead persona
   sadr report --tags "security"      Analyze only security-tagged records
   sadr ask --role "dba"              Ask a question as a DBA persona

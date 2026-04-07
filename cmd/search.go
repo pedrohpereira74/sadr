@@ -146,18 +146,22 @@ func newSearchCmd() *cobra.Command {
 				return
 			}
 
-			entryByTitle := map[string]storage.RecordEntry{}
-			for _, e := range searchEntries {
-				entryByTitle[e.Record.Title] = e
-			}
-
 			for _, r := range results {
 				tags := r.Fields["tags"]
 				if tags == "" {
 					tags = "-"
 				}
-				if e, ok := entryByTitle[r.Title]; ok && e.Record.Author != "" {
-					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s/%d\t%s\t%s\t%s\n", e.Record.Author, e.FileID, r.Type, r.Title, tags)
+				var author string
+				var fileID int
+				for _, e := range searchEntries {
+					if e.Record.Title == r.Title && e.Record.Type == r.Type {
+						author = e.Record.Author
+						fileID = e.FileID
+						break
+					}
+				}
+				if author != "" {
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s/%d\t%s\t%s\t%s\n", author, fileID, r.Type, r.Title, tags)
 				} else {
 					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", r.Type, r.Title, tags)
 				}

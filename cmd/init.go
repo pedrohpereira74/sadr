@@ -135,11 +135,16 @@ func writeGlobalConfig(path string, cfg config.GlobalConfig) error {
 		return err
 	}
 	lines := strings.Split(string(data), "\n")
+	found := false
 	for i, line := range lines {
 		if strings.HasPrefix(line, "username:") {
 			lines[i] = fmt.Sprintf("username: %q", cfg.Username)
+			found = true
 			break
 		}
+	}
+	if !found {
+		lines = append([]string{fmt.Sprintf("username: %q", cfg.Username)}, lines...)
 	}
 	return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0600)
 }
