@@ -74,12 +74,6 @@ ai:
   api_key: ""
   model: "gemini-3-flash-preview"
   ai_depth: true
-
-# jira:
-#   url: "https://yourorg.atlassian.net"
-#   email: "you@example.com"
-#   api_token: ""
-#   api_token_env: "JIRA_API_TOKEN"
 `
 
 type ExportField struct {

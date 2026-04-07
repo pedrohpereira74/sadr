@@ -19,18 +19,10 @@ type AskConfig struct {
 }
 
 type GlobalConfig struct {
-	Username string     `yaml:"username"`
-	Editor   string     `yaml:"editor"`
-	Language string     `yaml:"language"`
-	AI       AIConfig   `yaml:"ai"`
-	Jira     JiraConfig `yaml:"jira"`
-}
-
-type JiraConfig struct {
-	URL         string `yaml:"url"`
-	Email       string `yaml:"email"`
-	APIToken    string `yaml:"api_token"`
-	APITokenEnv string `yaml:"api_token_env"`
+	Username string   `yaml:"username"`
+	Editor   string   `yaml:"editor"`
+	Language string   `yaml:"language"`
+	AI       AIConfig `yaml:"ai"`
 }
 type AIConfig struct {
 	Provider  string `yaml:"provider"`

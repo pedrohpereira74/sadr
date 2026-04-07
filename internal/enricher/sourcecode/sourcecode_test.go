@@ -1,10 +1,11 @@
-package enricher
+package sourcecode
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/pedrohpereira74/sadr/internal/enricher"
 	"github.com/pedrohpereira74/sadr/internal/model"
 )
 
@@ -14,8 +15,8 @@ func TestSourceCodeEnricher(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(root, "src", "auth.go"), []byte("package auth\n\nfunc Login() {}"), 0644)
 
 	record := model.Record{FileRef: "src/auth.go", Fields: map[string]string{}}
-	e := SourceCodeEnricher{}
-	ctx := e.Enrich(RecordContext{}, record, root)
+	e := Enricher{}
+	ctx := e.Enrich(enricher.RecordContext{}, record, root)
 
 	if len(ctx.SourceFiles) != 1 {
 		t.Fatalf("expected 1 source file, got %d", len(ctx.SourceFiles))
@@ -35,8 +36,8 @@ func TestSourceCodeEnricherMultipleFiles(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(root, "src", "db.go"), []byte("package db"), 0644)
 
 	record := model.Record{FileRef: "src/auth.go,src/db.go", Fields: map[string]string{}}
-	e := SourceCodeEnricher{}
-	ctx := e.Enrich(RecordContext{}, record, root)
+	e := Enricher{}
+	ctx := e.Enrich(enricher.RecordContext{}, record, root)
 
 	if len(ctx.SourceFiles) != 2 {
 		t.Fatalf("expected 2 source files, got %d", len(ctx.SourceFiles))
@@ -44,9 +45,9 @@ func TestSourceCodeEnricherMultipleFiles(t *testing.T) {
 }
 
 func TestSourceCodeEnricherNoFileRef(t *testing.T) {
-	e := SourceCodeEnricher{}
+	e := Enricher{}
 	record := model.Record{FileRef: model.NoFileRef, Fields: map[string]string{}}
-	ctx := e.Enrich(RecordContext{}, record, "/tmp")
+	ctx := e.Enrich(enricher.RecordContext{}, record, "/tmp")
 	if len(ctx.SourceFiles) != 0 {
 		t.Error("expected no source files for N/A file_ref")
 	}
@@ -59,8 +60,8 @@ func TestSourceCodeEnricherWithTestFile(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(root, "src", "auth_test.go"), []byte("package auth\nfunc TestAuth(t *testing.T){}"), 0644)
 
 	record := model.Record{FileRef: "src/auth.go", Fields: map[string]string{}}
-	e := SourceCodeEnricher{}
-	ctx := e.Enrich(RecordContext{}, record, root)
+	e := Enricher{}
+	ctx := e.Enrich(enricher.RecordContext{}, record, root)
 
 	if len(ctx.SourceFiles) != 1 {
 		t.Fatalf("expected 1 source file, got %d", len(ctx.SourceFiles))

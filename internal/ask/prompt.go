@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/pedrohpereira74/sadr/internal/enricher"
+	"github.com/pedrohpereira74/sadr/internal/enricher/sourcecode"
 )
 
 type Persona struct {
@@ -52,17 +53,16 @@ RECORDS AND CONTEXT:
 			fmt.Fprintf(&b, "%s: %s\n", key, val)
 		}
 
-
 		if withSnippet && ctx.RecordSnippet != "" {
-			fmt.Fprintf(&b, "Snippet:\n```\n%s\n```\n", enricher.ZipSnippet(ctx.RecordSnippet))
+			fmt.Fprintf(&b, "Snippet:\n```\n%s\n```\n", sourcecode.ZipSnippet(ctx.RecordSnippet))
 		}
 
 		for _, sf := range ctx.SourceFiles {
 			if sf.SourceCode != "" {
-				fmt.Fprintf(&b, "<file_ref path=%q>\n%s\n</file_ref>\n", sf.SourcePath, enricher.ZipSourceCode(sf.SourceCode))
+				fmt.Fprintf(&b, "<file_ref path=%q>\n%s\n</file_ref>\n", sf.SourcePath, sourcecode.ZipSourceCode(sf.SourceCode))
 			}
 			if sf.TestCode != "" {
-				fmt.Fprintf(&b, "<file_ref path=%q>\n%s\n</file_ref>\n", sf.TestPath, enricher.ZipSourceCode(sf.TestCode))
+				fmt.Fprintf(&b, "<file_ref path=%q>\n%s\n</file_ref>\n", sf.TestPath, sourcecode.ZipSourceCode(sf.TestCode))
 			}
 		}
 

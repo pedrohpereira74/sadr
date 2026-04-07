@@ -14,7 +14,6 @@ import (
 	"github.com/pedrohpereira74/sadr/internal/ask"
 	"github.com/pedrohpereira74/sadr/internal/config"
 	"github.com/pedrohpereira74/sadr/internal/discover"
-	"github.com/pedrohpereira74/sadr/internal/enricher"
 	"github.com/pedrohpereira74/sadr/internal/storage"
 	"github.com/pedrohpereira74/sadr/internal/ui"
 )
@@ -390,20 +389,6 @@ func openEditorImpl(editor string, path string) error {
 
 	return c.Run()
 }
-
-func loadJiraEnricher() *enricher.JiraEnricher {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil
-	}
-	globalConfigPath := filepath.Join(home, ".sadr", "global-config.yaml")
-	cfg, err := config.LoadGlobalFromFile(globalConfigPath)
-	if err != nil {
-		return nil
-	}
-	return enricher.NewJiraEnricher(cfg.Jira)
-}
-
 func configDisplayName(filename string) string {
 	name := strings.TrimSuffix(filename, ".yaml")
 	if name == "default-config" {

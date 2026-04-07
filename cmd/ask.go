@@ -12,6 +12,7 @@ import (
 	"github.com/pedrohpereira74/sadr/internal/ask"
 	"github.com/pedrohpereira74/sadr/internal/config"
 	"github.com/pedrohpereira74/sadr/internal/enricher"
+	"github.com/pedrohpereira74/sadr/internal/enricher/sourcecode"
 	"github.com/pedrohpereira74/sadr/internal/search"
 	"github.com/pedrohpereira74/sadr/internal/storage"
 	"github.com/pedrohpereira74/sadr/internal/ui"
@@ -137,10 +138,7 @@ func runAsk(opts *askOptions) {
 		}
 	}
 
-	var enrichers []enricher.Enricher
-	if je := loadJiraEnricher(); je != nil {
-		enrichers = append(enrichers, je)
-	}
+	enrichers := []enricher.Enricher{sourcecode.Enricher{}}
 
 	var contexts []enricher.RecordContext
 	for _, e := range filtered {
@@ -155,7 +153,7 @@ func runAsk(opts *askOptions) {
 	for _, ctx := range contexts {
 		payloadSize += len(ctx.RecordTitle)
 		if opts.complete {
-			payloadSize += len(enricher.ZipSnippet(ctx.RecordSnippet))
+			payloadSize += len(sourcecode.ZipSnippet(ctx.RecordSnippet))
 		}
 		for _, v := range ctx.RecordFields {
 			payloadSize += len(v)
