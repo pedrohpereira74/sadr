@@ -175,8 +175,8 @@ var markdownTmpl = template.Must(template.New("markdown").Parse(markdownHTML))
 
 func RenderMarkdownHTML(title, content string) (string, error) {
 	var mdBuf bytes.Buffer
-	if err := goldmark.Convert([]byte(content), &mdBuf); err != nil {
-		return "", fmt.Errorf("failed to convert markdown: %v", err)
+	if err := goldmark.New().Convert([]byte(content), &mdBuf); err != nil {
+		return "", fmt.Errorf("failed to convert markdown: %w", err)
 	}
 
 	var buf bytes.Buffer

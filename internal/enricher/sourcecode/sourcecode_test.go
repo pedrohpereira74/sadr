@@ -89,3 +89,24 @@ func TestFindTestFileNotFound(t *testing.T) {
 		t.Errorf("expected empty string, got %s", result)
 	}
 }
+
+func TestSourceCodeEnricherAbsolutePathIgnored(t *testing.T) {
+	root := t.TempDir()
+	absPath, _ := filepath.Abs(filepath.Join(string(os.PathSeparator), "etc", "passwd"))
+	record := model.Record{FileRef: absPath, Fields: map[string]string{}}
+	e := Enricher{}
+	ctx := e.Enrich(enricher.RecordContext{}, record, root)
+	if len(ctx.SourceFiles) != 0 {
+		t.Errorf("expected absolute path to be ignored, got %d source files", len(ctx.SourceFiles))
+	}
+}
+
+func TestSourceCodeEnricherPathTraversalIgnored(t *testing.T) {
+	root := t.TempDir()
+	record := model.Record{FileRef: filepath.Join("..", "secret.go"), Fields: map[string]string{}}
+	e := Enricher{}
+	ctx := e.Enrich(enricher.RecordContext{}, record, root)
+	if len(ctx.SourceFiles) != 0 {
+		t.Errorf("expected path traversal to be ignored, got %d source files", len(ctx.SourceFiles))
+	}
+}

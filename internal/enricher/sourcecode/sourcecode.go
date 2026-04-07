@@ -22,11 +22,16 @@ func (e Enricher) Enrich(ctx enricher.RecordContext, record model.Record, projec
 
 	for p := range strings.SplitSeq(record.FileRef, ",") {
 		p = strings.TrimSpace(p)
-		if p == "" {
+		if p == "" || filepath.IsAbs(p) {
 			continue
 		}
 
 		fullPath := filepath.Join(projectRoot, p)
+		rel, err := filepath.Rel(projectRoot, fullPath)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			continue
+		}
+
 		data, err := os.ReadFile(fullPath)
 		if err != nil {
 			continue
