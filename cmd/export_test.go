@@ -9,19 +9,19 @@ import (
 	"github.com/pedrohpereira74/sadr/internal/storage"
 )
 
-func setupExportTest(t *testing.T) string {
+func setupExportTest(t *testing.T) (dir string, username string) {
 	t.Helper()
 	resetCmd(findSubCmd("export"))
 
-	dir, _ := os.MkdirTemp("", "sadr-test-*")
+	home, _ := os.MkdirTemp("", "sadr-test-home-*")
+	t.Cleanup(func() { os.RemoveAll(home) })
+	username = setupTestUser(t, home)
+
+	dir, _ = os.MkdirTemp("", "sadr-test-*")
 	t.Cleanup(func() { os.RemoveAll(dir) })
-	recordsDir := filepath.Join(dir, ".sadr", "records")
-	exportsDir := filepath.Join(dir, ".sadr", "exports")
+	recordsDir := filepath.Join(dir, ".sadr", username, "records")
 	if err := os.MkdirAll(recordsDir, 0755); err != nil {
 		t.Fatalf("failed to create records dir: %v", err)
-	}
-	if err := os.MkdirAll(exportsDir, 0755); err != nil {
-		t.Fatalf("failed to create exports dir: %v", err)
 	}
 
 	s := storage.NewStorage(recordsDir)
@@ -43,18 +43,18 @@ func setupExportTest(t *testing.T) string {
 		t.Fatalf("failed to change dir: %v", err)
 	}
 	t.Cleanup(func() { os.Chdir(originalWd) })
-	return dir
+	return dir, username
 }
 
 func TestExportCreatesHTMLFile(t *testing.T) {
-	dir := setupExportTest(t)
+	dir, username := setupExportTest(t)
 
 	rootCmd.SetArgs([]string{"export", "--id", "1"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	exportsDir := filepath.Join(dir, ".sadr", "exports")
+	exportsDir := filepath.Join(dir, ".sadr", username, "exports")
 	entries, _ := os.ReadDir(exportsDir)
 	if len(entries) != 1 {
 		t.Errorf("expected 1 export, got %d", len(entries))
@@ -62,14 +62,14 @@ func TestExportCreatesHTMLFile(t *testing.T) {
 }
 
 func TestExportAllCreatesMultipleFiles(t *testing.T) {
-	dir := setupExportTest(t)
+	dir, username := setupExportTest(t)
 
 	rootCmd.SetArgs([]string{"export", "--all"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	exportsDir := filepath.Join(dir, ".sadr", "exports")
+	exportsDir := filepath.Join(dir, ".sadr", username, "exports")
 	entries, _ := os.ReadDir(exportsDir)
 	if len(entries) != 3 {
 		t.Errorf("expected 3 exports, got %d", len(entries))
@@ -77,14 +77,14 @@ func TestExportAllCreatesMultipleFiles(t *testing.T) {
 }
 
 func TestExportFiltersByTags(t *testing.T) {
-	dir := setupExportTest(t)
+	dir, username := setupExportTest(t)
 
 	rootCmd.SetArgs([]string{"export", "--tags", "security"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	exportsDir := filepath.Join(dir, ".sadr", "exports")
+	exportsDir := filepath.Join(dir, ".sadr", username, "exports")
 	entries, _ := os.ReadDir(exportsDir)
 	if len(entries) != 1 {
 		t.Errorf("expected 1 export with tag 'security', got %d", len(entries))

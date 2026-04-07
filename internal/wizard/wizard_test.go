@@ -2,6 +2,7 @@ package wizard
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -278,12 +279,19 @@ func TestFilepickerMultiSelect(t *testing.T) {
 }
 
 func TestFilepickerPreSelected(t *testing.T) {
+	dir := t.TempDir()
+	for _, f := range []string{"handler.go", "model.go", "main.go", "utils.go"} {
+		if err := os.WriteFile(filepath.Join(dir, f), []byte(""), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	m := NewModel()
 	m = removeEditorSteps(m)
 	m.textarea = initTextarea()
 
 	preFiles := []string{"handler.go", "model.go"}
-	applyPreSelectedFiles(&m, preFiles)
+	applyPreSelectedFiles(&m, preFiles, dir)
 
 	fpIdx := 0
 	for i := range m.steps {
@@ -296,23 +304,26 @@ func TestFilepickerPreSelected(t *testing.T) {
 	if len(m.steps[fpIdx].suggestedFiles) != 2 {
 		t.Fatalf("expected 2 suggested files, got %d", len(m.steps[fpIdx].suggestedFiles))
 	}
-
-	m.steps[fpIdx].allFiles = []string{"handler.go", "model.go", "main.go", "utils.go"}
-	suggested := map[string]bool{}
-	for _, f := range m.steps[fpIdx].suggestedFiles {
-		suggested[f] = true
+	if len(m.steps[fpIdx].allFiles) == 0 {
+		t.Fatal("expected allFiles to be populated eagerly")
 	}
+
+	allIdx := map[string]int{}
 	for i, f := range m.steps[fpIdx].allFiles {
-		if suggested[f] {
-			m.steps[fpIdx].selectedMap[i] = true
-		}
+		allIdx[f] = i
 	}
 
-	if !m.steps[fpIdx].selectedMap[0] || !m.steps[fpIdx].selectedMap[1] {
-		t.Error("expected handler.go and model.go to be selected")
+	if !m.steps[fpIdx].selectedMap[allIdx["handler.go"]] {
+		t.Error("expected handler.go to be selected")
 	}
-	if m.steps[fpIdx].selectedMap[2] || m.steps[fpIdx].selectedMap[3] {
-		t.Error("expected main.go and utils.go to NOT be selected")
+	if !m.steps[fpIdx].selectedMap[allIdx["model.go"]] {
+		t.Error("expected model.go to be selected")
+	}
+	if m.steps[fpIdx].selectedMap[allIdx["main.go"]] {
+		t.Error("expected main.go to NOT be selected")
+	}
+	if m.steps[fpIdx].selectedMap[allIdx["utils.go"]] {
+		t.Error("expected utils.go to NOT be selected")
 	}
 }
 
@@ -620,7 +631,7 @@ func TestViewCompleted(t *testing.T) {
 func TestViewEditorStep(t *testing.T) {
 	m := NewModel()
 	view := m.View()
-	if !strings.Contains(view, "Press Enter to open editor") {
+	if !strings.Contains(view, "enter to open editor") {
 		t.Errorf("expected editor prompt in view, got '%s'", view)
 	}
 }

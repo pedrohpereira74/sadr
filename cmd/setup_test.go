@@ -1,8 +1,11 @@
 package cmd
 
 import (
+	"context"
 	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/pedrohpereira74/sadr/internal/ui"
 	"github.com/pedrohpereira74/sadr/internal/wizard"
@@ -23,14 +26,16 @@ func TestMain(m *testing.M) {
 	snippetCapturer = func() (string, error) { return "mock snippet", nil }
 	clipboardReader = func() (string, error) { return "mock clipboard", nil }
 	confirmOverwrite = func() string { return "yes" }
+	confirmPromptFn = func(_ string) bool { return true }
+	generateTextFn = func(_ context.Context, _, _, _ string, _ time.Duration) (string, error) {
+		return "# Mock Report\n\nThis is a mock AI response.", nil
+	}
 
 	ui.PauseFn = func(_ float64) {}
 
 	os.Exit(m.Run())
 }
 
-// resetCmd resets all flags on a command to their default values and clears Changed state.
-// This is needed when rootCmd.Execute() is called multiple times in the same test binary.
 func resetCmd(cmd *cobra.Command) {
 	reset := func(f *pflag.Flag) {
 		if f.Changed {
@@ -42,7 +47,6 @@ func resetCmd(cmd *cobra.Command) {
 	cmd.PersistentFlags().VisitAll(reset)
 }
 
-// findSubCmd finds a direct subcommand of rootCmd by name.
 func findSubCmd(name string) *cobra.Command {
 	for _, c := range rootCmd.Commands() {
 		if c.Name() == name {
@@ -50,4 +54,28 @@ func findSubCmd(name string) *cobra.Command {
 		}
 	}
 	return nil
+}
+
+func setupTestUser(t *testing.T, home string) string {
+	t.Helper()
+	const testUser = "testuser"
+	sadrHome := filepath.Join(home, ".sadr")
+	if err := os.MkdirAll(sadrHome, 0755); err != nil {
+		t.Fatalf("failed to create ~/.sadr: %v", err)
+	}
+	globalConfig := `username: "testuser"
+editor: ""
+language: "english"
+ai:
+  provider: "gemini"
+  api_key: ""
+  model: ""
+  ai_depth: false
+`
+	if err := os.WriteFile(filepath.Join(sadrHome, "global-config.yaml"), []byte(globalConfig), 0600); err != nil {
+		t.Fatalf("failed to write global config: %v", err)
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	return testUser
 }

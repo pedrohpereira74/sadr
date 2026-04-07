@@ -41,9 +41,10 @@ func newConfigCmd() *cobra.Command {
 	opts := &configOptions{}
 
 	cmd := &cobra.Command{
-		Use:   "config",
+		Use:   "config [name]",
 		Short: "Open config in $EDITOR",
-		Long:  "Open the project's config.yaml. Use --global to edit your personal global configuration.",
+		Long:  "Open a project config from .sadr/configs/. Use --global to edit your personal global configuration.",
+		Args:  cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			if opts.setAPIKey != "" {
 				home, err := os.UserHomeDir()
@@ -144,8 +145,42 @@ func newConfigCmd() *cobra.Command {
 				return
 			}
 
-			localConfig := filepath.Join(paths.Root, "config.yaml")
-			if err := editorRunner(editor, localConfig); err != nil {
+			var targetConfig string
+			if len(args) > 0 {
+				targetConfig = filepath.Join(paths.ConfigsDir, configFilename(args[0]))
+				if _, err := os.Stat(targetConfig); err != nil {
+					ui.Error(os.Stderr, fmt.Sprintf("config %q not found.", args[0]))
+					return
+				}
+			} else {
+				entries, _ := os.ReadDir(paths.ConfigsDir)
+				var configs []string
+				for _, e := range entries {
+					if !e.IsDir() && strings.HasSuffix(e.Name(), ".yaml") {
+						configs = append(configs, e.Name())
+					}
+				}
+				if len(configs) == 0 {
+					ui.Error(os.Stderr, "no configs found in .sadr/configs/")
+					return
+				}
+				if len(configs) == 1 {
+					targetConfig = filepath.Join(paths.ConfigsDir, configs[0])
+				} else {
+					options := make([]selectOption, 0, len(configs))
+					for _, f := range configs {
+						name := configDisplayName(f)
+						options = append(options, selectOption{Label: name, Value: f})
+					}
+					chosen := runSelect("which config?", options)
+					if chosen == "" {
+						return
+					}
+					targetConfig = filepath.Join(paths.ConfigsDir, chosen)
+				}
+			}
+
+			if err := editorRunner(editor, targetConfig); err != nil {
 				ui.Error(os.Stderr, fmt.Sprintf("editor exited with error: %v", err))
 			}
 		},

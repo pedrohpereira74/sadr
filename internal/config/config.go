@@ -9,10 +9,17 @@ import (
 )
 
 type Config struct {
-	Fields []Field `yaml:"fields"`
+	Fields []Field   `yaml:"fields"`
+	Ask    AskConfig `yaml:"ask"`
+}
+
+type AskConfig struct {
+	Limit int    `yaml:"limit"`
+	Range string `yaml:"range"`
 }
 
 type GlobalConfig struct {
+	Username string   `yaml:"username"`
 	Editor   string   `yaml:"editor"`
 	Language string   `yaml:"language"`
 	AI       AIConfig `yaml:"ai"`

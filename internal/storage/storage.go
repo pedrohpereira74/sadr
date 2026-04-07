@@ -31,6 +31,7 @@ type RecordEntry struct {
 	Record model.Record
 	FileID int
 	Path   string
+	Author string
 }
 
 func NewStorage(dir string) *Storage {
@@ -45,9 +46,9 @@ func (s *Storage) SaveRecord(r model.Record) (string, error) {
 	}
 
 	var content strings.Builder
-	content.WriteString("---\n")
+	fmt.Fprintf(&content, "---\n")
 	content.Write(yamlBytes)
-	content.WriteString("---\n\n")
+	fmt.Fprintf(&content, "---\n\n")
 
 	formatBody(&content, r)
 
@@ -56,7 +57,7 @@ func (s *Storage) SaveRecord(r model.Record) (string, error) {
 	nextID := s.getMaxID() + 1
 
 	for attempts := 0; attempts < 100; attempts++ {
-		filename := fmt.Sprintf("sadr-%04d-%s.md", nextID, slug)
+		filename := fmt.Sprintf("sadr-record-%04d-%s.md", nextID, slug)
 		fullPath := filepath.Join(s.Dir, filename)
 		f, err := os.OpenFile(fullPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
 		if err != nil {
@@ -90,6 +91,10 @@ func buildFrontmatter(r model.Record) map[string]interface{} {
 		"created":        r.CreatedAt.Format(time.RFC3339),
 	}
 
+	if r.Author != "" {
+		fm["author"] = r.Author
+	}
+
 	if tagsStr, ok := r.Fields["tags"]; ok && tagsStr != "" {
 		raw := strings.Split(tagsStr, ",")
 		var clean []string
@@ -100,6 +105,10 @@ func buildFrontmatter(r model.Record) map[string]interface{} {
 			}
 		}
 		fm["tags"] = clean
+	}
+
+	if statusStr, ok := r.Fields["status"]; ok && statusStr != "" {
+		fm["status"] = statusStr
 	}
 
 	return fm
@@ -117,12 +126,16 @@ func formatBody(content *strings.Builder, r model.Record) {
 		fmt.Fprintf(content, "**Tags:** %s\n\n", strings.Join(formattedTags, " "))
 	}
 
+	if statusStr, ok := r.Fields["status"]; ok && statusStr != "" {
+		fmt.Fprintf(content, "**Status:** %s\n\n", statusStr)
+	}
+
 	if r.Snippet != "" {
 		bt := determineBackticks(r.Snippet)
 		fmt.Fprintf(content, "## Snippet\n\n%s\n%s\n%s\n\n", bt, strings.TrimSpace(r.Snippet), bt)
 	}
 
-	written := map[string]bool{"tags": true}
+	written := map[string]bool{"tags": true, "status": true}
 
 	for _, key := range r.FieldOrder {
 		value, ok := r.Fields[key]
@@ -186,10 +199,11 @@ func (s *Storage) LoadRecord(path string) (model.Record, error) {
 	title, _ := front["title"].(string)
 	recordType, _ := front["type"].(string)
 	fileRef, _ := front["file_ref"].(string)
+	author, _ := front["author"].(string)
 
 	validTypes := map[string]bool{"full": true, "snippet": true, "adr": true}
 	if !validTypes[recordType] {
-		_, _ = fmt.Fprintf(os.Stderr, ":(  Warning: record has unknown type '%s'\n", recordType)
+		_, _ = fmt.Fprintf(os.Stderr, ":(  warning: record has unknown type '%s'\n", recordType)
 	}
 
 	r := model.Record{
@@ -197,6 +211,7 @@ func (s *Storage) LoadRecord(path string) (model.Record, error) {
 		Type:          recordType,
 		SchemaVersion: schemaVersion,
 		FileRef:       fileRef,
+		Author:        author,
 		CreatedAt:     createdAt,
 		Fields:        map[string]string{},
 	}
@@ -207,6 +222,10 @@ func (s *Storage) LoadRecord(path string) (model.Record, error) {
 			strs[i] = fmt.Sprintf("%v", v)
 		}
 		r.Fields["tags"] = strings.Join(strs, ",")
+	}
+
+	if status, ok := front["status"].(string); ok && status != "" {
+		r.Fields["status"] = status
 	}
 
 	body := strings.TrimSpace(parts[2])
@@ -257,6 +276,7 @@ func (s *Storage) ListRecordEntries() ([]RecordEntry, error) {
 			Record: r,
 			FileID: ParseFileID(entry.Name()),
 			Path:   path,
+			Author: r.Author,
 		})
 	}
 	return records, nil
@@ -275,13 +295,12 @@ func (s *Storage) ListRecords() ([]model.Record, error) {
 }
 
 func (s *Storage) GetRecordByFileID(id int) (model.Record, string, error) {
-	prefix := fmt.Sprintf("sadr-%04d-", id)
 	entries, err := os.ReadDir(s.Dir)
 	if err != nil {
 		return model.Record{}, "", err
 	}
 	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasPrefix(entry.Name(), prefix) && strings.HasSuffix(entry.Name(), ".md") {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".md") && ParseFileID(entry.Name()) == id {
 			path := filepath.Join(s.Dir, entry.Name())
 			r, err := s.LoadRecord(path)
 			if err != nil {
@@ -301,13 +320,29 @@ func ParseFileID(filename string) int {
 	if !strings.HasPrefix(filename, "sadr-") {
 		return 0
 	}
-	parts := strings.SplitN(filename, "-", 3)
-	if len(parts) < 2 {
+	parts := strings.SplitN(filename, "-", 4)
+	if len(parts) < 3 {
 		return 0
 	}
+	idPart := parts[2]
+	if isAllDigits(parts[1]) {
+		idPart = parts[1]
+	}
 	var id int
-	fmt.Sscanf(parts[1], "%d", &id)
+	fmt.Sscanf(idPart, "%d", &id)
 	return id
+}
+
+func isAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func capitalizeKey(key string) string {
@@ -350,20 +385,37 @@ func Slugify(title string) string {
 }
 
 func (s *Storage) getMaxID() int {
-	entries, err := os.ReadDir(s.Dir)
+	return NextID(s.Dir) - 1
+}
+
+func NextID(dir string) int {
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return 0
+		return 1
 	}
 	maxID := 0
 	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasPrefix(entry.Name(), "sadr-") && strings.HasSuffix(entry.Name(), ".md") {
-			id := ParseFileID(entry.Name())
-			if id > maxID {
-				maxID = id
-			}
+		if entry.IsDir() || !strings.HasPrefix(entry.Name(), "sadr-") || !strings.HasSuffix(entry.Name(), ".md") {
+			continue
+		}
+		if id := ParseFileID(entry.Name()); id > maxID {
+			maxID = id
 		}
 	}
-	return maxID
+	return maxID + 1
+}
+
+func FindFileByID(dir string, id int) (string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return "", err
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".md") && ParseFileID(entry.Name()) == id {
+			return filepath.Join(dir, entry.Name()), nil
+		}
+	}
+	return "", fmt.Errorf("#%d not found", id)
 }
 
 func determineBackticks(snippet string) string {
@@ -404,7 +456,7 @@ func splitSections(body string) (map[string]string, []string) {
 			buf.Reset()
 		} else {
 			if current != "" {
-				buf.WriteString(line + "\n")
+				fmt.Fprintf(&buf, "%s\n", line)
 			}
 		}
 	}

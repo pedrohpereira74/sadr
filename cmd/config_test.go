@@ -10,11 +10,11 @@ import (
 func TestConfigOpensLocal(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "sadr-test-*")
 	t.Cleanup(func() { os.RemoveAll(dir) })
-	sadrDir := filepath.Join(dir, ".sadr")
-	if err := os.MkdirAll(sadrDir, 0755); err != nil {
+	configsDir := filepath.Join(dir, ".sadr", "configs")
+	if err := os.MkdirAll(configsDir, 0755); err != nil {
 		t.Fatalf("failed to create dir: %v", err)
 	}
-	configPath := filepath.Join(sadrDir, "config.yaml")
+	configPath := filepath.Join(configsDir, "default-config.yaml")
 	if err := os.WriteFile(configPath, []byte("fields: []\n"), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}

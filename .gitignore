@@ -1,5 +1,6 @@
-.sadr/exports/
 .idea/
 dist/
 *.test
 *.txt
+.sadr/*/exports/
+.sadr/*/answers/

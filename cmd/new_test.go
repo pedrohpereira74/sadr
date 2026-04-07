@@ -9,14 +9,17 @@ import (
 	"github.com/pedrohpereira74/sadr/internal/storage"
 )
 
-func setupNewTest(t *testing.T) string {
+func setupNewTest(t *testing.T) (dir string, username string) {
 	t.Helper()
 	resetCmd(findSubCmd("new"))
 
-	dir, _ := os.MkdirTemp("", "sadr-test-*")
+	home, _ := os.MkdirTemp("", "sadr-test-home-*")
+	t.Cleanup(func() { os.RemoveAll(home) })
+	username = setupTestUser(t, home)
+
+	dir, _ = os.MkdirTemp("", "sadr-test-*")
 	t.Cleanup(func() { os.RemoveAll(dir) })
-	sadrDir := filepath.Join(dir, ".sadr", "records")
-	if err := os.MkdirAll(sadrDir, 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, ".sadr"), 0755); err != nil {
 		t.Fatalf("failed to create dir: %v", err)
 	}
 	originalWd, _ := os.Getwd()
@@ -24,18 +27,18 @@ func setupNewTest(t *testing.T) string {
 		t.Fatalf("failed to change dir: %v", err)
 	}
 	t.Cleanup(func() { os.Chdir(originalWd) })
-	return dir
+	return dir, username
 }
 
 func TestNewCreatesRecord(t *testing.T) {
-	dir := setupNewTest(t)
+	dir, username := setupNewTest(t)
 
 	rootCmd.SetArgs([]string{"new", "--title", "Use retry with backoff"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	recordsDir := filepath.Join(dir, ".sadr", "records")
+	recordsDir := filepath.Join(dir, ".sadr", username, "records")
 	entries, err := os.ReadDir(recordsDir)
 	if err != nil {
 		t.Fatalf("failed to read records dir: %v", err)
@@ -46,14 +49,14 @@ func TestNewCreatesRecord(t *testing.T) {
 }
 
 func TestNewAdrCreatesRecordWithTypeAdr(t *testing.T) {
-	dir := setupNewTest(t)
+	dir, username := setupNewTest(t)
 
 	rootCmd.SetArgs([]string{"new", "adr", "--title", "Use Redis for cache"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	recordsDir := filepath.Join(dir, ".sadr", "records")
+	recordsDir := filepath.Join(dir, ".sadr", username, "records")
 	s := storage.NewStorage(recordsDir)
 	records, _ := s.ListRecords()
 	if len(records) != 1 {
@@ -65,14 +68,14 @@ func TestNewAdrCreatesRecordWithTypeAdr(t *testing.T) {
 }
 
 func TestNewSnippetCreatesRecordWithTypeSnippet(t *testing.T) {
-	dir := setupNewTest(t)
+	dir, username := setupNewTest(t)
 
 	rootCmd.SetArgs([]string{"new", "snippet", "--title", "Retry helper"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	recordsDir := filepath.Join(dir, ".sadr", "records")
+	recordsDir := filepath.Join(dir, ".sadr", username, "records")
 	s := storage.NewStorage(recordsDir)
 	records, _ := s.ListRecords()
 	if len(records) != 1 {
@@ -106,7 +109,7 @@ func TestNewGlobalSavesToHome(t *testing.T) {
 }
 
 func TestNewReadsConfigForWizard(t *testing.T) {
-	dir := setupNewTest(t)
+	dir, username := setupNewTest(t)
 
 	configContent := `
 fields:
@@ -118,7 +121,11 @@ fields:
     required: true
     options: [api, security, database]
 `
-	configPath := filepath.Join(dir, ".sadr", "config.yaml")
+	configsDir := filepath.Join(dir, ".sadr", "configs")
+	if err := os.MkdirAll(configsDir, 0755); err != nil {
+		t.Fatalf("failed to create configs dir: %v", err)
+	}
+	configPath := filepath.Join(configsDir, "default-config.yaml")
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
@@ -128,7 +135,7 @@ fields:
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	recordsDir := filepath.Join(dir, ".sadr", "records")
+	recordsDir := filepath.Join(dir, ".sadr", username, "records")
 	entries, _ := os.ReadDir(recordsDir)
 	if len(entries) != 1 {
 		t.Errorf("expected 1 record, got %d", len(entries))
@@ -136,7 +143,7 @@ fields:
 }
 
 func TestNewFromFile(t *testing.T) {
-	dir := setupNewTest(t)
+	dir, username := setupNewTest(t)
 
 	snippetFile := filepath.Join(dir, "snippet.go")
 	if err := os.WriteFile(snippetFile, []byte("client := retryablehttp.NewClient()"), 0644); err != nil {
@@ -148,7 +155,7 @@ func TestNewFromFile(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	recordsDir := filepath.Join(dir, ".sadr", "records")
+	recordsDir := filepath.Join(dir, ".sadr", username, "records")
 	s := storage.NewStorage(recordsDir)
 	records, _ := s.ListRecords()
 	if len(records) != 1 {
@@ -160,7 +167,7 @@ func TestNewFromFile(t *testing.T) {
 }
 
 func TestNewFromDiff(t *testing.T) {
-	dir := setupNewTest(t)
+	dir, username := setupNewTest(t)
 
 	_ = exec.Command("git", "init").Run()
 	_ = exec.Command("git", "config", "user.email", "test@example.com").Run()
@@ -175,7 +182,7 @@ func TestNewFromDiff(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	recordsDir := filepath.Join(dir, ".sadr", "records")
+	recordsDir := filepath.Join(dir, ".sadr", username, "records")
 	s := storage.NewStorage(recordsDir)
 	records, _ := s.ListRecords()
 	if len(records) != 1 {
@@ -187,7 +194,7 @@ func TestNewFromDiff(t *testing.T) {
 }
 
 func TestNewFromDiffEmpty(t *testing.T) {
-	dir := setupNewTest(t)
+	dir, username := setupNewTest(t)
 
 	_ = exec.Command("git", "init").Run()
 	_ = exec.Command("git", "config", "user.email", "test@example.com").Run()
@@ -199,7 +206,7 @@ func TestNewFromDiffEmpty(t *testing.T) {
 	rootCmd.SetArgs([]string{"new", "--diff", "--title", "No changes"})
 	_ = rootCmd.Execute()
 
-	recordsDir := filepath.Join(dir, ".sadr", "records")
+	recordsDir := filepath.Join(dir, ".sadr", username, "records")
 	entries, _ := os.ReadDir(recordsDir)
 	if len(entries) != 0 {
 		t.Errorf("expected 0 records when diff is empty, got %d", len(entries))
@@ -207,7 +214,7 @@ func TestNewFromDiffEmpty(t *testing.T) {
 }
 
 func TestNewSmartWithoutSnippetAborts(t *testing.T) {
-	dir := setupNewTest(t)
+	dir, username := setupNewTest(t)
 
 	rootCmd.SetArgs([]string{"new", "--smart"})
 	t.Setenv("EDITOR", "sort")
@@ -218,7 +225,7 @@ func TestNewSmartWithoutSnippetAborts(t *testing.T) {
 
 	_ = rootCmd.Execute()
 
-	recordsDir := filepath.Join(dir, ".sadr", "records")
+	recordsDir := filepath.Join(dir, ".sadr", username, "records")
 	entries, _ := os.ReadDir(recordsDir)
 	if len(entries) != 0 {
 		t.Errorf("expected 0 records when --smart is aborted, got %d", len(entries))
@@ -226,7 +233,7 @@ func TestNewSmartWithoutSnippetAborts(t *testing.T) {
 }
 
 func TestNewSmartWithoutAPIKeyStillCreatesRecord(t *testing.T) {
-	dir := setupNewTest(t)
+	dir, username := setupNewTest(t)
 	t.Setenv("GEMINI_API_KEY", "")
 
 	snippetFile := filepath.Join(dir, "snippet.go")
@@ -235,7 +242,7 @@ func TestNewSmartWithoutAPIKeyStillCreatesRecord(t *testing.T) {
 	rootCmd.SetArgs([]string{"new", "--smart", "--file", snippetFile, "--title", "Test"})
 	_ = rootCmd.Execute()
 
-	recordsDir := filepath.Join(dir, ".sadr", "records")
+	recordsDir := filepath.Join(dir, ".sadr", username, "records")
 	entries, _ := os.ReadDir(recordsDir)
 	if len(entries) != 1 {
 		t.Errorf("expected 1 record (fallback to manual), got %d", len(entries))
@@ -279,7 +286,7 @@ index 1234567..abcdefg 100644`
 }
 
 func TestNewFromFileSetsFileRef(t *testing.T) {
-	dir := setupNewTest(t)
+	dir, username := setupNewTest(t)
 
 	snippetFile := filepath.Join(dir, "src", "main.go")
 	if err := os.MkdirAll(filepath.Dir(snippetFile), 0755); err != nil {
@@ -294,7 +301,7 @@ func TestNewFromFileSetsFileRef(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	recordsDir := filepath.Join(dir, ".sadr", "records")
+	recordsDir := filepath.Join(dir, ".sadr", username, "records")
 	s := storage.NewStorage(recordsDir)
 	records, _ := s.ListRecords()
 	if len(records) != 1 {

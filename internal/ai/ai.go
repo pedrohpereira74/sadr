@@ -34,8 +34,9 @@ CRITICAL RULES - FAILURE TO COMPLY WILL BREAK THE SYSTEM:
 [%s]
 DO NOT translate, rename, add, or omit any keys. The keys must remain exactly as listed above.
 4. CONTENT LANGUAGE: The VALUES inside the JSON must be written in: %s.
-5. TITLE LENGTH: If a "title" key is present, it MUST be a short, concise phrase of at most 10 words. Do NOT write full sentences or descriptions as titles.
-6. FIELD TYPES: Some keys above may include a type hint in parentheses, e.g. "consequences (text)". Use ONLY the key name (without the hint) in the JSON output. Respect the type:
+5. VOICE: Write in third person, impersonal, technical report style. NEVER use first person ("I", "we", "my", "our"). Describe what the code does, not what you did or observed.
+6. TITLE LENGTH: If a "title" key is present, it MUST be a short, concise phrase of at most 10 words. Do NOT write full sentences or descriptions as titles.
+7. FIELD TYPES: Some keys above may include a type hint in parentheses, e.g. "consequences (text)". Use ONLY the key name (without the hint) in the JSON output. Respect the type:
    - "(text)": Write complete, flowing prose. Use full sentences separated by periods. Do NOT use comma-separated lists.
    - "(list)": Return items separated by commas with NO bullet points.
    If no type hint is given, default to text behavior.
@@ -69,7 +70,7 @@ func ParseResponse(response string) (map[string]string, error) {
 	response = strings.TrimSuffix(response, "```")
 	response = strings.TrimSpace(response)
 
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal([]byte(response), &raw); err != nil {
 		return nil, fmt.Errorf("failed to parse AI response: %v", err)
 	}
@@ -81,7 +82,7 @@ func ParseResponse(response string) (map[string]string, error) {
 		switch v := val.(type) {
 		case string:
 			result[cleanKey] = v
-		case []interface{}:
+		case []any:
 			var parts []string
 			for _, item := range v {
 				parts = append(parts, fmt.Sprintf("%v", item))
@@ -95,9 +96,9 @@ func ParseResponse(response string) (map[string]string, error) {
 	return result, nil
 }
 
-var httpClient = &http.Client{Timeout: 30 * time.Second}
+var httpClient = &http.Client{Timeout: 90 * time.Second}
 
-func Suggest(ctx context.Context, snippet string, fields []string, language string, apiKey string, model string, depth bool) (map[string]string, error) {
+func resolveAPIKey(apiKey string) (string, error) {
 	if apiKey == "" {
 		apiKey = os.Getenv("AI_API_KEY")
 	}
@@ -105,17 +106,23 @@ func Suggest(ctx context.Context, snippet string, fields []string, language stri
 		apiKey = os.Getenv("GEMINI_API_KEY")
 	}
 	if apiKey == "" {
-		return nil, fmt.Errorf("AI API key not set in global config or environment")
+		return "", fmt.Errorf("AI API key not set in global config or environment")
+	}
+	return apiKey, nil
+}
+
+func GenerateText(ctx context.Context, prompt string, apiKey string, model string, timeout time.Duration) (string, error) {
+	apiKey, err := resolveAPIKey(apiKey)
+	if err != nil {
+		return "", err
 	}
 
 	if model == "" {
 		model = DefaultModel
 	}
 
-	prompt := BuildPrompt(snippet, fields, language, depth)
-
-	reqBody := map[string]interface{}{
-		"contents": []map[string]interface{}{
+	reqBody := map[string]any{
+		"contents": []map[string]any{
 			{
 				"parts": []map[string]string{
 					{"text": prompt},
@@ -126,31 +133,39 @@ func Suggest(ctx context.Context, snippet string, fields []string, language stri
 
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent", model)
 
+	client := httpClient
+	if timeout > 0 {
+		client = &http.Client{
+			Timeout:   timeout,
+			Transport: httpClient.Transport,
+		}
+	}
+
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return "", fmt.Errorf("failed to create request: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-goog-api-key", apiKey)
 
-	resp, err := httpClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("API request failed: %v", err)
+		return "", fmt.Errorf("API request failed: %v", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, string(body))
+		return "", fmt.Errorf("API error (%d): %s", resp.StatusCode, string(body))
 	}
 
 	var geminiResp struct {
@@ -164,13 +179,21 @@ func Suggest(ctx context.Context, snippet string, fields []string, language stri
 	}
 
 	if err := json.Unmarshal(body, &geminiResp); err != nil {
-		return nil, fmt.Errorf("failed to parse API response: %v", err)
+		return "", fmt.Errorf("failed to parse API response: %v", err)
 	}
 
 	if len(geminiResp.Candidates) == 0 || len(geminiResp.Candidates[0].Content.Parts) == 0 {
-		return nil, fmt.Errorf("empty response from API")
+		return "", fmt.Errorf("empty response from API")
 	}
 
-	text := geminiResp.Candidates[0].Content.Parts[0].Text
+	return geminiResp.Candidates[0].Content.Parts[0].Text, nil
+}
+
+func Suggest(ctx context.Context, snippet string, fields []string, language string, apiKey string, model string, depth bool) (map[string]string, error) {
+	prompt := BuildPrompt(snippet, fields, language, depth)
+	text, err := GenerateText(ctx, prompt, apiKey, model, 0)
+	if err != nil {
+		return nil, err
+	}
 	return ParseResponse(text)
 }

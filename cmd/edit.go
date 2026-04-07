@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/pedrohpereira74/sadr/internal/storage"
 	"github.com/pedrohpereira74/sadr/internal/ui"
@@ -22,7 +23,7 @@ func newEditCmd() *cobra.Command {
 		Short: "Edit a record in $EDITOR",
 		Long:  "Open a specific record in your default editor.",
 		Run: func(cmd *cobra.Command, args []string) {
-			id, err := parseID(opts.rawID)
+			idUsername, id, err := parseUserID(opts.rawID)
 			if err != nil {
 				ui.Error(os.Stderr, err.Error())
 				return
@@ -33,11 +34,19 @@ func newEditCmd() *cobra.Command {
 				ui.Error(os.Stderr, err.Error())
 				return
 			}
-			recordsDir := paths.Records
 
 			if id <= 0 {
 				ui.Error(os.Stderr, "provide --id <number> to edit a record.")
 				return
+			}
+
+			var recordsDir string
+			if opts.global {
+				recordsDir = paths.Records
+			} else if idUsername != "" {
+				recordsDir = filepath.Join(paths.Root, idUsername, "records")
+			} else {
+				recordsDir = paths.Records
 			}
 
 			s := storage.NewStorage(recordsDir)
@@ -62,7 +71,7 @@ func newEditCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&opts.rawID, "id", "", "Record ID to edit")
+	cmd.Flags().StringVar(&opts.rawID, "id", "", "Record ID to edit (supports name/id format)")
 	cmd.Flags().BoolVarP(&opts.global, "global", "g", false, "Edit personal record from ~/.sadr/")
 	return cmd
 }

@@ -12,15 +12,20 @@ import (
 
 func setupSearchTest(t *testing.T) string {
 	t.Helper()
+	home, _ := os.MkdirTemp("", "sadr-test-home-*")
+	t.Cleanup(func() { os.RemoveAll(home) })
+	username := setupTestUser(t, home)
+
 	dir, _ := os.MkdirTemp("", "sadr-test-*")
 	t.Cleanup(func() { os.RemoveAll(dir) })
-	recordsDir := filepath.Join(dir, ".sadr", "records")
+	recordsDir := filepath.Join(dir, ".sadr", username, "records")
 	if err := os.MkdirAll(recordsDir, 0755); err != nil {
 		t.Fatalf("failed to create dir: %v", err)
 	}
 
 	s := storage.NewStorage(recordsDir)
 	r, _ := model.NewRecordWithOptions("Use retry with backoff", "full")
+	r.Author = username
 	_, _ = s.SaveRecord(r)
 
 	originalWd, _ := os.Getwd()
@@ -58,8 +63,6 @@ func TestSearchNoResults(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// No stdout output expected for zero results
-	// The "no results" message goes to os.Stderr via ui.Info
 	output := buf.String()
 	if len(output) != 0 {
 		t.Errorf("expected no stdout output for zero results, got: %s", output)

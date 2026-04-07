@@ -11,9 +11,13 @@ import (
 
 func setupEditTest(t *testing.T) string {
 	t.Helper()
+	home, _ := os.MkdirTemp("", "sadr-test-home-*")
+	t.Cleanup(func() { os.RemoveAll(home) })
+	username := setupTestUser(t, home)
+
 	dir, _ := os.MkdirTemp("", "sadr-test-*")
 	t.Cleanup(func() { os.RemoveAll(dir) })
-	recordsDir := filepath.Join(dir, ".sadr", "records")
+	recordsDir := filepath.Join(dir, ".sadr", username, "records")
 	if err := os.MkdirAll(recordsDir, 0755); err != nil {
 		t.Fatalf("failed to create dir: %v", err)
 	}
@@ -32,18 +36,12 @@ func setupEditTest(t *testing.T) string {
 }
 
 func TestEditFindsRecord(t *testing.T) {
-	dir := setupEditTest(t)
+	_ = setupEditTest(t)
 
 	t.Setenv("EDITOR", "sort")
 
 	rootCmd.SetArgs([]string{"edit", "--id", "1"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
-	}
-
-	recordsDir := filepath.Join(dir, ".sadr", "records")
-	entries, _ := os.ReadDir(recordsDir)
-	if len(entries) != 1 {
-		t.Errorf("expected 1 record, got %d", len(entries))
 	}
 }

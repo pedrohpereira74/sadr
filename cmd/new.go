@@ -27,6 +27,7 @@ type newOptions struct {
 	smart     bool
 	model     string
 	diff      bool
+	config    string
 }
 
 func newNewCmd() *cobra.Command {
@@ -58,9 +59,50 @@ func newNewCmd() *cobra.Command {
 	cmd.PersistentFlags().BoolVarP(&opts.smart, "smart", "s", false, "AI suggests field values from snippet")
 	cmd.PersistentFlags().StringVar(&opts.model, "model", "", "Override AI model (auto-enables --smart)")
 	cmd.PersistentFlags().BoolVarP(&opts.diff, "diff", "d", false, "Read snippet from git diff")
+	cmd.PersistentFlags().StringVar(&opts.config, "config", "", "Use a specific config (e.g. db, api, default)")
 	cmd.MarkFlagsMutuallyExclusive("clipboard", "file", "diff")
 	cmd.AddCommand(adrCmd, snippetCmd)
 	return cmd
+}
+
+func resolveConfigPath(configsDir, configFlag string) (string, error) {
+	if configFlag != "" {
+		path := filepath.Join(configsDir, configFilename(configFlag))
+		if _, err := os.Stat(path); err != nil {
+			return "", fmt.Errorf("config %q not found in .sadr/configs/", configFlag)
+		}
+		return path, nil
+	}
+
+	entries, err := os.ReadDir(configsDir)
+	if err != nil {
+		return "", nil
+	}
+	var configs []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".yaml") {
+			configs = append(configs, e.Name())
+		}
+	}
+
+	if len(configs) == 0 {
+		return "", nil
+	}
+
+	if len(configs) == 1 {
+		return filepath.Join(configsDir, configs[0]), nil
+	}
+
+	options := make([]selectOption, 0, len(configs))
+	for _, f := range configs {
+		name := configDisplayName(f)
+		options = append(options, selectOption{Label: name, Value: f})
+	}
+	chosen := runSelect("which config?", options)
+	if chosen == "" {
+		return "", fmt.Errorf("cancelled")
+	}
+	return filepath.Join(configsDir, chosen), nil
 }
 
 func loadFieldDefs(configPath string) ([]wizard.FieldDef, error) {
@@ -216,8 +258,8 @@ func loadAISuggestions(opts *newOptions, snippet string, fieldDefs []wizard.Fiel
 			ui.Info(os.Stderr, "cancelled.")
 			return nil, fmt.Errorf("cancelled")
 		}
-		ui.Error(os.Stderr, "AI API key not set or request failed. falling back to manual mode.")
-		ui.Info(os.Stderr, "set it up: https://ai.google.dev\n\n    starting wizard in 3 seconds...")
+		ui.Error(os.Stderr, fmt.Sprintf("AI request failed: %v. falling back to manual mode.", err))
+		ui.Info(os.Stderr, "starting wizard in 3 seconds...")
 		ui.Pause(3.0)
 		return nil, nil
 	}
@@ -282,13 +324,15 @@ func buildRecordFromWizard(result map[string]string, fieldDefs []wizard.FieldDef
 		r.Fields[key] = value
 	}
 
+	r.Fields["status"] = "active"
+
 	return r, nil
 }
 
 func extractFilesFromDiff(diffContent string) []string {
 	seen := map[string]bool{}
 	var files []string
-	for _, line := range strings.Split(diffContent, "\n") {
+	for line := range strings.SplitSeq(diffContent, "\n") {
 		if strings.HasPrefix(line, "diff --git ") {
 			parts := strings.Fields(line)
 			if len(parts) >= 4 {
@@ -313,7 +357,7 @@ func listUntrackedFiles() []string {
 		return nil
 	}
 	var files []string
-	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(string(output)), "\n") {
 		if line != "" {
 			files = append(files, line)
 		}
@@ -347,8 +391,20 @@ func runNew(recordType string, opts *newOptions) func(cmd *cobra.Command, args [
 			ui.Error(os.Stderr, err.Error())
 			return
 		}
+		if err := os.MkdirAll(paths.Records, 0755); err != nil {
+			ui.Error(os.Stderr, fmt.Sprintf("failed to create records directory: %v", err))
+			return
+		}
 		recordsDir := paths.Records
-		configPath := filepath.Join(paths.Root, "config.yaml")
+		configPath, err := resolveConfigPath(paths.ConfigsDir, opts.config)
+		if err != nil {
+			if err.Error() == "cancelled" {
+				ui.Info(os.Stderr, "cancelled.")
+				return
+			}
+			ui.Error(os.Stderr, err.Error())
+			return
+		}
 
 		snippetFromSource := readSnippetFromSource(opts)
 		if opts.diff && snippetFromSource == "" {
@@ -397,7 +453,7 @@ func runNew(recordType string, opts *newOptions) func(cmd *cobra.Command, args [
 		if opts.title == "" {
 			fieldDefs, cfgErr := loadFieldDefs(configPath)
 			if cfgErr != nil {
-				ui.Error(os.Stderr, fmt.Sprintf("\nCONFIGURATION ERROR\n%v\n\nPlease fix your config.yaml and try again.\n", cfgErr))
+				ui.Error(os.Stderr, fmt.Sprintf("\nconfiguration error\n%v\n\nfix your config.yaml and try again.\n", cfgErr))
 				return
 			}
 
@@ -450,6 +506,10 @@ func runNew(recordType string, opts *newOptions) func(cmd *cobra.Command, args [
 			}
 		}
 
+		if paths.Username != "" {
+			r.Author = paths.Username
+		}
+
 		s := storage.NewStorage(recordsDir)
 		path, err := s.SaveRecord(r)
 		if err != nil {
@@ -457,7 +517,7 @@ func runNew(recordType string, opts *newOptions) func(cmd *cobra.Command, args [
 			return
 		}
 
-		ui.Success(os.Stderr, fmt.Sprintf("%s saved — congrats, your code can now defend itself in a code review.", filepath.Base(path)))
+		ui.Success(os.Stderr, fmt.Sprintf("record saved to %s", filepath.Base(path)))
 	}
 }
 
@@ -472,7 +532,7 @@ func captureSnippetFromEditorImpl() (string, error) {
 
 	editor := findEditor()
 	if editor == "" {
-		return "", fmt.Errorf("no editor found. Set $EDITOR or $VISUAL")
+		return "", fmt.Errorf("no editor found. set $EDITOR or $VISUAL")
 	}
 
 	if err := openEditorImpl(editor, tmpName); err != nil {

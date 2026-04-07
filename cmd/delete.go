@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/pedrohpereira74/sadr/internal/storage"
 	"github.com/pedrohpereira74/sadr/internal/ui"
@@ -23,7 +24,7 @@ func newDeleteCmd() *cobra.Command {
 		Short: "Delete a record",
 		Long:  "Permanently delete a record by its ID.",
 		Run: func(cmd *cobra.Command, args []string) {
-			id, err := parseID(opts.rawID)
+			idUsername, id, err := parseUserID(opts.rawID)
 			if err != nil {
 				ui.Error(os.Stderr, err.Error())
 				return
@@ -34,11 +35,19 @@ func newDeleteCmd() *cobra.Command {
 				ui.Error(os.Stderr, err.Error())
 				return
 			}
-			recordsDir := paths.Records
 
 			if id <= 0 {
 				ui.Error(os.Stderr, "provide --id <number> to delete a record.")
 				return
+			}
+
+			var recordsDir string
+			if opts.global {
+				recordsDir = paths.Records
+			} else if idUsername != "" {
+				recordsDir = filepath.Join(paths.Root, idUsername, "records")
+			} else {
+				recordsDir = paths.Records
 			}
 
 			s := storage.NewStorage(recordsDir)
@@ -71,7 +80,7 @@ func newDeleteCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&opts.rawID, "id", "", "Record ID to delete")
+	cmd.Flags().StringVar(&opts.rawID, "id", "", "Record ID to delete (supports name/id format)")
 	cmd.Flags().BoolVar(&opts.force, "force", false, "Skip confirmation")
 	cmd.Flags().BoolVarP(&opts.global, "global", "g", false, "Delete personal record from ~/.sadr/")
 	return cmd

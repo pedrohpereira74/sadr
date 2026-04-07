@@ -7,10 +7,13 @@ import (
 )
 
 type SadrPaths struct {
-	Root     string
-	Records  string
-	Exports  string
-	IsGlobal bool
+	Root       string
+	Records    string
+	Exports    string
+	Answers    string
+	ConfigsDir string
+	Username   string
+	IsGlobal   bool
 }
 
 func FindSadrDir(startDir string) (SadrPaths, error) {
@@ -58,8 +61,9 @@ func FindSadrDir(startDir string) (SadrPaths, error) {
 
 func buildPaths(root string) SadrPaths {
 	return SadrPaths{
-		Root:    root,
-		Records: filepath.Join(root, "records"),
-		Exports: filepath.Join(root, "exports"),
+		Root:       root,
+		Records:    filepath.Join(root, "records"),
+		Exports:    filepath.Join(root, "exports"),
+		ConfigsDir: filepath.Join(root, "configs"),
 	}
 }
