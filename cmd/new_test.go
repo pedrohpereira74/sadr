@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/pedrohpereira74/sadr/internal/storage"
+	"github.com/pedrohpereira74/sadr/internal/templates"
 )
 
 func setupNewTest(t *testing.T) (dir string, username string) {
@@ -19,8 +20,12 @@ func setupNewTest(t *testing.T) (dir string, username string) {
 
 	dir, _ = os.MkdirTemp("", "sadr-test-*")
 	t.Cleanup(func() { os.RemoveAll(dir) })
-	if err := os.MkdirAll(filepath.Join(dir, ".sadr"), 0755); err != nil {
+	configsDir := filepath.Join(dir, ".sadr", "configs")
+	if err := os.MkdirAll(configsDir, 0755); err != nil {
 		t.Fatalf("failed to create dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(configsDir, "default-config.yaml"), []byte(templates.MinimalConfig), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
 	}
 	originalWd, _ := os.Getwd()
 	if err := os.Chdir(dir); err != nil {
@@ -95,6 +100,13 @@ func TestNewGlobalSavesToHome(t *testing.T) {
 	globalRecords := filepath.Join(home, ".sadr", "records")
 	if err := os.MkdirAll(globalRecords, 0755); err != nil {
 		t.Fatalf("failed to create dir: %v", err)
+	}
+	globalConfigs := filepath.Join(home, ".sadr", "configs")
+	if err := os.MkdirAll(globalConfigs, 0755); err != nil {
+		t.Fatalf("failed to create dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(globalConfigs, "default-config.yaml"), []byte(templates.MinimalConfig), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
 	}
 
 	rootCmd.SetArgs([]string{"new", "--global", "--title", "Personal snippet"})
