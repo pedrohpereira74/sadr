@@ -3,9 +3,12 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"github.com/pedrohpereira74/sadr/internal/config"
+	"github.com/pedrohpereira74/sadr/internal/storage"
 	"github.com/pedrohpereira74/sadr/internal/templates"
 	"github.com/pedrohpereira74/sadr/internal/ui"
 	"github.com/spf13/cobra"
@@ -17,9 +20,9 @@ type initOptions struct {
 }
 
 func selectPresetImpl() string {
-	return runSelect("Choose your starting config:", []selectOption{
-		{Label: "Minimal (title + tags — quick capture)", Value: "minimal"},
-		{Label: "Extended (title + tags + ADR fields — full decisions)", Value: "extended"},
+	return runSelect("choose your starting config:", []selectOption{
+		{Label: "minimal (title + tags — quick capture)", Value: "minimal"},
+		{Label: "extended (title + tags + ADR fields — full decisions)", Value: "extended"},
 	})
 }
 
@@ -50,11 +53,10 @@ func initGlobal(opts *initOptions) {
 
 	sadrDir := filepath.Join(home, ".sadr")
 	globalConfigPath := filepath.Join(sadrDir, "global-config.yaml")
-	projectConfigPath := filepath.Join(sadrDir, "config.yaml")
+	configsDir := filepath.Join(sadrDir, "configs")
+	defaultConfigPath := filepath.Join(configsDir, "default-config.yaml")
 
-	_, globalExists := os.Stat(globalConfigPath)
-	_, projectExists := os.Stat(projectConfigPath)
-	if globalExists == nil && projectExists == nil {
+	if existingCfg, cfgErr := config.LoadGlobalFromFile(globalConfigPath); cfgErr == nil && existingCfg.Username != "" {
 		ui.Info(os.Stderr, "global workspace already initialized at ~/.sadr")
 		return
 	}
@@ -64,41 +66,103 @@ func initGlobal(opts *initOptions) {
 		return
 	}
 
-	if err := os.MkdirAll(filepath.Join(sadrDir, "records"), 0755); err != nil {
-		ui.Error(os.Stderr, fmt.Sprintf("failed to create global records/: %v", err))
-		return
-	}
-	if err := os.MkdirAll(filepath.Join(sadrDir, "exports"), 0755); err != nil {
-		ui.Error(os.Stderr, fmt.Sprintf("failed to create global exports/: %v", err))
+	if err := os.MkdirAll(configsDir, 0755); err != nil {
+		ui.Error(os.Stderr, fmt.Sprintf("failed to create ~/.sadr/configs/: %v", err))
 		return
 	}
 
-	if globalExists != nil {
-		if err := os.WriteFile(globalConfigPath, []byte(templates.GlobalConfig), 0600); err != nil {
-			ui.Error(os.Stderr, fmt.Sprintf("failed to create global config: %v", err))
+	username := resolveUsername()
+	if username == "" {
+		ui.Info(os.Stderr, "cancelled.")
+		return
+	}
+
+	var cfg config.GlobalConfig
+	if existing, cfgErr := config.LoadGlobalFromFile(globalConfigPath); cfgErr == nil {
+		cfg = existing
+	} else {
+		if writeErr := os.WriteFile(globalConfigPath, []byte(templates.GlobalConfig), 0600); writeErr != nil {
+			ui.Error(os.Stderr, fmt.Sprintf("failed to create global config: %v", writeErr))
+			return
+		}
+		cfg, _ = config.LoadGlobalFromFile(globalConfigPath)
+	}
+
+	cfg.Username = storage.Slugify(username)
+
+	if writeErr := writeGlobalConfig(globalConfigPath, cfg); writeErr != nil {
+		ui.Error(os.Stderr, fmt.Sprintf("failed to write global config: %v", writeErr))
+		return
+	}
+
+	if _, err := os.Stat(defaultConfigPath); os.IsNotExist(err) {
+		if writeErr := os.WriteFile(defaultConfigPath, []byte(presetConfig(chosen)), 0644); writeErr != nil {
+			ui.Error(os.Stderr, fmt.Sprintf("failed to create default config: %v", writeErr))
 			return
 		}
 	}
 
-	if projectExists != nil {
-		if err := os.WriteFile(projectConfigPath, []byte(presetConfig(chosen)), 0644); err != nil {
-			ui.Error(os.Stderr, fmt.Sprintf("failed to create project config: %v", err))
-			return
-		}
-	}
-
-	ui.Success(os.Stderr, "done! global workspace and personal project initialized at ~/.sadr")
+	ui.Success(os.Stderr, fmt.Sprintf("done! global workspace initialized at ~/.sadr (user: %s)", cfg.Username))
 	ui.Info(os.Stderr, "now run 'sadr init' inside your project to start capturing.")
 }
 
+func resolveUsername() string {
+	var options []selectOption
+
+	gitName := ""
+	if out, err := exec.Command("git", "config", "--global", "user.name").Output(); err == nil {
+		gitName = strings.TrimSpace(string(out))
+	}
+
+	if gitName != "" {
+		options = append(options, selectOption{Label: fmt.Sprintf("use git username: %s", gitName), Value: gitName})
+	}
+	options = append(options, selectOption{Label: "enter custom username", Value: "custom"})
+
+	chosen := runSelect("choose your username:", options)
+	if chosen == "" {
+		return ""
+	}
+	if chosen == "custom" {
+		return runTextarea("enter your username:", "e.g. pedro")
+	}
+	return chosen
+}
+
+func writeGlobalConfig(path string, cfg config.GlobalConfig) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	lines := strings.Split(string(data), "\n")
+	for i, line := range lines {
+		if strings.HasPrefix(line, "username:") {
+			lines[i] = fmt.Sprintf("username: %q", cfg.Username)
+			break
+		}
+	}
+	return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0600)
+}
+
 func initHeal(sadrDir string, opts *initOptions) {
-	if err := os.MkdirAll(filepath.Join(sadrDir, "records"), 0755); err != nil {
-		ui.Error(os.Stderr, fmt.Sprintf("failed to create records/: %v", err))
+	configsDir := filepath.Join(sadrDir, "configs")
+	defaultConfigPath := filepath.Join(configsDir, "default-config.yaml")
+
+	if err := os.MkdirAll(configsDir, 0755); err != nil {
+		ui.Error(os.Stderr, fmt.Sprintf("failed to create configs/: %v", err))
 		return
 	}
-	if err := os.MkdirAll(filepath.Join(sadrDir, "exports"), 0755); err != nil {
-		ui.Error(os.Stderr, fmt.Sprintf("failed to create exports/: %v", err))
-		return
+
+	oldConfigPath := filepath.Join(sadrDir, "config.yaml")
+	if _, err := os.Stat(oldConfigPath); err == nil {
+		content, readErr := os.ReadFile(oldConfigPath)
+		if readErr == nil {
+			if writeErr := os.WriteFile(defaultConfigPath, content, 0644); writeErr == nil {
+				_ = os.Remove(oldConfigPath)
+				ui.Success(os.Stderr, "healed! moved config.yaml to configs/default-config.yaml.")
+				return
+			}
+		}
 	}
 
 	chosen := resolvePreset(opts)
@@ -106,34 +170,30 @@ func initHeal(sadrDir string, opts *initOptions) {
 		return
 	}
 
-	configPath := filepath.Join(sadrDir, "config.yaml")
-	if err := os.WriteFile(configPath, []byte(presetConfig(chosen)), 0644); err != nil {
+	if err := os.WriteFile(defaultConfigPath, []byte(presetConfig(chosen)), 0644); err != nil {
 		ui.Error(os.Stderr, fmt.Sprintf("failed to create config: %v", err))
 		return
 	}
 
-	ui.Success(os.Stderr, "healed! recreated missing config.yaml.")
+	ui.Success(os.Stderr, "healed! recreated missing configs/default-config.yaml.")
 }
 
 func initFresh(cwd string, opts *initOptions) {
 	sadrDir := filepath.Join(cwd, ".sadr")
+	configsDir := filepath.Join(sadrDir, "configs")
 
 	chosen := resolvePreset(opts)
 	if chosen == "" {
 		return
 	}
 
-	if err := os.MkdirAll(filepath.Join(sadrDir, "records"), 0755); err != nil {
-		ui.Error(os.Stderr, fmt.Sprintf("failed to create .sadr/records/: %v", err))
-		return
-	}
-	if err := os.MkdirAll(filepath.Join(sadrDir, "exports"), 0755); err != nil {
-		ui.Error(os.Stderr, fmt.Sprintf("failed to create .sadr/exports/: %v", err))
+	if err := os.MkdirAll(configsDir, 0755); err != nil {
+		ui.Error(os.Stderr, fmt.Sprintf("failed to create .sadr/configs/: %v", err))
 		return
 	}
 
-	configPath := filepath.Join(sadrDir, "config.yaml")
-	if err := os.WriteFile(configPath, []byte(presetConfig(chosen)), 0644); err != nil {
+	defaultConfigPath := filepath.Join(configsDir, "default-config.yaml")
+	if err := os.WriteFile(defaultConfigPath, []byte(presetConfig(chosen)), 0644); err != nil {
 		ui.Error(os.Stderr, fmt.Sprintf("failed to create config: %v", err))
 		return
 	}
@@ -168,8 +228,8 @@ func newInitCmd() *cobra.Command {
 			sadrDir := filepath.Join(cwd, ".sadr")
 
 			if _, err := os.Stat(sadrDir); !os.IsNotExist(err) {
-				configPath := filepath.Join(sadrDir, "config.yaml")
-				if _, err := os.Stat(configPath); !os.IsNotExist(err) {
+				defaultConfigPath := filepath.Join(sadrDir, "configs", "default-config.yaml")
+				if _, err := os.Stat(defaultConfigPath); !os.IsNotExist(err) {
 					ui.Info(os.Stderr, "nice try... sadr already lives here.")
 					return
 				}
@@ -195,10 +255,21 @@ func addToGitignore(dir string) {
 	}
 
 	gitignorePath := filepath.Join(dir, ".gitignore")
-	entry := ".sadr/exports/"
+	entries := []string{".sadr/*/exports/", ".sadr/*/answers/"}
 
 	content, err := os.ReadFile(gitignorePath)
-	if err == nil && strings.Contains(string(content), entry) {
+	contentStr := ""
+	if err == nil {
+		contentStr = string(content)
+	}
+
+	var toAdd []string
+	for _, entry := range entries {
+		if !strings.Contains(contentStr, entry) {
+			toAdd = append(toAdd, entry)
+		}
+	}
+	if len(toAdd) == 0 {
 		return
 	}
 
@@ -208,10 +279,12 @@ func addToGitignore(dir string) {
 	}
 	defer func() { _ = f.Close() }()
 
-	if len(content) > 0 && !strings.HasSuffix(string(content), "\n") {
+	if len(contentStr) > 0 && !strings.HasSuffix(contentStr, "\n") {
 		_, _ = f.WriteString("\n")
 	}
-	_, _ = f.WriteString(entry + "\n")
+	for _, entry := range toAdd {
+		_, _ = f.WriteString(entry + "\n")
+	}
 }
 
 func init() {

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/pedrohpereira74/sadr/internal/model"
 	"github.com/pedrohpereira74/sadr/internal/search"
@@ -28,7 +29,7 @@ func newExportCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "export",
 		Short: "Export records to self-contained HTML",
-		Long:  "Export records into a single, styled HTML file. Use flags to filter by ID or tags.",
+		Long:  "Export records into a single, styled HTML file.",
 		Run: func(cmd *cobra.Command, args []string) {
 			id, err := parseID(opts.rawID)
 			if err != nil {
@@ -75,7 +76,7 @@ func newExportCmd() *cobra.Command {
 				if count == 0 {
 					ui.Info(os.Stderr, "no records match those tags.")
 				} else {
-					ui.Success(os.Stderr, fmt.Sprintf("%d record(s) exported.", count))
+					ui.Success(os.Stderr, fmt.Sprintf("%d record(s) exported to %s", count, paths.Exports))
 				}
 				return
 			}
@@ -84,7 +85,7 @@ func newExportCmd() *cobra.Command {
 				for _, e := range entries {
 					exportRecord(e.Record, e.FileID, paths.Exports, opts.adrOnly)
 				}
-				ui.Success(os.Stderr, fmt.Sprintf("%d record(s) exported.", len(entries)))
+				ui.Success(os.Stderr, fmt.Sprintf("%d record(s) exported to %s", len(entries), paths.Exports))
 				return
 			}
 
@@ -92,7 +93,7 @@ func newExportCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&opts.rawID, "id", "", "Record ID to export")
+	cmd.Flags().StringVar(&opts.rawID, "id", "", "ID to export")
 	cmd.Flags().BoolVar(&opts.all, "all", false, "Export all records")
 	cmd.Flags().StringVar(&opts.tags, "tags", "", "Export records matching tags (comma-separated)")
 	cmd.Flags().BoolVarP(&opts.global, "global", "g", false, "Export personal records from ~/.sadr/")
@@ -100,6 +101,7 @@ func newExportCmd() *cobra.Command {
 	cmd.MarkFlagsMutuallyExclusive("id", "all", "tags")
 	return cmd
 }
+
 
 func exportRecord(r model.Record, id int, exportsDir string, adrOnly bool) {
 	data := templates.ExportData{
@@ -116,7 +118,11 @@ func exportRecord(r model.Record, id int, exportsDir string, adrOnly bool) {
 
 	written := map[string]bool{}
 	if tags, ok := r.Fields["tags"]; ok && tags != "" {
-		data.Tags = tags
+		parts := strings.Split(tags, ",")
+		for i, t := range parts {
+			parts[i] = strings.TrimSpace(t)
+		}
+		data.Tags = strings.Join(parts, ", ")
 		written["tags"] = true
 	}
 
@@ -147,7 +153,12 @@ func exportRecord(r model.Record, id int, exportsDir string, adrOnly bool) {
 	}
 
 	slug := storage.Slugify(r.Title)
-	filename := fmt.Sprintf("sadr-%04d-%s.html", id, slug)
+	var filename string
+	if adrOnly {
+		filename = fmt.Sprintf("sadr-export-%04d-adr-%s.html", id, slug)
+	} else {
+		filename = fmt.Sprintf("sadr-export-%04d-%s.html", id, slug)
+	}
 	outputPath := filepath.Join(exportsDir, filename)
 
 	if err := os.WriteFile(outputPath, []byte(html), 0644); err != nil {
@@ -155,7 +166,7 @@ func exportRecord(r model.Record, id int, exportsDir string, adrOnly bool) {
 		return
 	}
 
-	ui.Success(os.Stderr, fmt.Sprintf("%s exported — from tribal knowledge to actual documentation.", filepath.Base(outputPath)))
+	ui.Success(os.Stderr, fmt.Sprintf("record exported to %s", filepath.Base(outputPath)))
 }
 
 func init() {

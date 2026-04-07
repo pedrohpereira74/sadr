@@ -37,13 +37,6 @@ Available Commands:
     new adr       Capture an ADR only (no snippet)
     new snippet   Capture a snippet only (no ADR questions)
 
-  list        List all records
-              --type <string>      Filter by type: full, snippet, adr
-              --tags <string>      Filter by tags (comma-separated)
-              --field <string>     Filter by field value (key=value)
-              --format <string>    Output format: json
-              -g, --global         List personal records from ~/.sadr/
-
   search      Search records by title, tags, or content
               --deep               Search inside snippet content and fields
               --id <int>           Show a specific record by its numeric ID
@@ -58,11 +51,28 @@ Available Commands:
               --force              Skip confirmation
               -g, --global         Delete personal record from ~/.sadr/
 
-  export      Export records to self-contained HTML
+  export      Export records or reports to self-contained HTML
               --id <int>           Record ID to export
               --all                Export all records
               --tags <string>      Export records matching tags (comma-separated)
+              --report             Export a report (use with --id)
               -g, --global         Export personal records from ~/.sadr/
+
+  report      AI-powered analysis of your architecture decisions
+              --role <string>      Persona role: tech lead, dba, qa engineer, security analyst, devops engineer
+              --question <string>  Analysis question (skip interactive input)
+              --tags <string>      Filter records by tags (comma-separated)
+              --field <string>     Filter records by field (key=value)
+              --dry-run            Show token estimate without calling AI
+              -g, --global         Analyze personal records
+
+  ask         Ask a direct question to a senior persona about your architecture
+              --role <string>      Persona role (skip selector)
+              --question <string>  Question to ask (skip input)
+              --tags <string>      Filter records by tags
+              --field <string>     Filter records by field (key=value)
+              --dry-run            Show token estimate without calling AI
+              -g, --global         Use personal records from ~/.sadr/
 
   config      Open config in $EDITOR
               --global             Open global config (creates ~/.sadr/ on first use)
@@ -75,11 +85,14 @@ Examples:
   sadr new --smart --diff            AI-assisted capture from git diff
   sadr new snippet --file "<file>"   Capture a snippet from file
   sadr new adr                       Capture an architecture decision
-  sadr list --tags "go,api"          List records filtered by tags
   sadr search "auth" --deep          Deep search across all content
   sadr search --id 3                 View record #3 in detail
   sadr edit --id 2                   Edit record #2 in your editor
   sadr export --all                  Export all records to HTML
+  sadr export --report --id 1        Export report #1 to HTML
+  sadr report --role "tech lead"     AI analysis with Tech Lead persona
+  sadr report --tags "security"      Analyze only security-tagged records
+  sadr ask --role "dba"              Ask a question as a DBA persona
   sadr config --global               Setup global config
   sadr config --set-api-key "<key>"  Save Gemini API key for --smart mode
 `)

@@ -117,6 +117,47 @@ func TestSuggestMissingAPIKey(t *testing.T) {
 	}
 }
 
+func TestGenerateText(t *testing.T) {
+	old := httpClient
+	httpClient = mockClient(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(`{"candidates":[{"content":{"parts":[{"text":"# Report\n\nThis is a free-form report."}]}}]}`))
+	})
+	defer func() { httpClient = old }()
+
+	text, err := GenerateText(context.Background(), "analyze this", "fake-key", "", 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if text != "# Report\n\nThis is a free-form report." {
+		t.Errorf("unexpected text: %s", text)
+	}
+}
+
+func TestGenerateTextAPIError(t *testing.T) {
+	old := httpClient
+	httpClient = mockClient(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(500)
+		_, _ = w.Write([]byte(`{"error":"internal"}`))
+	})
+	defer func() { httpClient = old }()
+
+	_, err := GenerateText(context.Background(), "prompt", "fake-key", "", 0)
+	if err == nil {
+		t.Fatal("expected error for non-200 response")
+	}
+}
+
+func TestGenerateTextMissingKey(t *testing.T) {
+	t.Setenv("AI_API_KEY", "")
+	t.Setenv("GEMINI_API_KEY", "")
+
+	_, err := GenerateText(context.Background(), "prompt", "", "", 0)
+	if err == nil {
+		t.Fatal("expected error when no API key is provided")
+	}
+}
+
 func TestSuggestSetsAuthHeader(t *testing.T) {
 	var gotKey string
 	old := httpClient

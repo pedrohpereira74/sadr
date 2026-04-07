@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 
 	"github.com/muesli/reflow/wordwrap"
@@ -18,6 +19,7 @@ type searchOptions struct {
 	deep   bool
 	rawID  string
 	global bool
+	user   string
 }
 
 func newSearchCmd() *cobra.Command {
@@ -28,7 +30,7 @@ func newSearchCmd() *cobra.Command {
 		Short: "Search records by title, tags, or content",
 		Long:  "Search your records. Use --deep to search inside snippet bodies.",
 		Run: func(cmd *cobra.Command, args []string) {
-			id, err := parseID(opts.rawID)
+			idUsername, id, err := parseUserID(opts.rawID)
 			if err != nil {
 				ui.Error(os.Stderr, err.Error())
 				return
@@ -39,13 +41,22 @@ func newSearchCmd() *cobra.Command {
 				ui.Error(os.Stderr, err.Error())
 				return
 			}
-			recordsDir := paths.Records
+
 			if id > 0 && len(args) > 0 {
 				ui.Error(os.Stderr, "cannot use --id and a search query at the same time.")
 				return
 			}
 
 			if id > 0 {
+				var recordsDir string
+				if opts.global {
+					recordsDir = paths.Records
+				} else if idUsername != "" {
+					recordsDir = filepath.Join(paths.Root, idUsername, "records")
+				} else {
+					recordsDir = paths.Records
+				}
+
 				s := storage.NewStorage(recordsDir)
 				r, _, err := s.GetRecordByFileID(id)
 				if err != nil {
@@ -99,18 +110,45 @@ func newSearchCmd() *cobra.Command {
 			}
 
 			query := args[0]
-			s := storage.NewStorage(recordsDir)
-			records, err := s.ListRecords()
-			if err != nil {
-				ui.Error(os.Stderr, fmt.Sprintf("something went wrong: %v", err))
+
+			var searchEntries []storage.RecordEntry
+			if opts.global {
+				s := storage.NewStorage(paths.Records)
+				recs, listErr := s.ListRecordEntries()
+				if listErr != nil {
+					ui.Error(os.Stderr, fmt.Sprintf("something went wrong: %v", listErr))
+					return
+				}
+				searchEntries = recs
+			} else {
+				allEntries, listErr := listAllRecordEntries(paths.Root)
+				if listErr != nil {
+					ui.Error(os.Stderr, fmt.Sprintf("something went wrong: %v", listErr))
+					return
+				}
+				for _, e := range allEntries {
+					if opts.user != "" && e.Record.Author != opts.user {
+						continue
+					}
+					searchEntries = append(searchEntries, e)
+				}
+			}
+
+			var allRecords []model.Record
+			for _, e := range searchEntries {
+				allRecords = append(allRecords, e.Record)
+			}
+
+			results := search.Search(allRecords, query, opts.deep)
+
+			if len(results) == 0 {
+				ui.Info(os.Stderr, "0 results. your search is sadr than your snippets.")
 				return
 			}
 
-			results := search.Search(records, query, opts.deep)
-
-			if len(results) == 0 {
-				ui.Info(os.Stderr, "0 results. Your search is sadr than your snippets.")
-				return
+			entryByTitle := map[string]storage.RecordEntry{}
+			for _, e := range searchEntries {
+				entryByTitle[e.Record.Title] = e
 			}
 
 			for _, r := range results {
@@ -118,14 +156,19 @@ func newSearchCmd() *cobra.Command {
 				if tags == "" {
 					tags = "-"
 				}
-				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", r.Type, r.Title, tags)
+				if e, ok := entryByTitle[r.Title]; ok && e.Record.Author != "" {
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s/%d\t%s\t%s\t%s\n", e.Record.Author, e.FileID, r.Type, r.Title, tags)
+				} else {
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", r.Type, r.Title, tags)
+				}
 			}
 		},
 	}
 
 	cmd.Flags().BoolVar(&opts.deep, "deep", false, "Search inside snippet content and fields")
-	cmd.Flags().StringVar(&opts.rawID, "id", "", "Show a specific record by its numeric ID")
+	cmd.Flags().StringVar(&opts.rawID, "id", "", "Show a specific record by its numeric ID (supports name/id format)")
 	cmd.Flags().BoolVarP(&opts.global, "global", "g", false, "Search personal records in ~/.sadr/")
+	cmd.Flags().StringVar(&opts.user, "user", "", "Filter results by author username")
 	cmd.MarkFlagsMutuallyExclusive("id", "deep")
 	return cmd
 }

@@ -9,11 +9,124 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/pedrohpereira74/sadr/internal/ask"
 	"github.com/pedrohpereira74/sadr/internal/config"
 	"github.com/pedrohpereira74/sadr/internal/discover"
+	"github.com/pedrohpereira74/sadr/internal/enricher"
+	"github.com/pedrohpereira74/sadr/internal/storage"
 	"github.com/pedrohpereira74/sadr/internal/ui"
 )
+
+func DefaultPersonas() []ask.Persona {
+	return []ask.Persona{
+		{
+			Name:        "Tech Lead",
+			Instruction: "Analyze decisions strictly through an architecture lens: technical debt, design inconsistencies, coupling, and maintainability. If a finding is not directly related to code architecture or system design, do not include it.",
+		},
+		{
+			Name:        "DBA",
+			Instruction: "Analyze decisions strictly through a database lens: normalization, query patterns, indexing, data integrity, and persistence. If a finding is not directly related to data modeling, storage, or data access, do not include it.",
+		},
+		{
+			Name:        "QA Engineer",
+			Instruction: "Analyze decisions strictly through a quality assurance lens: testability, edge cases, regression risks, and test coverage. If a finding is not directly related to testing or quality verification, do not include it.",
+		},
+		{
+			Name:        "Security Analyst",
+			Instruction: "Analyze decisions strictly through a security lens: vulnerabilities, authentication gaps, data exposure, and compliance risks. If a finding is not directly related to security, do not include it.",
+		},
+		{
+			Name:        "DevOps Engineer",
+			Instruction: "Analyze decisions strictly through a DevOps lens: deployment risks, infrastructure concerns, CI/CD impacts, and operational reliability. If a finding is not directly related to deployment or operations, do not include it.",
+		},
+	}
+}
+
+func PersonaSlug(name string) string {
+	s := strings.ToLower(name)
+	s = strings.ReplaceAll(s, " ", "-")
+	return s
+}
+
+func resolvePersonaByName(name string) ask.Persona {
+	lower := strings.ToLower(name)
+	for _, p := range DefaultPersonas() {
+		if strings.ToLower(p.Name) == lower {
+			return p
+		}
+	}
+	return ask.Persona{
+		Name:        name,
+		Instruction: fmt.Sprintf("Analyze the architecture decisions from the perspective of a %s.", name),
+	}
+}
+
+func selectPersona() ask.Persona {
+	personas := DefaultPersonas()
+	options := make([]selectOption, 0, len(personas)+1)
+	for _, p := range personas {
+		options = append(options, selectOption{Label: p.Name, Value: p.Name})
+	}
+	options = append(options, selectOption{Label: "custom...", Value: "custom"})
+
+	chosen := runSelect("select a persona:", options)
+	if chosen == "" {
+		return ask.Persona{}
+	}
+
+	if chosen == "custom" {
+		desc := runTextarea("describe your custom persona:", "e.g. a frontend performance expert focused on bundle size and rendering...")
+		if desc == "" {
+			return ask.Persona{}
+		}
+		return ask.Persona{
+			Name:        "Custom",
+			Instruction: desc,
+		}
+	}
+
+	for _, p := range personas {
+		if p.Name == chosen {
+			return p
+		}
+	}
+	return ask.Persona{}
+}
+
+func loadAIConfig() (string, string) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", ""
+	}
+	globalConfigPath := filepath.Join(home, ".sadr", "global-config.yaml")
+	cfg, err := config.LoadGlobalFromFile(globalConfigPath)
+	if err != nil {
+		return "", ""
+	}
+	apiKey := cfg.AI.APIKey
+	if apiKey == "" && cfg.AI.APIKeyEnv != "" {
+		apiKey = os.Getenv(cfg.AI.APIKeyEnv)
+	}
+	return apiKey, cfg.AI.Model
+}
+
+func loadLanguageConfig() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "English"
+	}
+	globalConfigPath := filepath.Join(home, ".sadr", "global-config.yaml")
+	cfg, err := config.LoadGlobalFromFile(globalConfigPath)
+	if err != nil {
+		return "English"
+	}
+	if cfg.Language == "" {
+		return "English"
+	}
+	return cfg.Language
+}
 
 func parseID(raw string) (int, error) {
 	if raw == "" {
@@ -24,6 +137,66 @@ func parseID(raw string) (int, error) {
 		return 0, fmt.Errorf("invalid id %q: must be a positive number", raw)
 	}
 	return n, nil
+}
+
+func loadUsername() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	cfg, err := config.LoadGlobalFromFile(filepath.Join(home, ".sadr", "global-config.yaml"))
+	if err != nil {
+		return ""
+	}
+	return cfg.Username
+}
+
+func allUserRecordsDirs(sadrRoot string) []string {
+	entries, err := os.ReadDir(sadrRoot)
+	if err != nil {
+		return nil
+	}
+	var dirs []string
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		recordsDir := filepath.Join(sadrRoot, e.Name(), "records")
+		if _, err := os.Stat(recordsDir); err == nil {
+			dirs = append(dirs, recordsDir)
+		}
+	}
+	return dirs
+}
+
+func listAllRecordEntries(sadrRoot string) ([]storage.RecordEntry, error) {
+	dirs := allUserRecordsDirs(sadrRoot)
+	var all []storage.RecordEntry
+	for _, dir := range dirs {
+		s := storage.NewStorage(dir)
+		entries, err := s.ListRecordEntries()
+		if err != nil {
+			continue
+		}
+		all = append(all, entries...)
+	}
+	return all, nil
+}
+
+func parseUserID(raw string) (username string, id int, err error) {
+	if raw == "" {
+		return "", 0, nil
+	}
+	if before, after, found := strings.Cut(raw, "/"); found {
+		username = before
+		id, err = strconv.Atoi(after)
+	} else {
+		id, err = strconv.Atoi(raw)
+	}
+	if err != nil || id < 0 {
+		return "", 0, fmt.Errorf("invalid id %q: must be number or name/number", raw)
+	}
+	return
 }
 
 type selectOption struct {
@@ -69,13 +242,13 @@ func (m selectModel) View() string {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("\n:(  %s\n\n", m.prompt))
+	fmt.Fprintf(&b, "\n:(  %s\n\n", m.prompt)
 	for i, opt := range m.options {
 		cursor := "  "
 		if i == m.cursor {
 			cursor = "> "
 		}
-		b.WriteString(fmt.Sprintf("  %s%s\n", cursor, opt.Label))
+		fmt.Fprintf(&b, "  %s%s\n", cursor, opt.Label)
 	}
 	return b.String()
 }
@@ -90,10 +263,70 @@ func runSelect(prompt string, options []selectOption) string {
 	return finalModel.(selectModel).chosen
 }
 
+type textareaModel struct {
+	prompt   string
+	textarea textarea.Model
+	result   string
+	done     bool
+}
+
+func (m textareaModel) Init() tea.Cmd { return textarea.Blink }
+
+func (m textareaModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.Type {
+		case tea.KeyCtrlC, tea.KeyEsc:
+			return m, tea.Quit
+		case tea.KeyEnter:
+			if !msg.Alt {
+				m.result = m.textarea.Value()
+				m.done = true
+				return m, tea.Quit
+			}
+		}
+	}
+	var cmd tea.Cmd
+	m.textarea, cmd = m.textarea.Update(msg)
+	return m, cmd
+}
+
+func (m textareaModel) View() string {
+	if m.done {
+		return ""
+	}
+	return fmt.Sprintf("\n:(  %s\n\n%s\n\n  (Enter to confirm, Esc to cancel)\n", m.prompt, m.textarea.View())
+}
+
+func runTextarea(prompt string, placeholder string) string {
+	ta := textarea.New()
+	ta.Placeholder = placeholder
+	ta.Focus()
+	ta.SetWidth(70)
+	ta.SetHeight(3)
+	ta.ShowLineNumbers = false
+
+	m := textareaModel{prompt: prompt, textarea: ta}
+	p := tea.NewProgram(m)
+	finalModel, err := p.Run()
+	if err != nil {
+		return ""
+	}
+	return finalModel.(textareaModel).result
+}
+
+func confirmPromptImpl(message string) bool {
+	chosen := runSelect(message, []selectOption{
+		{Label: "yes, proceed", Value: "yes"},
+		{Label: "no, cancel", Value: "no"},
+	})
+	return chosen == "yes"
+}
+
 func promptGlobalFallbackImpl() string {
-	return runSelect("No local sadr project found. Fallback to global at ~/.sadr?", []selectOption{
-		{Label: "Yes, use global", Value: "yes"},
-		{Label: "No, cancel", Value: "no"},
+	return runSelect("no local sadr project found. fallback to global at ~/.sadr?", []selectOption{
+		{Label: "yes, use global", Value: "yes"},
+		{Label: "no, cancel", Value: "no"},
 	})
 }
 
@@ -158,6 +391,34 @@ func openEditorImpl(editor string, path string) error {
 	return c.Run()
 }
 
+func loadJiraEnricher() *enricher.JiraEnricher {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+	globalConfigPath := filepath.Join(home, ".sadr", "global-config.yaml")
+	cfg, err := config.LoadGlobalFromFile(globalConfigPath)
+	if err != nil {
+		return nil
+	}
+	return enricher.NewJiraEnricher(cfg.Jira)
+}
+
+func configDisplayName(filename string) string {
+	name := strings.TrimSuffix(filename, ".yaml")
+	if name == "default-config" {
+		return "default"
+	}
+	return name
+}
+
+func configFilename(name string) string {
+	if name == "default" {
+		return "default-config.yaml"
+	}
+	return name + ".yaml"
+}
+
 func resolvePaths(global bool) (discover.SadrPaths, error) {
 	if global {
 		home, err := os.UserHomeDir()
@@ -166,12 +427,14 @@ func resolvePaths(global bool) (discover.SadrPaths, error) {
 		}
 		root := filepath.Join(home, ".sadr")
 		if _, err := os.Stat(root); os.IsNotExist(err) {
-			return discover.SadrPaths{}, fmt.Errorf("global storage not found. Run 'sadr config --global' first")
+			return discover.SadrPaths{}, fmt.Errorf("global storage not found. run 'sadr config --global' first")
 		}
 		return discover.SadrPaths{
-			Root:    root,
-			Records: filepath.Join(root, "records"),
-			Exports: filepath.Join(root, "exports"),
+			Root:       root,
+			Records:    filepath.Join(root, "records"),
+			Exports:    filepath.Join(root, "exports"),
+			Answers:    filepath.Join(root, "answers"),
+			ConfigsDir: filepath.Join(root, "configs"),
 		}, nil
 	}
 
@@ -186,5 +449,19 @@ func resolvePaths(global bool) (discover.SadrPaths, error) {
 	if err := handleGlobalFallback(paths); err != nil {
 		return discover.SadrPaths{}, nil
 	}
+
+	if !paths.IsGlobal {
+		username := loadUsername()
+		if username == "" {
+			return discover.SadrPaths{}, fmt.Errorf("no user configured. run 'sadr init --global' first.")
+		}
+		paths.Username = username
+		paths.Records = filepath.Join(paths.Root, username, "records")
+		paths.Exports = filepath.Join(paths.Root, username, "exports")
+		paths.Answers = filepath.Join(paths.Root, username, "answers")
+	} else {
+		paths.Answers = filepath.Join(paths.Root, "answers")
+	}
+
 	return paths, nil
 }

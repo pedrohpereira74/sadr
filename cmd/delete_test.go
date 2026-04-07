@@ -9,11 +9,15 @@ import (
 	"github.com/pedrohpereira74/sadr/internal/storage"
 )
 
-func setupDeleteTest(t *testing.T) string {
+func setupDeleteTest(t *testing.T) (dir string, username string) {
 	t.Helper()
-	dir, _ := os.MkdirTemp("", "sadr-test-*")
+	home, _ := os.MkdirTemp("", "sadr-test-home-*")
+	t.Cleanup(func() { os.RemoveAll(home) })
+	username = setupTestUser(t, home)
+
+	dir, _ = os.MkdirTemp("", "sadr-test-*")
 	t.Cleanup(func() { os.RemoveAll(dir) })
-	recordsDir := filepath.Join(dir, ".sadr", "records")
+	recordsDir := filepath.Join(dir, ".sadr", username, "records")
 	if err := os.MkdirAll(recordsDir, 0755); err != nil {
 		t.Fatalf("failed to create dir: %v", err)
 	}
@@ -27,18 +31,18 @@ func setupDeleteTest(t *testing.T) string {
 		t.Fatalf("failed to change dir: %v", err)
 	}
 	t.Cleanup(func() { os.Chdir(originalWd) })
-	return dir
+	return dir, username
 }
 
 func TestDeleteRemovesRecord(t *testing.T) {
-	dir := setupDeleteTest(t)
+	dir, username := setupDeleteTest(t)
 
 	rootCmd.SetArgs([]string{"delete", "--id", "1", "--force"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	recordsDir := filepath.Join(dir, ".sadr", "records")
+	recordsDir := filepath.Join(dir, ".sadr", username, "records")
 	entries, _ := os.ReadDir(recordsDir)
 	if len(entries) != 0 {
 		t.Errorf("expected 0 records after delete, got %d", len(entries))

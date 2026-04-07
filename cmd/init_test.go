@@ -24,11 +24,8 @@ func TestInitCreatesSadrDirectory(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, ".sadr")); os.IsNotExist(err) {
 		t.Error("expected .sadr/ to exist")
 	}
-	if _, err := os.Stat(filepath.Join(dir, ".sadr", "records")); os.IsNotExist(err) {
-		t.Error("expected .sadr/records/ to exist")
-	}
-	if _, err := os.Stat(filepath.Join(dir, ".sadr", "exports")); os.IsNotExist(err) {
-		t.Error("expected .sadr/exports/ to exist")
+	if _, err := os.Stat(filepath.Join(dir, ".sadr", "configs", "default-config.yaml")); os.IsNotExist(err) {
+		t.Error("expected .sadr/configs/default-config.yaml to exist")
 	}
 }
 
@@ -44,7 +41,7 @@ func TestInitMinimalCreatesConfig(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	content, err := os.ReadFile(filepath.Join(dir, ".sadr", "config.yaml"))
+	content, err := os.ReadFile(filepath.Join(dir, ".sadr", "configs", "default-config.yaml"))
 	if err != nil {
 		t.Fatalf("failed to read config: %v", err)
 	}
@@ -54,9 +51,6 @@ func TestInitMinimalCreatesConfig(t *testing.T) {
 	}
 	if !strings.Contains(string(content), "name: tags") {
 		t.Error("expected config to contain tags field")
-	}
-	if strings.Contains(string(content), "name: status") {
-		t.Error("minimal config should not contain status field")
 	}
 }
 
@@ -72,14 +66,11 @@ func TestInitExtendedCreatesConfig(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	content, err := os.ReadFile(filepath.Join(dir, ".sadr", "config.yaml"))
+	content, err := os.ReadFile(filepath.Join(dir, ".sadr", "configs", "default-config.yaml"))
 	if err != nil {
 		t.Fatalf("failed to read config: %v", err)
 	}
 
-	if !strings.Contains(string(content), "name: status") {
-		t.Error("extended config should contain status field")
-	}
 	if !strings.Contains(string(content), "name: context") {
 		t.Error("extended config should contain context field")
 	}
@@ -89,11 +80,12 @@ func TestInitDoesNotOverwrite(t *testing.T) {
 	dir, _ := os.MkdirTemp("", "sadr-test-*")
 	t.Cleanup(func() { os.RemoveAll(dir) })
 	sadrDir := filepath.Join(dir, ".sadr")
-	if err := os.MkdirAll(sadrDir, 0755); err != nil {
+	configsDir := filepath.Join(sadrDir, "configs")
+	if err := os.MkdirAll(configsDir, 0755); err != nil {
 		t.Fatalf("failed to create dir: %v", err)
 	}
-	// Create the config so init sees it as fully initialized
-	if err := os.WriteFile(filepath.Join(sadrDir, "config.yaml"), []byte("fields: []"), 0644); err != nil {
+	defaultConfigPath := filepath.Join(configsDir, "default-config.yaml")
+	if err := os.WriteFile(defaultConfigPath, []byte("fields: []"), 0644); err != nil {
 		t.Fatalf("failed to write config: %v", err)
 	}
 	if err := os.Chdir(dir); err != nil {
@@ -103,10 +95,9 @@ func TestInitDoesNotOverwrite(t *testing.T) {
 	rootCmd.SetArgs([]string{"init", "--preset", "minimal"})
 	_ = rootCmd.Execute()
 
-	// Config should still have original content (not overwritten)
-	content, _ := os.ReadFile(filepath.Join(sadrDir, "config.yaml"))
+	content, _ := os.ReadFile(defaultConfigPath)
 	if string(content) != "fields: []" {
-		t.Error("config.yaml was overwritten when it should have been preserved")
+		t.Error("default-config.yaml was overwritten when it should have been preserved")
 	}
 }
 
@@ -127,8 +118,11 @@ func TestInitAddsExportsToGitignore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected .gitignore to exist: %v", err)
 	}
-	if !strings.Contains(string(content), ".sadr/exports/") {
-		t.Error("expected .gitignore to contain .sadr/exports/")
+	if !strings.Contains(string(content), ".sadr/*/exports/") {
+		t.Error("expected .gitignore to contain .sadr/*/exports/")
+	}
+	if !strings.Contains(string(content), ".sadr/*/answers/") {
+		t.Error("expected .gitignore to contain .sadr/*/answers/")
 	}
 }
 
@@ -140,7 +134,7 @@ func TestInitDoesNotDuplicateGitignore(t *testing.T) {
 		t.Fatalf("failed to change dir: %v", err)
 	}
 
-	existing := "node_modules/\n.sadr/exports/\n"
+	existing := "node_modules/\n.sadr/*/exports/\n.sadr/*/answers/\n"
 	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(existing), 0644); err != nil {
 		t.Fatalf("failed to write gitignore: %v", err)
 	}
@@ -149,9 +143,9 @@ func TestInitDoesNotDuplicateGitignore(t *testing.T) {
 	_ = rootCmd.Execute()
 
 	content, _ := os.ReadFile(filepath.Join(dir, ".gitignore"))
-	count := strings.Count(string(content), ".sadr/exports/")
+	count := strings.Count(string(content), ".sadr/*/exports/")
 	if count != 1 {
-		t.Errorf("expected 1 occurrence of .sadr/exports/, got %d", count)
+		t.Errorf("expected 1 occurrence of .sadr/*/exports/, got %d", count)
 	}
 }
 
@@ -166,22 +160,13 @@ func TestInitHealsWhenConfigMissing(t *testing.T) {
 		t.Fatalf("failed to change dir: %v", err)
 	}
 
-	// .sadr/ exists but config.yaml is missing — should heal
 	rootCmd.SetArgs([]string{"init", "--preset", "minimal"})
 	if err := rootCmd.Execute(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	configPath := filepath.Join(sadrDir, "config.yaml")
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		t.Error("expected config.yaml to be recreated by healing")
-	}
-
-	// Also check that records/ and exports/ were created
-	if _, err := os.Stat(filepath.Join(sadrDir, "records")); os.IsNotExist(err) {
-		t.Error("expected records/ to exist after healing")
-	}
-	if _, err := os.Stat(filepath.Join(sadrDir, "exports")); os.IsNotExist(err) {
-		t.Error("expected exports/ to exist after healing")
+	defaultConfigPath := filepath.Join(sadrDir, "configs", "default-config.yaml")
+	if _, err := os.Stat(defaultConfigPath); os.IsNotExist(err) {
+		t.Error("expected configs/default-config.yaml to be recreated by healing")
 	}
 }

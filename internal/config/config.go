@@ -9,13 +9,28 @@ import (
 )
 
 type Config struct {
-	Fields []Field `yaml:"fields"`
+	Fields []Field   `yaml:"fields"`
+	Ask    AskConfig `yaml:"ask"`
+}
+
+type AskConfig struct {
+	Limit int    `yaml:"limit"`
+	Range string `yaml:"range"`
 }
 
 type GlobalConfig struct {
-	Editor   string   `yaml:"editor"`
-	Language string   `yaml:"language"`
-	AI       AIConfig `yaml:"ai"`
+	Username string     `yaml:"username"`
+	Editor   string     `yaml:"editor"`
+	Language string     `yaml:"language"`
+	AI       AIConfig   `yaml:"ai"`
+	Jira     JiraConfig `yaml:"jira"`
+}
+
+type JiraConfig struct {
+	URL         string `yaml:"url"`
+	Email       string `yaml:"email"`
+	APIToken    string `yaml:"api_token"`
+	APITokenEnv string `yaml:"api_token_env"`
 }
 type AIConfig struct {
 	Provider  string `yaml:"provider"`

@@ -49,7 +49,7 @@ type Model struct {
 
 func initTextarea() textarea.Model {
 	ta := textarea.New()
-	ta.Placeholder = "Type here... (Enter to confirm)"
+	ta.Placeholder = "type here... (enter to confirm)"
 	ta.Focus()
 	ta.ShowLineNumbers = false
 	ta.SetWidth(80)
@@ -71,19 +71,19 @@ func NewModel() Model {
 		steps: []step{
 			{
 				name:      "snippet",
-				prompt:    "Snippet",
+				prompt:    "snippet",
 				fieldType: "editor",
 				required:  false,
 			},
 			{
 				name:      "title",
-				prompt:    "Title",
+				prompt:    "title",
 				fieldType: "text",
 				required:  true,
 			},
 			{
 				name:        "tags",
-				prompt:      "Tags",
+				prompt:      "tags",
 				fieldType:   "multiselect",
 				required:    true,
 				options:     []string{"architecture", "api", "database", "security", "performance", "tooling", "infrastructure", "bugfix"},
@@ -91,7 +91,7 @@ func NewModel() Model {
 			},
 			{
 				name:        "file_ref",
-				prompt:      "File reference (type :skip for N/A)",
+				prompt:      "file reference (type :skip for N/A)",
 				fieldType:   "filepicker",
 				required:    true,
 				selectedMap: map[int]bool{},
@@ -131,7 +131,7 @@ func NewModelFromConfig(fields []FieldDef) Model {
 	steps := []step{
 		{
 			name:      "snippet",
-			prompt:    "Snippet",
+			prompt:    "snippet",
 			fieldType: "editor",
 			required:  false,
 		},
@@ -139,13 +139,12 @@ func NewModelFromConfig(fields []FieldDef) Model {
 
 	fileRefStep := step{
 		name:        "file_ref",
-		prompt:      "File reference (type :skip for N/A)",
+		prompt:      "file reference (type :skip for N/A)",
 		fieldType:   "filepicker",
 		required:    true,
 		selectedMap: map[int]bool{},
 	}
 
-	// Separate fields into: title, tags, other required, optional
 	var titleField, tagsField *FieldDef
 	var otherRequired, optional []FieldDef
 
@@ -165,7 +164,6 @@ func NewModelFromConfig(fields []FieldDef) Model {
 		}
 	}
 
-	// Order: title, tags, file_ref, other required, optional
 	if titleField != nil {
 		steps = append(steps, fieldDefToStep(*titleField))
 	}
@@ -231,13 +229,22 @@ func (s *step) filteredToAllIndex(filteredIdx int) int {
 	return -1
 }
 
-// visibleFileCount returns how many file lines fit in the terminal.
-// Fixed lines: 1 empty + 1 prompt + 1 empty + 1 filter "> " + 1 empty + 1 empty + 1 footer + 2 scroll hints = 9.
 func (m Model) visibleFileCount() int {
 	if m.height <= 0 {
 		return 10
 	}
 	available := m.height - 9
+	if available < 3 {
+		return 3
+	}
+	return available
+}
+
+func (m Model) visibleOptionCount() int {
+	if m.height <= 0 {
+		return 10
+	}
+	available := m.height - 7
 	if available < 3 {
 		return 3
 	}
@@ -273,7 +280,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			current.allFiles = files
 
 			if len(current.suggestedFiles) > 0 {
-				// Mark suggested files as selected
 				suggested := map[string]bool{}
 				for _, f := range current.suggestedFiles {
 					suggested[f] = true
@@ -283,7 +289,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						current.selectedMap[i] = true
 					}
 				}
-				// Show suggested files initially
 				current.filtered = current.suggestedFiles
 			} else {
 				current.filtered = files
@@ -296,6 +301,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.textarea.SetWidth(msg.Width - 4)
+		if msg.Height > 8 {
+			m.textarea.SetHeight(msg.Height - 8)
+		}
 		return m, nil
 
 	case editorFinishedMsg:
@@ -312,6 +320,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyCtrlC:
 			m.quitting = true
 			return m, tea.Quit
+
+		case tea.KeyEsc:
+			if m.currentStep > 0 {
+				m.currentStep--
+				if m.steps[m.currentStep].fieldType == "text" {
+					m.textarea.Reset()
+					m.textarea.SetValue(m.steps[m.currentStep].value)
+				}
+			}
+			return m, nil
 
 		case tea.KeyTab:
 			if current.fieldType == "text" {
@@ -419,6 +437,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case tea.KeyUp:
+			if current.fieldType == "text" {
+				var cmd tea.Cmd
+				m.textarea, cmd = m.textarea.Update(msg)
+				return m, cmd
+			}
 			if current.fieldType == "filepicker" && current.cursorPos > 0 {
 				current.cursorPos--
 				if current.cursorPos < current.scrollOffset {
@@ -427,9 +450,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if (current.fieldType == "multiselect" || current.fieldType == "select") && current.cursorPos > 0 {
 				current.cursorPos--
+				if current.cursorPos < current.scrollOffset {
+					current.scrollOffset = current.cursorPos
+				}
 			}
 
 		case tea.KeyDown:
+			if current.fieldType == "text" {
+				var cmd tea.Cmd
+				m.textarea, cmd = m.textarea.Update(msg)
+				return m, cmd
+			}
 			if current.fieldType == "filepicker" && current.cursorPos < len(current.filtered)-1 {
 				visible := m.visibleFileCount()
 				current.cursorPos++
@@ -439,6 +470,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if (current.fieldType == "multiselect" || current.fieldType == "select") && current.cursorPos < len(current.options)-1 {
 				current.cursorPos++
+				visible := m.visibleOptionCount()
+				if current.cursorPos >= current.scrollOffset+visible {
+					current.scrollOffset = current.cursorPos - visible + 1
+				}
 			}
 
 		case tea.KeySpace:
@@ -508,37 +543,40 @@ func (m Model) View() string {
 	current := m.steps[m.currentStep]
 	var b strings.Builder
 
+	backHint := ""
+	if m.currentStep > 0 {
+		backHint = " · esc back"
+	}
+
 	requiredHint := " (tab to skip)"
 	if current.required {
 		requiredHint = " (required)"
 	}
 
-	b.WriteString(fmt.Sprintf("\n:(  %s%s\n\n", current.prompt, requiredHint))
+	fmt.Fprintf(&b, "\n:(  %s%s\n\n", current.prompt, requiredHint)
 
 	if current.fieldType == "text" {
-		b.WriteString(fmt.Sprintf("  \n%s\n\n", m.textarea.View()))
+		fmt.Fprintf(&b, "  \n%s\n\n", m.textarea.View())
+		fmt.Fprintf(&b, "  enter confirm%s\n", backHint)
 	}
 
 	if current.fieldType == "editor" {
-		b.WriteString("  Press Enter to open editor\n")
+		fmt.Fprintf(&b, "  enter to open editor%s\n", backHint)
 	}
 
 	if current.fieldType == "filepicker" {
-		b.WriteString(fmt.Sprintf("  > %s\n\n", string(current.filterInput)))
+		fmt.Fprintf(&b, "  > %s\n\n", string(current.filterInput))
 
 		if len(current.filtered) == 0 && len(current.allFiles) == 0 {
-			b.WriteString("  type to filter files · :skip to skip\n")
+			fmt.Fprintf(&b, "  type to filter · :skip to skip%s\n", backHint)
 		} else if len(current.filtered) == 0 {
-			b.WriteString("  no files match\n")
+			fmt.Fprintf(&b, "  no files match%s\n", backHint)
 		} else {
 			visible := m.visibleFileCount()
-			end := current.scrollOffset + visible
-			if end > len(current.filtered) {
-				end = len(current.filtered)
-			}
+			end := min(current.scrollOffset+visible, len(current.filtered))
 
 			if current.scrollOffset > 0 {
-				b.WriteString(fmt.Sprintf("  ↑ %d more\n", current.scrollOffset))
+				fmt.Fprintf(&b, "  ↑ %d more\n", current.scrollOffset)
 			}
 
 			for i := current.scrollOffset; i < end; i++ {
@@ -551,12 +589,12 @@ func (m Model) View() string {
 				if idx >= 0 && current.selectedMap[idx] {
 					checked = "[x]"
 				}
-				b.WriteString(fmt.Sprintf("  %s%s %s\n", cursor, checked, current.filtered[i]))
+				fmt.Fprintf(&b, "  %s%s %s\n", cursor, checked, current.filtered[i])
 			}
 
 			remaining := len(current.filtered) - end
 			if remaining > 0 {
-				b.WriteString(fmt.Sprintf("  ↓ %d more\n", remaining))
+				fmt.Fprintf(&b, "  ↓ %d more\n", remaining)
 			}
 
 			selectedCount := 0
@@ -565,12 +603,20 @@ func (m Model) View() string {
 					selectedCount++
 				}
 			}
-			b.WriteString(fmt.Sprintf("\n  %d files · ↑/↓ navigate · %d selected · space toggle · enter confirm\n", len(current.filtered), selectedCount))
+			fmt.Fprintf(&b, "\n  %d files · ↑/↓ navigate · %d selected · space toggle · enter confirm%s\n", len(current.filtered), selectedCount, backHint)
 		}
 	}
 
 	if current.fieldType == "select" || current.fieldType == "multiselect" {
-		for i, opt := range current.options {
+		visible := m.visibleOptionCount()
+		end := min(current.scrollOffset+visible, len(current.options))
+
+		if current.scrollOffset > 0 {
+			fmt.Fprintf(&b, "  ↑ %d more\n", current.scrollOffset)
+		}
+
+		for i := current.scrollOffset; i < end; i++ {
+			opt := current.options[i]
 			cursor := "  "
 			if i == current.cursorPos {
 				cursor = "> "
@@ -580,10 +626,15 @@ func (m Model) View() string {
 				if current.selectedMap[i] {
 					checked = "[x]"
 				}
-				b.WriteString(fmt.Sprintf("  %s%s %s\n", cursor, checked, opt))
+				fmt.Fprintf(&b, "  %s%s %s\n", cursor, checked, opt)
 			} else {
-				b.WriteString(fmt.Sprintf("  %s%s\n", cursor, opt))
+				fmt.Fprintf(&b, "  %s%s\n", cursor, opt)
 			}
+		}
+
+		remaining := len(current.options) - end
+		if remaining > 0 {
+			fmt.Fprintf(&b, "  ↓ %d more\n", remaining)
 		}
 
 		if current.fieldType == "multiselect" {
@@ -593,9 +644,9 @@ func (m Model) View() string {
 					selectedCount++
 				}
 			}
-			b.WriteString(fmt.Sprintf("\n  ↑/↓ navigate · %d selected · space toggle · enter confirm\n", selectedCount))
+			fmt.Fprintf(&b, "\n  ↑/↓ navigate · %d selected · space toggle · enter confirm%s\n", selectedCount, backHint)
 		} else {
-			b.WriteString("\n  ↑/↓ navigate · enter confirm\n")
+			fmt.Fprintf(&b, "\n  ↑/↓ navigate · enter confirm%s\n", backHint)
 		}
 	}
 
@@ -649,7 +700,7 @@ func Run(opts Options) (map[string]string, error) {
 	m.projectRoot = opts.ProjectRoot
 
 	if len(opts.PreSelectedFiles) > 0 {
-		applyPreSelectedFiles(&m, opts.PreSelectedFiles)
+		applyPreSelectedFiles(&m, opts.PreSelectedFiles, opts.ProjectRoot)
 	}
 
 	if len(opts.Suggestions) > 0 {
@@ -659,13 +710,26 @@ func Run(opts Options) (map[string]string, error) {
 	return programRunner(m)
 }
 
-func applyPreSelectedFiles(m *Model, files []string) {
+func applyPreSelectedFiles(m *Model, files []string, projectRoot string) {
+	allFiles, _ := filepicker.ListProjectFiles(projectRoot)
+
+	suggested := map[string]bool{}
+	for _, f := range files {
+		suggested[f] = true
+	}
+
 	for i, s := range m.steps {
 		if s.fieldType == "filepicker" {
 			m.steps[i].suggestedFiles = files
 			m.steps[i].filtered = files
+			m.steps[i].allFiles = allFiles
 			if m.steps[i].selectedMap == nil {
 				m.steps[i].selectedMap = map[int]bool{}
+			}
+			for j, f := range allFiles {
+				if suggested[f] {
+					m.steps[i].selectedMap[j] = true
+				}
 			}
 			break
 		}
@@ -676,8 +740,8 @@ func applySuggestions(m *Model, suggestions map[string]string) {
 	for i, s := range m.steps {
 		if val, ok := suggestions[s.name]; ok {
 			if s.fieldType == "multiselect" && s.selectedMap != nil {
-				parts := strings.Split(val, ",")
-				for _, part := range parts {
+				parts := strings.SplitSeq(val, ",")
+				for part := range parts {
 					part = strings.TrimSpace(part)
 					for j, opt := range s.options {
 						if strings.EqualFold(opt, part) {

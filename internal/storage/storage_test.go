@@ -36,7 +36,7 @@ func TestSaveRecordCorrectFilename(t *testing.T) {
 		t.Fatalf("Unexpected error = %v", err)
 	}
 
-	expected := "sadr-0001-use-retry.md"
+	expected := "sadr-record-0001-use-retry.md"
 	if filepath.Base(path) != expected {
 		t.Errorf("expected filename '%s', got '%s'", expected, filepath.Base(path))
 	}
@@ -54,7 +54,7 @@ func TestSaveRecordVerifySequentialID(t *testing.T) {
 		t.Fatalf("Unexpected error = %v", err)
 	}
 
-	expected := "sadr-0002-second-record.md"
+	expected := "sadr-record-0002-second-record.md"
 	if filepath.Base(path2) != expected {
 		t.Errorf("expected filename '%s', got '%s'", expected, filepath.Base(path2))
 	}
@@ -151,7 +151,6 @@ func TestListRecordsSkipsInvalidFile(t *testing.T) {
 	r, _ := model.NewRecordWithOptions("Valid record", "full")
 	_, _ = s.SaveRecord(r)
 
-	// Write an invalid .md file
 	invalidPath := filepath.Join(s.Dir, "sadr-9999-bad.md")
 	_ = os.WriteFile(invalidPath, []byte("not valid frontmatter at all"), 0644)
 
@@ -169,9 +168,14 @@ func TestParseFileID(t *testing.T) {
 		filename string
 		want     int
 	}{
+		{"sadr-record-0001-use-retry.md", 1},
+		{"sadr-record-0042-redis-cache.md", 42},
+		{"sadr-record-0100-big.md", 100},
+		{"sadr-answer-0003-tech-lead.md", 3},
+		{"sadr-report-0007-dba.md", 7},
+		{"sadr-docs-0002-auth.md", 2},
 		{"sadr-0001-use-retry.md", 1},
 		{"sadr-0042-redis-cache.md", 42},
-		{"sadr-0100-big.md", 100},
 		{"not-a-record.md", 0},
 		{"sadr-bad-name.md", 0},
 	}
