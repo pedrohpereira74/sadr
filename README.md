@@ -9,7 +9,7 @@ sadr is a CLI tool that blends a snippet manager with Architectural Decision Rec
 
 - **AI-Powered (`--smart`)**: Automatically deduces titles, context, and decisions from your code snippet using your desired AI model (currently only gemini models).
 - **Multiple Sources**: Read from `--clipboard`, a `--file`, or your latest `--diff`.
-- **Customizable Schemas**: You define the questions. The `config.yaml` is fully configurable. Add custom `select`, `multiselect`, `list`, or `text` fields.
+- **Customizable Schemas**: You define the questions. The `config.yaml` is fully configurable. Add custom `select`, `multiselect`, `list`, or `text` fields. Supports multiple configs per project — switch between them with `--config`.
 - **HTML Export**: Export your knowledge base to a single standalone, styled HTML file (`sadr export`).
 - **Git-friendly**: sadr is designed to be used in git repositories. It stores records as markdown files in a `.sadr` directory, which can be tracked by git.
 
@@ -18,7 +18,7 @@ sadr is a CLI tool that blends a snippet manager with Architectural Decision Rec
 sadr provides pre-compiled binaries for all major platforms. Choose your preferred method:
 
 ### 🌟 Native Script
-The easiest way to install sadr on macOS or Linux is via our native installer script:
+The easiest way to install sadr on macOS or Linux is via the native installer script:
 ```bash
 curl -sSfL https://raw.githubusercontent.com/pedrohpereira74/sadr/master/install.sh | sh
 ```
@@ -87,8 +87,8 @@ go install github.com/pedrohpereira74/sadr@latest
 ## ⚙️ Configuration
 
 sadr uses three configuration files:
-1. **Project schemas config (`.sadr/config.yaml`)**: Team-oriented, git-friendly scope. Shareable schemas and fields.Tracked by Git.
-2. **Personal schemas config (`~/.sadr/config.yaml`)**: The "Dear Diary" schema. Personal fields for your private snippet vault. Strictly local, never tracked.
+1. **Project schemas config (`.sadr/configs/default-config.yaml`)**: Team-oriented, git-friendly scope. Shareable schemas and fields. Tracked by Git.
+2. **Personal schemas config (`~/.sadr/configs/default-config.yaml`)**: The "Dear Diary" schema. Personal fields for your private snippet vault. Strictly local, never tracked.
 3. **Global config (`~/.sadr/global-config.yaml`)**: Personal preferences (Default Editor, Default Language, AI Provider credentials). Never tracked.
 
 
