@@ -6,12 +6,9 @@ func HasAnyTag(recordTags string, filterTags string) bool {
 	if strings.TrimSpace(recordTags) == "" || strings.TrimSpace(filterTags) == "" {
 		return false
 	}
-	rTags := strings.Split(recordTags, ",")
-	fTags := strings.Split(filterTags, ",")
-
-	for _, ft := range fTags {
+	for ft := range strings.SplitSeq(filterTags, ",") {
 		ft = strings.TrimSpace(ft)
-		for _, rt := range rTags {
+		for rt := range strings.SplitSeq(recordTags, ",") {
 			if strings.EqualFold(strings.TrimSpace(rt), ft) {
 				return true
 			}

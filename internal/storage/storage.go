@@ -56,7 +56,7 @@ func (s *Storage) SaveRecord(r model.Record) (string, error) {
 	data := []byte(content.String())
 	nextID := s.getMaxID() + 1
 
-	for attempts := 0; attempts < 100; attempts++ {
+	for range 100 {
 		filename := fmt.Sprintf("sadr-record-%04d-%s.md", nextID, slug)
 		fullPath := filepath.Join(s.Dir, filename)
 		f, err := os.OpenFile(fullPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
@@ -82,8 +82,8 @@ func (s *Storage) SaveRecord(r model.Record) (string, error) {
 	return "", fmt.Errorf("failed to create record file after 100 attempts")
 }
 
-func buildFrontmatter(r model.Record) map[string]interface{} {
-	fm := map[string]interface{}{
+func buildFrontmatter(r model.Record) map[string]any {
+	fm := map[string]any{
 		"schema_version": model.SchemaVersion,
 		"type":           r.Type,
 		"title":          r.Title,
@@ -96,9 +96,8 @@ func buildFrontmatter(r model.Record) map[string]interface{} {
 	}
 
 	if tagsStr, ok := r.Fields["tags"]; ok && tagsStr != "" {
-		raw := strings.Split(tagsStr, ",")
 		var clean []string
-		for _, t := range raw {
+		for t := range strings.SplitSeq(tagsStr, ",") {
 			t = strings.TrimSpace(t)
 			if t != "" {
 				clean = append(clean, t)
@@ -118,9 +117,8 @@ func formatBody(content *strings.Builder, r model.Record) {
 	fmt.Fprintf(content, "# %s\n\n", r.Title)
 
 	if tagsStr, ok := r.Fields["tags"]; ok && tagsStr != "" {
-		tagsList := strings.Split(tagsStr, ",")
 		var formattedTags []string
-		for _, t := range tagsList {
+		for t := range strings.SplitSeq(tagsStr, ",") {
 			formattedTags = append(formattedTags, "`#"+strings.TrimSpace(t)+"`")
 		}
 		fmt.Fprintf(content, "**Tags:** %s\n\n", strings.Join(formattedTags, " "))
@@ -170,7 +168,7 @@ func (s *Storage) LoadRecord(path string) (model.Record, error) {
 		return model.Record{}, fmt.Errorf("invalid record format: missing frontmatter")
 	}
 
-	var front map[string]interface{}
+	var front map[string]any
 	err = yaml.Unmarshal([]byte(parts[1]), &front)
 	if err != nil {
 		return model.Record{}, err
@@ -216,7 +214,7 @@ func (s *Storage) LoadRecord(path string) (model.Record, error) {
 		Fields:        map[string]string{},
 	}
 
-	if tags, ok := front["tags"].([]interface{}); ok {
+	if tags, ok := front["tags"].([]any); ok {
 		strs := make([]string, len(tags))
 		for i, v := range tags {
 			strs[i] = fmt.Sprintf("%v", v)
@@ -329,7 +327,9 @@ func ParseFileID(filename string) int {
 		idPart = parts[1]
 	}
 	var id int
-	fmt.Sscanf(idPart, "%d", &id)
+	if _, err := fmt.Sscanf(idPart, "%d", &id); err != nil {
+		return 0
+	}
 	return id
 }
 
@@ -435,7 +435,7 @@ func splitSections(body string) (map[string]string, []string) {
 	inCodeBlock := false
 	codeBlockFence := ""
 
-	for _, line := range strings.Split(body, "\n") {
+	for line := range strings.SplitSeq(body, "\n") {
 		trimmed := strings.TrimSpace(line)
 
 		if fence := extractFence(trimmed); fence != "" {

@@ -438,7 +438,7 @@ func resolvePaths(global bool) (discover.SadrPaths, error) {
 	if !paths.IsGlobal {
 		username := loadUsername()
 		if username == "" {
-			return discover.SadrPaths{}, fmt.Errorf("no user configured. run 'sadr init --global' first.")
+			return discover.SadrPaths{}, fmt.Errorf("no user configured, run 'sadr init --global' first")
 		}
 		paths.Username = username
 		paths.Records = filepath.Join(paths.Root, username, "records")

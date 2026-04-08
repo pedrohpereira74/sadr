@@ -235,8 +235,7 @@ func parseRangeCutoff(rangeStr string) time.Time {
 	}
 	var n int
 	var unit string
-	fmt.Sscanf(rangeStr, "%d%s", &n, &unit)
-	if n <= 0 {
+	if _, err := fmt.Sscanf(rangeStr, "%d%s", &n, &unit); err != nil || n <= 0 {
 		return time.Time{}
 	}
 	now := time.Now()

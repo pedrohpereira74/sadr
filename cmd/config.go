@@ -25,7 +25,7 @@ func confirmOverwriteImpl() string {
 }
 
 func extractAPIKey(content string) string {
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "api_key:") && !strings.HasPrefix(trimmed, "api_key_env:") {
 			val := strings.TrimPrefix(trimmed, "api_key:")
