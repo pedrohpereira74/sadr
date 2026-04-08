@@ -7,10 +7,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var version = "dev"
+
 var rootCmd = &cobra.Command{
-	Use:   "sadr",
-	Short: ":( sadr — snippets + architecture decision records",
-	Long:  "Capture code with context. Because snippets without a \"why\" are sadr.\nA tool to document decisions alongside code snippets.",
+	Use:     "sadr",
+	Short:   ":( sadr — snippets + architecture decision records",
+	Long:    "Capture code with context. Because snippets without a \"why\" are sadr.\nA tool to document decisions alongside code snippets.",
+	Version: version,
 }
 
 func init() {

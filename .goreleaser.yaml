@@ -9,6 +9,8 @@ builds:
   - id: sadr
     env:
       - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X github.com/pedrohpereira74/sadr/cmd.version={{.Version}}
     goos:
       - linux
       - windows
