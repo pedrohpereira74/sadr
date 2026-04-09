@@ -581,6 +581,8 @@ func (m Model) View() string {
 
 			if current.scrollOffset > 0 {
 				fmt.Fprintf(&b, "  ↑ %d more\n", current.scrollOffset)
+			} else {
+				fmt.Fprintf(&b, "\n")
 			}
 
 			for i := current.scrollOffset; i < end; i++ {
@@ -599,6 +601,8 @@ func (m Model) View() string {
 			remaining := len(current.filtered) - end
 			if remaining > 0 {
 				fmt.Fprintf(&b, "  ↓ %d more\n", remaining)
+			} else {
+				fmt.Fprintf(&b, "\n")
 			}
 
 			selectedCount := 0
