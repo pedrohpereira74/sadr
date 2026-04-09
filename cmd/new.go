@@ -336,6 +336,7 @@ func extractFilesFromDiff(diffContent string) []string {
 	seen := map[string]bool{}
 	var files []string
 	for line := range strings.SplitSeq(diffContent, "\n") {
+		line = strings.TrimRight(line, "\r")
 		if strings.HasPrefix(line, "diff --git ") {
 			parts := strings.Fields(line)
 			if len(parts) >= 4 {
@@ -361,6 +362,7 @@ func listUntrackedFiles() []string {
 	}
 	var files []string
 	for line := range strings.SplitSeq(strings.TrimSpace(string(output)), "\n") {
+		line = strings.TrimRight(line, "\r")
 		if line != "" {
 			files = append(files, line)
 		}

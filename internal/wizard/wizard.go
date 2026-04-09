@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textarea"
@@ -289,7 +290,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						current.selectedMap[i] = true
 					}
 				}
-				current.filtered = current.suggestedFiles
+				sorted := make([]string, len(current.suggestedFiles))
+				copy(sorted, current.suggestedFiles)
+				sort.Strings(sorted)
+				current.filtered = sorted
 			} else {
 				current.filtered = files
 			}
@@ -718,10 +722,14 @@ func applyPreSelectedFiles(m *Model, files []string, projectRoot string) {
 		suggested[f] = true
 	}
 
+	sorted := make([]string, len(files))
+	copy(sorted, files)
+	sort.Strings(sorted)
+
 	for i, s := range m.steps {
 		if s.fieldType == "filepicker" {
-			m.steps[i].suggestedFiles = files
-			m.steps[i].filtered = files
+			m.steps[i].suggestedFiles = sorted
+			m.steps[i].filtered = sorted
 			m.steps[i].allFiles = allFiles
 			if m.steps[i].selectedMap == nil {
 				m.steps[i].selectedMap = map[int]bool{}
