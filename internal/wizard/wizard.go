@@ -234,7 +234,7 @@ func (m Model) visibleFileCount() int {
 	if m.height <= 0 {
 		return 10
 	}
-	available := m.height - 9
+	available := m.height - 10
 	if available < 3 {
 		return 3
 	}
@@ -721,13 +721,22 @@ func Run(opts Options) (map[string]string, error) {
 func applyPreSelectedFiles(m *Model, files []string, projectRoot string) {
 	allFiles, _ := filepicker.ListProjectFiles(projectRoot)
 
-	suggested := map[string]bool{}
-	for _, f := range files {
-		suggested[f] = true
+	allSet := map[string]bool{}
+	for _, f := range allFiles {
+		allSet[f] = true
 	}
 
-	sorted := make([]string, len(files))
-	copy(sorted, files)
+	suggested := map[string]bool{}
+	var validFiles []string
+	for _, f := range files {
+		if allSet[f] {
+			suggested[f] = true
+			validFiles = append(validFiles, f)
+		}
+	}
+
+	sorted := make([]string, len(validFiles))
+	copy(sorted, validFiles)
 	sort.Strings(sorted)
 
 	for i, s := range m.steps {
