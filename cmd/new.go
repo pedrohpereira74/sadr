@@ -153,7 +153,7 @@ func readSnippetFromSource(opts *newOptions) string {
 			ui.Error(os.Stderr, fmt.Sprintf("failed to read file: %v", err))
 			return ""
 		}
-		if info.Size() > 10<<20 {
+		if info.Size() > model.MaxSnippetFileSize {
 			ui.Error(os.Stderr, "file exceeds 10 MB limit.")
 			return ""
 		}
@@ -216,22 +216,14 @@ func readClipboardImpl() (string, error) {
 func loadAISuggestions(opts *newOptions, snippet string, fieldDefs []wizard.FieldDef) (map[string]string, error) {
 	ui.Info(os.Stderr, "analyzing snippet...")
 
-	var docLanguage, aiKey, modelName string
-	var aiDepth bool
-
-	home, err := os.UserHomeDir()
-	if err == nil {
-		globalConfigPath := filepath.Join(home, ".sadr", "global-config.yaml")
-		if cfg, err := config.LoadGlobalFromFile(globalConfigPath); err == nil {
-			docLanguage = cfg.Language
-			aiKey = cfg.AI.APIKey
-			if aiKey == "" && cfg.AI.APIKeyEnv != "" {
-				aiKey = os.Getenv(cfg.AI.APIKeyEnv)
-			}
-			modelName = cfg.AI.Model
-			aiDepth = cfg.AI.AIDepth
-		}
+	cfg := loadGlobalConfig()
+	docLanguage := cfg.Language
+	aiKey := cfg.AI.APIKey
+	if aiKey == "" && cfg.AI.APIKeyEnv != "" {
+		aiKey = os.Getenv(cfg.AI.APIKeyEnv)
 	}
+	modelName := cfg.AI.Model
+	aiDepth := cfg.AI.AIDepth
 
 	if opts.model != "" {
 		modelName = opts.model
@@ -269,6 +261,27 @@ func loadAISuggestions(opts *newOptions, snippet string, fieldDefs []wizard.Fiel
 	return suggestions, nil
 }
 
+// maybeCaptureSmartSnippet opens an editor to capture a snippet when --smart is
+// set but no snippet was provided via --file, --clipboard, or --diff. Returns
+// the (possibly updated) snippet and false if the operation should be aborted.
+func maybeCaptureSmartSnippet(opts *newOptions, snippet string) (string, bool) {
+	if !opts.smart || snippet != "" {
+		return snippet, true
+	}
+	ui.Info(os.Stderr, "opening editor to capture snippet for AI analysis...")
+	ui.Pause(1.5)
+	content, err := snippetCapturer()
+	if err != nil {
+		ui.Error(os.Stderr, fmt.Sprintf("failed to open editor: %v", err))
+		return "", false
+	}
+	if strings.TrimSpace(content) == "" {
+		ui.Info(os.Stderr, "--smart requires a snippet to analyze. operation aborted.")
+		return "", false
+	}
+	return content, true
+}
+
 func buildRecordFromWizard(result map[string]string, fieldDefs []wizard.FieldDef, recordType string, snippet string) (model.Record, error) {
 	r, err := model.NewRecordWithOptions(result["title"], recordType)
 	if err != nil {
@@ -276,23 +289,23 @@ func buildRecordFromWizard(result map[string]string, fieldDefs []wizard.FieldDef
 	}
 
 	for _, fd := range fieldDefs {
-		if fd.Name != "title" && fd.Name != "snippet" {
+		if fd.Name != model.FieldTitle && fd.Name != model.FieldSnippet {
 			r.FieldOrder = append(r.FieldOrder, strings.TrimSpace(fd.Name))
 		}
 	}
 
 	if snippet != "" {
 		r.Snippet = snippet
-	} else if result["snippet"] != "" {
-		r.Snippet = result["snippet"]
+	} else if result[model.FieldSnippet] != "" {
+		r.Snippet = result[model.FieldSnippet]
 	}
 
 	for key, value := range result {
 		key = strings.TrimSpace(key)
-		if key == "title" || key == "snippet" {
+		if key == model.FieldTitle || key == model.FieldSnippet {
 			continue
 		}
-		if key == "file_ref" {
+		if key == model.FieldFileRef {
 			r.FileRef = value
 			continue
 		}
@@ -327,7 +340,7 @@ func buildRecordFromWizard(result map[string]string, fieldDefs []wizard.FieldDef
 		r.Fields[key] = value
 	}
 
-	r.Fields["status"] = "active"
+	r.Fields[model.FieldStatus] = "active"
 
 	return r, nil
 }
@@ -415,23 +428,13 @@ func runNew(recordType string, opts *newOptions) func(cmd *cobra.Command, args [
 		if opts.diff && snippetFromSource == "" {
 			return
 		}
-		hasSnippet := snippetFromSource != ""
 
-		if opts.smart && !hasSnippet {
-			ui.Info(os.Stderr, "opening editor to capture snippet for AI analysis...")
-			ui.Pause(1.5)
-			content, editorErr := snippetCapturer()
-			if editorErr != nil {
-				ui.Error(os.Stderr, fmt.Sprintf("failed to open editor: %v", editorErr))
-				return
-			}
-			if strings.TrimSpace(content) == "" {
-				ui.Info(os.Stderr, "--smart requires a snippet to analyze. operation aborted.")
-				return
-			}
-			snippetFromSource = content
-			hasSnippet = true
+		var ok bool
+		snippetFromSource, ok = maybeCaptureSmartSnippet(opts, snippetFromSource)
+		if !ok {
+			return
 		}
+		hasSnippet := snippetFromSource != ""
 
 		if opts.model != "" {
 			opts.smart = true
@@ -533,18 +536,20 @@ func captureSnippetFromEditorImpl() (string, error) {
 	}
 	tmpName := tmpFile.Name()
 	_ = tmpFile.Close()
-	defer func() { _ = os.Remove(tmpName) }()
 
 	editor := findEditor()
 	if editor == "" {
+		_ = os.Remove(tmpName)
 		return "", fmt.Errorf("no editor found. set $EDITOR or $VISUAL")
 	}
 
 	if err := openEditorImpl(editor, tmpName); err != nil {
+		_ = os.Remove(tmpName)
 		return "", err
 	}
 
 	content, err := os.ReadFile(tmpName)
+	_ = os.Remove(tmpName)
 	if err != nil {
 		return "", err
 	}

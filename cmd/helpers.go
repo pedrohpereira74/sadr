@@ -94,16 +94,20 @@ func selectPersona() ask.Persona {
 	return ask.Persona{}
 }
 
-func loadAIConfig() (string, string) {
+func loadGlobalConfig() config.GlobalConfig {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", ""
+		return config.GlobalConfig{}
 	}
-	globalConfigPath := filepath.Join(home, ".sadr", "global-config.yaml")
-	cfg, err := config.LoadGlobalFromFile(globalConfigPath)
+	cfg, err := config.LoadGlobalFromFile(filepath.Join(home, ".sadr", "global-config.yaml"))
 	if err != nil {
-		return "", ""
+		return config.GlobalConfig{}
 	}
+	return cfg
+}
+
+func loadAIConfig() (string, string) {
+	cfg := loadGlobalConfig()
 	apiKey := cfg.AI.APIKey
 	if apiKey == "" && cfg.AI.APIKeyEnv != "" {
 		apiKey = os.Getenv(cfg.AI.APIKeyEnv)
@@ -112,15 +116,7 @@ func loadAIConfig() (string, string) {
 }
 
 func loadLanguageConfig() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "English"
-	}
-	globalConfigPath := filepath.Join(home, ".sadr", "global-config.yaml")
-	cfg, err := config.LoadGlobalFromFile(globalConfigPath)
-	if err != nil {
-		return "English"
-	}
+	cfg := loadGlobalConfig()
 	if cfg.Language == "" {
 		return "English"
 	}
@@ -139,15 +135,7 @@ func parseID(raw string) (int, error) {
 }
 
 func loadUsername() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	cfg, err := config.LoadGlobalFromFile(filepath.Join(home, ".sadr", "global-config.yaml"))
-	if err != nil {
-		return ""
-	}
-	return cfg.Username
+	return loadGlobalConfig().Username
 }
 
 func allUserRecordsDirs(sadrRoot string) []string {

@@ -172,6 +172,22 @@ fields:
 	}
 }
 
+func TestValidateDuplicateFieldNames(t *testing.T) {
+	yamlData := `
+fields:
+  - name: context
+    type: text
+    required: true
+  - name: context
+    type: text
+    required: false
+`
+	_, err := LoadFromString(yamlData)
+	if err == nil {
+		t.Fatal("expected error for duplicate field name, got nil")
+	}
+}
+
 func TestLoadGlobalFromFileReadsYAML(t *testing.T) {
 	dir := t.TempDir()
 	path := dir + "/config.yaml"

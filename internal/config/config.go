@@ -74,24 +74,23 @@ func LoadGlobalFromFile(path string) (GlobalConfig, error) {
 }
 
 func validate(cfg Config) error {
-	ValidTypes := []string{
-		"text",
-		"select",
-		"multitext",
-		"multiselect",
-		"list",
+	validTypes := map[string]bool{
+		"text":        true,
+		"select":      true,
+		"multitext":   true,
+		"multiselect": true,
+		"list":        true,
 	}
+	seen := make(map[string]bool, len(cfg.Fields))
 	for _, field := range cfg.Fields {
 		if field.Name == "" {
 			return errors.New("field name must not be empty")
 		}
-		found := false
-		for _, validType := range ValidTypes {
-			if field.Type == validType {
-				found = true
-			}
+		if seen[field.Name] {
+			return fmt.Errorf("duplicate field name: %q", field.Name)
 		}
-		if !found {
+		seen[field.Name] = true
+		if !validTypes[field.Type] {
 			return fmt.Errorf("invalid type '%s' for field '%s'", field.Type, field.Name)
 		}
 		if field.Required == nil {
@@ -102,5 +101,4 @@ func validate(cfg Config) error {
 		}
 	}
 	return nil
-
 }
