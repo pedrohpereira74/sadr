@@ -6,6 +6,17 @@ import (
 	"time"
 )
 
+func ParseTags(s string) []string {
+	var tags []string
+	for t := range strings.SplitSeq(s, ",") {
+		t = strings.TrimSpace(t)
+		if t != "" {
+			tags = append(tags, t)
+		}
+	}
+	return tags
+}
+
 const SchemaVersion = 1
 const NoFileRef = "N/A"
 

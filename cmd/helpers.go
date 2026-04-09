@@ -163,11 +163,44 @@ func listAllRecordEntries(sadrRoot string) ([]storage.RecordEntry, error) {
 		s := storage.NewStorage(dir)
 		entries, err := s.ListRecordEntries()
 		if err != nil {
+			ui.Warning(os.Stderr, fmt.Sprintf("skipping %s: %v", dir, err))
 			continue
 		}
 		all = append(all, entries...)
 	}
 	return all, nil
+}
+
+func pickConfigFile(configsDir string) (string, error) {
+	entries, err := os.ReadDir(configsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("configs directory not found: %q", configsDir)
+		}
+		return "", fmt.Errorf("failed to read configs directory %q: %w", configsDir, err)
+	}
+	var configs []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".yaml") {
+			configs = append(configs, e.Name())
+		}
+	}
+	if len(configs) == 0 {
+		return "", fmt.Errorf("no config files found in %q", configsDir)
+	}
+	if len(configs) == 1 {
+		return filepath.Join(configsDir, configs[0]), nil
+	}
+	options := make([]selectOption, 0, len(configs))
+	for _, f := range configs {
+		name := configDisplayName(f)
+		options = append(options, selectOption{Label: name, Value: f})
+	}
+	chosen := runSelect("which config?", options)
+	if chosen == "" {
+		return "", fmt.Errorf("cancelled")
+	}
+	return filepath.Join(configsDir, chosen), nil
 }
 
 func parseUserID(raw string) (username string, id int, err error) {

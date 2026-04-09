@@ -73,39 +73,7 @@ func resolveConfigPath(configsDir, configFlag string) (string, error) {
 		}
 		return path, nil
 	}
-
-	entries, err := os.ReadDir(configsDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return "", fmt.Errorf("configs directory not found: %q", configsDir)
-		}
-		return "", fmt.Errorf("failed to read configs directory %q: %w", configsDir, err)
-	}
-	var configs []string
-	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".yaml") {
-			configs = append(configs, e.Name())
-		}
-	}
-
-	if len(configs) == 0 {
-		return "", fmt.Errorf("no config files found in %q", configsDir)
-	}
-
-	if len(configs) == 1 {
-		return filepath.Join(configsDir, configs[0]), nil
-	}
-
-	options := make([]selectOption, 0, len(configs))
-	for _, f := range configs {
-		name := configDisplayName(f)
-		options = append(options, selectOption{Label: name, Value: f})
-	}
-	chosen := runSelect("which config?", options)
-	if chosen == "" {
-		return "", fmt.Errorf("cancelled")
-	}
-	return filepath.Join(configsDir, chosen), nil
+	return pickConfigFile(configsDir)
 }
 
 func loadFieldDefs(configPath string) ([]wizard.FieldDef, error) {
@@ -171,6 +139,9 @@ func readSnippetFromSource(opts *newOptions) string {
 		if err != nil {
 			ui.Error(os.Stderr, fmt.Sprintf("git diff failed: %v", err))
 			return ""
+		}
+		if len(output) > model.MaxSnippetFileSize {
+			output = output[:model.MaxSnippetFileSize]
 		}
 		content := strings.TrimSpace(string(output))
 		if content == "" {

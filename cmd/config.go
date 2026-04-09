@@ -54,7 +54,7 @@ func newConfigCmd() *cobra.Command {
 				}
 
 				globalDir := filepath.Join(home, ".sadr")
-				_ = os.MkdirAll(globalDir, 0755)
+				_ = os.MkdirAll(globalDir, 0700)
 				configPath := filepath.Join(globalDir, "global-config.yaml")
 
 				content, err := os.ReadFile(configPath)
@@ -153,31 +153,14 @@ func newConfigCmd() *cobra.Command {
 					return
 				}
 			} else {
-				entries, _ := os.ReadDir(paths.ConfigsDir)
-				var configs []string
-				for _, e := range entries {
-					if !e.IsDir() && strings.HasSuffix(e.Name(), ".yaml") {
-						configs = append(configs, e.Name())
+				chosen, err := pickConfigFile(paths.ConfigsDir)
+				if err != nil {
+					if err.Error() != "cancelled" {
+						ui.Error(os.Stderr, err.Error())
 					}
-				}
-				if len(configs) == 0 {
-					ui.Error(os.Stderr, "no configs found in .sadr/configs/")
 					return
 				}
-				if len(configs) == 1 {
-					targetConfig = filepath.Join(paths.ConfigsDir, configs[0])
-				} else {
-					options := make([]selectOption, 0, len(configs))
-					for _, f := range configs {
-						name := configDisplayName(f)
-						options = append(options, selectOption{Label: name, Value: f})
-					}
-					chosen := runSelect("which config?", options)
-					if chosen == "" {
-						return
-					}
-					targetConfig = filepath.Join(paths.ConfigsDir, chosen)
-				}
+				targetConfig = chosen
 			}
 
 			if err := editorRunner(editor, targetConfig); err != nil {

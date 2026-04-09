@@ -134,36 +134,27 @@ func newSearchCmd() *cobra.Command {
 				}
 			}
 
-			var allRecords []model.Record
+			var matched []storage.RecordEntry
 			for _, e := range searchEntries {
-				allRecords = append(allRecords, e.Record)
+				if search.Matches(e.Record, query, opts.deep) {
+					matched = append(matched, e)
+				}
 			}
 
-			results := search.Search(allRecords, query, opts.deep)
-
-			if len(results) == 0 {
+			if len(matched) == 0 {
 				ui.Info(os.Stderr, "0 results. your search is sadr than your snippets.")
 				return
 			}
 
-			for _, r := range results {
-				tags := r.Fields["tags"]
+			for _, e := range matched {
+				tags := e.Record.Fields["tags"]
 				if tags == "" {
 					tags = "-"
 				}
-				var author string
-				var fileID int
-				for _, e := range searchEntries {
-					if e.Record.Title == r.Title && e.Record.Type == r.Type {
-						author = e.Record.Author
-						fileID = e.FileID
-						break
-					}
-				}
-				if author != "" {
-					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s/%d\t%s\t%s\t%s\n", author, fileID, r.Type, r.Title, tags)
+				if e.Author != "" {
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s/%d\t%s\t%s\t%s\n", e.Author, e.FileID, e.Record.Type, e.Record.Title, tags)
 				} else {
-					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", r.Type, r.Title, tags)
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", e.Record.Type, e.Record.Title, tags)
 				}
 			}
 		},

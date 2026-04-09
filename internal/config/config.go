@@ -73,6 +73,14 @@ func LoadGlobalFromFile(path string) (GlobalConfig, error) {
 	return LoadGlobalFromString(string(data))
 }
 
+func SaveGlobalConfig(path string, cfg GlobalConfig) error {
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0600)
+}
+
 func validate(cfg Config) error {
 	validTypes := map[string]bool{
 		"text":        true,
@@ -81,10 +89,14 @@ func validate(cfg Config) error {
 		"multiselect": true,
 		"list":        true,
 	}
+	reserved := map[string]bool{"snippet": true, "file_ref": true}
 	seen := make(map[string]bool, len(cfg.Fields))
 	for _, field := range cfg.Fields {
 		if field.Name == "" {
 			return errors.New("field name must not be empty")
+		}
+		if reserved[field.Name] {
+			return fmt.Errorf("field name %q is reserved", field.Name)
 		}
 		if seen[field.Name] {
 			return fmt.Errorf("duplicate field name: %q", field.Name)

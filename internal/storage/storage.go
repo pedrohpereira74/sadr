@@ -102,14 +102,7 @@ func buildFrontmatter(r model.Record) map[string]any {
 	}
 
 	if tagsStr, ok := r.Fields[model.FieldTags]; ok && tagsStr != "" {
-		var clean []string
-		for t := range strings.SplitSeq(tagsStr, ",") {
-			t = strings.TrimSpace(t)
-			if t != "" {
-				clean = append(clean, t)
-			}
-		}
-		fm[model.FieldTags] = clean
+		fm[model.FieldTags] = model.ParseTags(tagsStr)
 	}
 
 	if statusStr, ok := r.Fields[model.FieldStatus]; ok && statusStr != "" {
@@ -124,8 +117,8 @@ func formatBody(content *strings.Builder, r model.Record) {
 
 	if tagsStr, ok := r.Fields[model.FieldTags]; ok && tagsStr != "" {
 		var formattedTags []string
-		for t := range strings.SplitSeq(tagsStr, ",") {
-			formattedTags = append(formattedTags, "`#"+strings.TrimSpace(t)+"`")
+		for _, t := range model.ParseTags(tagsStr) {
+			formattedTags = append(formattedTags, "`#"+t+"`")
 		}
 		fmt.Fprintf(content, "**Tags:** %s\n\n", strings.Join(formattedTags, " "))
 	}

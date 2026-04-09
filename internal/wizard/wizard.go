@@ -324,9 +324,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.textarea.SetWidth(msg.Width - 4)
-		if msg.Height > 8 {
-			m.textarea.SetHeight(msg.Height - 8)
-		}
+		m.textarea.SetHeight(max(2, msg.Height-8))
 		return m, nil
 
 	case editorFinishedMsg:
@@ -482,7 +480,12 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 			editor = os.Getenv("VISUAL")
 		}
 		if editor == "" {
-			editor = "vim"
+			for _, candidate := range []string{"vim", "nano", "vi"} {
+				if _, err := exec.LookPath(candidate); err == nil {
+					editor = candidate
+					break
+				}
+			}
 		}
 
 		c := exec.Command(editor, m.tempFile)

@@ -67,7 +67,7 @@ func initGlobal(opts *initOptions) {
 	}
 
 	for _, dir := range []string{configsDir} {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0700); err != nil {
 			ui.Error(os.Stderr, fmt.Sprintf("failed to create %s: %v", dir, err))
 			return
 		}
@@ -87,7 +87,11 @@ func initGlobal(opts *initOptions) {
 			ui.Error(os.Stderr, fmt.Sprintf("failed to create global config: %v", writeErr))
 			return
 		}
-		cfg, _ = config.LoadGlobalFromFile(globalConfigPath)
+		cfg, err = config.LoadGlobalFromFile(globalConfigPath)
+		if err != nil {
+			ui.Error(os.Stderr, fmt.Sprintf("failed to load global config after writing: %v", err))
+			return
+		}
 	}
 
 	cfg.Username = storage.Slugify(username)
@@ -143,23 +147,7 @@ func resolveUsername() string {
 }
 
 func writeGlobalConfig(path string, cfg config.GlobalConfig) error {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	lines := strings.Split(string(data), "\n")
-	found := false
-	for i, line := range lines {
-		if strings.HasPrefix(line, "username:") {
-			lines[i] = fmt.Sprintf("username: %q", cfg.Username)
-			found = true
-			break
-		}
-	}
-	if !found {
-		lines = append([]string{fmt.Sprintf("username: %q", cfg.Username)}, lines...)
-	}
-	return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0600)
+	return config.SaveGlobalConfig(path, cfg)
 }
 
 func initHeal(sadrDir string, opts *initOptions) {
@@ -216,7 +204,9 @@ func initFresh(cwd string, opts *initOptions) {
 		return
 	}
 
-	addToGitignore(cwd)
+	if err := addToGitignore(cwd); err != nil {
+		ui.Warning(os.Stderr, fmt.Sprintf("could not update .gitignore: %v", err))
+	}
 
 	ui.Success(os.Stderr, "done! created .sadr in this directory.")
 	ui.Info(os.Stderr, "try it: run 'sadr new' to capture your first record.")
@@ -266,10 +256,10 @@ func newInitCmd() *cobra.Command {
 	return cmd
 }
 
-func addToGitignore(dir string) {
+func addToGitignore(dir string) error {
 	gitDir := filepath.Join(dir, ".git")
 	if _, err := os.Stat(gitDir); os.IsNotExist(err) {
-		return
+		return nil
 	}
 
 	gitignorePath := filepath.Join(dir, ".gitignore")
@@ -288,21 +278,26 @@ func addToGitignore(dir string) {
 		}
 	}
 	if len(toAdd) == 0 {
-		return
+		return nil
 	}
 
 	f, err := os.OpenFile(gitignorePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		return
+		return err
 	}
 	defer func() { _ = f.Close() }()
 
 	if len(contentStr) > 0 && !strings.HasSuffix(contentStr, "\n") {
-		_, _ = f.WriteString("\n")
+		if _, err := f.WriteString("\n"); err != nil {
+			return err
+		}
 	}
 	for _, entry := range toAdd {
-		_, _ = f.WriteString(entry + "\n")
+		if _, err := f.WriteString(entry + "\n"); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func init() {

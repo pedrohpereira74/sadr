@@ -48,3 +48,12 @@ func TestDeleteRemovesRecord(t *testing.T) {
 		t.Errorf("expected 0 records after delete, got %d", len(entries))
 	}
 }
+
+func TestDeleteNotFound(t *testing.T) {
+	setupDeleteTest(t)
+
+	rootCmd.SetArgs([]string{"delete", "--id", "99", "--force"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

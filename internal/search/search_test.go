@@ -88,3 +88,59 @@ func TestSearchCaseInsensitive(t *testing.T) {
 		t.Errorf("expected 1 result, got %d", len(results))
 	}
 }
+
+func TestSearchNoResultsReturnsEmptySlice(t *testing.T) {
+	dir := t.TempDir()
+	s := storage.NewStorage(dir)
+
+	r, _ := model.NewRecordWithOptions("Use retry", "full")
+	_, _ = s.SaveRecord(r)
+
+	records := loadRecords(t, dir)
+	results := Search(records, "banana", false)
+	if results == nil {
+		t.Error("expected empty slice, got nil")
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 results, got %d", len(results))
+	}
+}
+
+func TestSearchDeepFindsInCustomFields(t *testing.T) {
+	dir := t.TempDir()
+	s := storage.NewStorage(dir)
+
+	r, _ := model.NewRecordWithOptions("Payment service", "full")
+	r.Fields["context"] = "The unreliable external vendor caused repeated timeouts"
+
+	_, _ = s.SaveRecord(r)
+
+	records := loadRecords(t, dir)
+	shallow := Search(records, "vendor", false)
+	if len(shallow) != 0 {
+		t.Errorf("expected 0 results without deep, got %d", len(shallow))
+	}
+
+	deep := Search(records, "vendor", true)
+	if len(deep) != 1 {
+		t.Errorf("expected 1 result with deep, got %d", len(deep))
+	}
+}
+
+func TestMatchesReturnsFalseOnNoMatch(t *testing.T) {
+	r, _ := model.NewRecordWithOptions("Use retry", "full")
+	if Matches(r, "banana", true) {
+		t.Error("expected Matches to return false for non-matching query")
+	}
+}
+
+func TestMatchesDeepFindsInSnippet(t *testing.T) {
+	r, _ := model.NewRecordWithOptions("HTTP client", "full")
+	r.Snippet = "retryablehttp.NewClient()"
+	if !Matches(r, "retryablehttp", true) {
+		t.Error("expected Matches to find content in snippet with deep=true")
+	}
+	if Matches(r, "retryablehttp", false) {
+		t.Error("expected Matches to miss snippet content with deep=false")
+	}
+}

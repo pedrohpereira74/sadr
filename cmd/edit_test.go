@@ -45,3 +45,12 @@ func TestEditFindsRecord(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestEditInvalidID(t *testing.T) {
+	setupEditTest(t)
+
+	rootCmd.SetArgs([]string{"edit", "--id", "99"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

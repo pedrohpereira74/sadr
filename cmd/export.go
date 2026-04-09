@@ -117,11 +117,7 @@ func exportRecord(r model.Record, id int, exportsDir string, adrOnly bool) {
 
 	written := map[string]bool{}
 	if tags, ok := r.Fields["tags"]; ok && tags != "" {
-		parts := strings.Split(tags, ",")
-		for i, t := range parts {
-			parts[i] = strings.TrimSpace(t)
-		}
-		data.Tags = strings.Join(parts, ", ")
+		data.Tags = strings.Join(model.ParseTags(tags), ", ")
 		written["tags"] = true
 	}
 
