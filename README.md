@@ -29,10 +29,13 @@ brew install pedrohpereira74/homebrew-tap/sadr
 ```
 
 ### 🪟 Scoop (Windows)
+
 ```bash
 scoop bucket add pedrohpereira74 https://github.com/pedrohpereira74/scoop-bucket
 scoop install sadr
 ```
+
+> If you run into permission errors, try running the commands in an elevated terminal (Run as Administrator).
 
 ### 🐧 APT / Debian
 Download the `.deb` file from the [Releases page](https://github.com/pedrohpereira74/sadr/releases) or install directly:
