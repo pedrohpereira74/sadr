@@ -27,22 +27,22 @@ func Info(w io.Writer, msg string) {
 	if !isTTY {
 		return
 	}
-	_, _ = fmt.Fprintf(w, ":(  %s\n", msg)
+	_, _ = fmt.Fprintf(w, "%s\n", msg)
 }
 
 func Error(w io.Writer, msg string) {
-	_, _ = fmt.Fprintf(w, ":(  %s\n", msg)
+	_, _ = fmt.Fprintf(w, "%s\n", msg)
 }
 
 func Success(w io.Writer, msg string) {
 	if !isTTY {
 		return
 	}
-	_, _ = fmt.Fprintf(w, ":(  %s\n", msg)
+	_, _ = fmt.Fprintf(w, "%s\n", msg)
 }
 
 func Warning(w io.Writer, msg string) {
-	_, _ = fmt.Fprintf(w, ":(  %s\n", msg)
+	_, _ = fmt.Fprintf(w, "%s\n", msg)
 }
 
 func Pause(seconds float64) {

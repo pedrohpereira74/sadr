@@ -200,7 +200,7 @@ func (s *Storage) LoadRecord(path string) (model.Record, error) {
 
 	validTypes := map[string]bool{"full": true, "snippet": true, "adr": true}
 	if !validTypes[recordType] {
-		_, _ = fmt.Fprintf(os.Stderr, ":(  warning: record has unknown type '%s'\n", recordType)
+		_, _ = fmt.Fprintf(os.Stderr, "warning: record has unknown type '%s'\n", recordType)
 	}
 
 	r := model.Record{
@@ -266,7 +266,7 @@ func (s *Storage) ListRecordEntries() ([]RecordEntry, error) {
 		path := filepath.Join(s.Dir, entry.Name())
 		r, err := s.LoadRecord(path)
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, ":(  Skipping invalid record %s: %v\n", entry.Name(), err)
+			_, _ = fmt.Fprintf(os.Stderr, "Skipping invalid record %s: %v\n", entry.Name(), err)
 			continue
 		}
 		records = append(records, RecordEntry{

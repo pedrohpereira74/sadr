@@ -262,7 +262,7 @@ func (m selectModel) View() string {
 		return ""
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "\n:(  %s\n\n", m.prompt)
+	fmt.Fprintf(&b, "\n%s\n\n", m.prompt)
 	for i, opt := range m.options {
 		cursor := "  "
 		if i == m.cursor {
@@ -315,7 +315,7 @@ func (m textareaModel) View() string {
 	if m.done {
 		return ""
 	}
-	return fmt.Sprintf("\n:(  %s\n\n%s\n\n  (Enter to confirm, Esc to cancel)\n", m.prompt, m.textarea.View())
+	return fmt.Sprintf("\n%s\n\n%s\n\n  (Enter to confirm, Esc to cancel)\n", m.prompt, m.textarea.View())
 }
 
 func runTextarea(prompt string, placeholder string) string {

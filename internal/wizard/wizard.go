@@ -553,7 +553,7 @@ func (m Model) View() string {
 		return ""
 	}
 	if m.Completed() {
-		return ":(  Done!\n"
+		return "Done!\n"
 	}
 
 	current := m.steps[m.currentStep]
@@ -569,7 +569,7 @@ func (m Model) View() string {
 		requiredHint = " (required)"
 	}
 
-	fmt.Fprintf(&b, "\n:(  %s%s\n\n", current.prompt, requiredHint)
+	fmt.Fprintf(&b, "\n%s%s\n\n", current.prompt, requiredHint)
 
 	if current.fieldType == "text" {
 		fmt.Fprintf(&b, "  \n%s\n\n", m.textarea.View())

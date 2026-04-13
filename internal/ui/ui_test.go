@@ -11,7 +11,7 @@ func TestInfoWritesToWriter(t *testing.T) {
 	Info(&buf, "sadr-001 saved — Congrats!")
 
 	output := buf.String()
-	if output != ":(  sadr-001 saved — Congrats!\n" {
+	if output != "sadr-001 saved — Congrats!\n" {
 		t.Errorf("expected brand voice output, got '%s'", output)
 	}
 }
@@ -21,7 +21,7 @@ func TestErrorWritesToWriter(t *testing.T) {
 	Error(&buf, "Something went wrong")
 
 	output := buf.String()
-	if output != ":(  Something went wrong\n" {
+	if output != "Something went wrong\n" {
 		t.Errorf("expected error output, got '%s'", output)
 	}
 }
