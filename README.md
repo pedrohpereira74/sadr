@@ -1,6 +1,4 @@
-# :( sadr — snippets + architecture decision records
-
-**Capture code with context. Because snippets without a "why" are actually sad.**
+# sadr — snippets + architecture decision records
 
 sadr is a CLI tool that blends a snippet manager with Architectural Decision Records (ADR). It helps you capture code snippets directly from your clipboard, a file, or git diffs, and guides you to detail the context, decisions, and trade-offs behind that code — or any custom fields your team requires.
 
