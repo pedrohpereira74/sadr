@@ -75,9 +75,8 @@ go install github.com/pedrohpereira74/sadr@latest
    # From git diff, with AI auto-fill
    sadr new --diff --smart
    ```
-5. **Search and List**:
+5. **Search**:
    ```bash
-   sadr list --tags "architecture,api"
    sadr search "auth logic" --deep
    ```
 6. **Export to HTML**:
