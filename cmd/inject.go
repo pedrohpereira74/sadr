@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/pedrohpereira74/sadr/internal/ai"
+	jiraclient "github.com/pedrohpereira74/sadr/internal/jira"
 	"github.com/pedrohpereira74/sadr/internal/wizard"
 )
 
@@ -17,6 +18,8 @@ var (
 	clipboardReader                             = readClipboardImpl
 	confirmOverwrite                            = confirmOverwriteImpl
 
-	generateTextFn func(ctx context.Context, prompt, apiKey, model string, timeout time.Duration) (string, error) = ai.GenerateText
-	confirmPromptFn func(message string) bool = confirmPromptImpl
+	generateTextFn  func(ctx context.Context, prompt, apiKey, model string, timeout time.Duration) (string, error) = ai.GenerateText
+	confirmPromptFn func(message string) bool                                                                      = confirmPromptImpl
+
+	jiraFetcherFn func(ctx context.Context, client *jiraclient.Client, key string) (jiraclient.Issue, bool) = defaultJiraFetcher
 )

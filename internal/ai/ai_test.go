@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -12,10 +13,31 @@ func TestBuildPrompt(t *testing.T) {
 	fields := []string{"title", "tags", "context", "decision"}
 	language := "english"
 
-	prompt := BuildPrompt(snippet, fields, language, false)
+	prompt := BuildPrompt(snippet, fields, language, false, "")
 
 	if prompt == "" {
 		t.Fatal("expected non-empty prompt")
+	}
+}
+
+func TestBuildPromptWithJiraContext(t *testing.T) {
+	snippet := "some code"
+	jiraCtx := "Summary: Fix login bug\n\nUsers cannot log in when MFA is enabled."
+
+	prompt := BuildPrompt(snippet, []string{"title"}, "english", false, jiraCtx)
+
+	if !strings.Contains(prompt, "JIRA ISSUE CONTEXT") {
+		t.Error("expected JIRA ISSUE CONTEXT section in prompt")
+	}
+	if !strings.Contains(prompt, "Fix login bug") {
+		t.Error("expected jira summary in prompt")
+	}
+}
+
+func TestBuildPromptWithoutJiraContextHasNoJiraSection(t *testing.T) {
+	prompt := BuildPrompt("code", []string{"title"}, "english", false, "")
+	if strings.Contains(prompt, "JIRA ISSUE CONTEXT") {
+		t.Error("expected no JIRA section when jiraContext is empty")
 	}
 }
 
@@ -56,7 +78,7 @@ func TestSuggestValidResponse(t *testing.T) {
 	})
 	defer func() { httpClient = old }()
 
-	result, err := Suggest(context.Background(), "some code", []string{"title"}, "english", "fake-key", "", false)
+	result, err := Suggest(context.Background(),"some code", []string{"title"}, "english", "fake-key", "", false, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -73,7 +95,7 @@ func TestSuggestAPIError(t *testing.T) {
 	})
 	defer func() { httpClient = old }()
 
-	_, err := Suggest(context.Background(), "code", []string{"title"}, "english", "bad-key", "", false)
+	_, err := Suggest(context.Background(),"code", []string{"title"}, "english", "bad-key", "", false, "")
 	if err == nil {
 		t.Fatal("expected error for non-200 response")
 	}
@@ -87,7 +109,7 @@ func TestSuggestEmptyResponse(t *testing.T) {
 	})
 	defer func() { httpClient = old }()
 
-	_, err := Suggest(context.Background(), "code", []string{"title"}, "english", "fake-key", "", false)
+	_, err := Suggest(context.Background(),"code", []string{"title"}, "english", "fake-key", "", false, "")
 	if err == nil {
 		t.Fatal("expected error for empty candidates")
 	}
@@ -101,7 +123,7 @@ func TestSuggestInvalidJSON(t *testing.T) {
 	})
 	defer func() { httpClient = old }()
 
-	_, err := Suggest(context.Background(), "code", []string{"title"}, "english", "fake-key", "", false)
+	_, err := Suggest(context.Background(),"code", []string{"title"}, "english", "fake-key", "", false, "")
 	if err == nil {
 		t.Fatal("expected error for invalid JSON response body")
 	}
@@ -111,7 +133,7 @@ func TestSuggestMissingAPIKey(t *testing.T) {
 	t.Setenv("AI_API_KEY", "")
 	t.Setenv("GEMINI_API_KEY", "")
 
-	_, err := Suggest(context.Background(), "code", []string{"title"}, "english", "", "", false)
+	_, err := Suggest(context.Background(),"code", []string{"title"}, "english", "", "", false, "")
 	if err == nil {
 		t.Fatal("expected error when no API key is provided")
 	}
@@ -168,7 +190,7 @@ func TestSuggestSetsAuthHeader(t *testing.T) {
 	})
 	defer func() { httpClient = old }()
 
-	_, _ = Suggest(context.Background(), "code", []string{"title"}, "english", "my-secret-key", "", false)
+	_, _ = Suggest(context.Background(),"code", []string{"title"}, "english", "my-secret-key", "", false, "")
 	if gotKey != "my-secret-key" {
 		t.Errorf("expected API key header 'my-secret-key', got '%s'", gotKey)
 	}

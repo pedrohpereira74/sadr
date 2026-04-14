@@ -17,6 +17,19 @@ func loadRecords(t *testing.T, dir string) []model.Record {
 	return records
 }
 
+func filterRecords(records []model.Record, query string, deep bool) []model.Record {
+	var results []model.Record
+	for _, r := range records {
+		if Matches(r, query, deep) {
+			results = append(results, r)
+		}
+	}
+	if results == nil {
+		return []model.Record{}
+	}
+	return results
+}
+
 func TestSearchByTitle(t *testing.T) {
 	dir := t.TempDir()
 	s := storage.NewStorage(dir)
@@ -28,7 +41,7 @@ func TestSearchByTitle(t *testing.T) {
 	_, _ = s.SaveRecord(r2)
 
 	records := loadRecords(t, dir)
-	results := Search(records, "retry", false)
+	results := filterRecords(records, "retry", false)
 	if len(results) != 1 {
 		t.Errorf("expected 1 result, got %d", len(results))
 	}
@@ -44,12 +57,12 @@ func TestSearchDeepFindsInSnippet(t *testing.T) {
 	_, _ = s.SaveRecord(r)
 
 	records := loadRecords(t, dir)
-	shallow := Search(records, "retryablehttp", false)
+	shallow := filterRecords(records, "retryablehttp", false)
 	if len(shallow) != 0 {
 		t.Errorf("expected 0 results without deep, got %d", len(shallow))
 	}
 
-	deep := Search(records, "retryablehttp", true)
+	deep := filterRecords(records, "retryablehttp", true)
 	if len(deep) != 1 {
 		t.Errorf("expected 1 result with deep, got %d", len(deep))
 	}
@@ -69,7 +82,7 @@ func TestSearchByTags(t *testing.T) {
 	_, _ = s.SaveRecord(r2)
 
 	records := loadRecords(t, dir)
-	results := Search(records, "security", false)
+	results := filterRecords(records, "security", false)
 	if len(results) != 1 {
 		t.Errorf("expected 1 result, got %d", len(results))
 	}
@@ -83,7 +96,7 @@ func TestSearchCaseInsensitive(t *testing.T) {
 	_, _ = s.SaveRecord(r)
 
 	records := loadRecords(t, dir)
-	results := Search(records, "retry", false)
+	results := filterRecords(records, "retry", false)
 	if len(results) != 1 {
 		t.Errorf("expected 1 result, got %d", len(results))
 	}
@@ -97,7 +110,7 @@ func TestSearchNoResultsReturnsEmptySlice(t *testing.T) {
 	_, _ = s.SaveRecord(r)
 
 	records := loadRecords(t, dir)
-	results := Search(records, "banana", false)
+	results := filterRecords(records, "banana", false)
 	if results == nil {
 		t.Error("expected empty slice, got nil")
 	}
@@ -116,12 +129,12 @@ func TestSearchDeepFindsInCustomFields(t *testing.T) {
 	_, _ = s.SaveRecord(r)
 
 	records := loadRecords(t, dir)
-	shallow := Search(records, "vendor", false)
+	shallow := filterRecords(records, "vendor", false)
 	if len(shallow) != 0 {
 		t.Errorf("expected 0 results without deep, got %d", len(shallow))
 	}
 
-	deep := Search(records, "vendor", true)
+	deep := filterRecords(records, "vendor", true)
 	if len(deep) != 1 {
 		t.Errorf("expected 1 result with deep, got %d", len(deep))
 	}

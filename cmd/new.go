@@ -9,9 +9,12 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/pedrohpereira74/sadr/internal/ai"
+	"github.com/pedrohpereira74/sadr/internal/compress"
 	"github.com/pedrohpereira74/sadr/internal/config"
+	jiraclient "github.com/pedrohpereira74/sadr/internal/jira"
 	"github.com/pedrohpereira74/sadr/internal/model"
 	"github.com/pedrohpereira74/sadr/internal/storage"
 	"github.com/pedrohpereira74/sadr/internal/ui"
@@ -184,7 +187,88 @@ func readClipboardImpl() (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
-func loadAISuggestions(opts *newOptions, snippet string, fieldDefs []wizard.FieldDef) (map[string]string, error) {
+func defaultJiraFetcher(ctx context.Context, client *jiraclient.Client, key string) (jiraclient.Issue, bool) {
+	issues, err := client.FetchAll(ctx, []string{key})
+	if err != nil {
+		return jiraclient.Issue{}, false
+	}
+	issue, ok := issues[key]
+	return issue, ok
+}
+
+func collectJiraContext(fieldDefs []wizard.FieldDef, projectURL string) (cardKey, jiraContext string) {
+	var jiraField *wizard.FieldDef
+	for i, fd := range fieldDefs {
+		if fd.Type == "jira" {
+			jiraField = &fieldDefs[i]
+			break
+		}
+	}
+	if jiraField == nil {
+		return "", ""
+	}
+
+	client := loadJiraClient(projectURL)
+	if client == nil {
+		ui.Info(os.Stderr, "jira not configured — skipping card context. set up with: sadr config --setup-jira")
+		return "", ""
+	}
+
+	key := runTextarea(fmt.Sprintf("jira card key for '%s':", jiraField.Name), "e.g. PROJ-123")
+	key = strings.TrimSpace(key)
+
+	if key == "" {
+		if jiraField.Required {
+			ui.Info(os.Stderr, "jira card key is required but was skipped — continuing without it.")
+		}
+		return "", ""
+	}
+
+	ui.Info(os.Stderr, fmt.Sprintf("fetching %s...", key))
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	issue, ok := jiraFetcherFn(ctx, client, key)
+	if !ok {
+		ui.Info(os.Stderr, fmt.Sprintf("card %s not found — continuing without jira context.", key))
+		return key, ""
+	}
+
+	var parts []string
+	if issue.Summary != "" {
+		parts = append(parts, "Summary: "+issue.Summary)
+	}
+	if issue.Description != "" {
+		parts = append(parts, issue.Description)
+	}
+
+	return key, strings.Join(parts, "\n\n")
+}
+
+func loadJiraClient(projectURL string) *jiraclient.Client {
+	if projectURL == "" {
+		return nil
+	}
+	cfg := loadGlobalConfig()
+	j := cfg.Jira
+	if j.Username == "" && j.Token == "" && j.TokenEnv == "" && j.ConsumerKey == "" {
+		return nil
+	}
+	return jiraclient.NewClientFromConfig(jiraclient.ClientConfig{
+		BaseURL:           projectURL,
+		Username:          j.Username,
+		Password:          j.Password,
+		PasswordEnv:       j.PasswordEnv,
+		Token:             j.Token,
+		TokenEnv:          j.TokenEnv,
+		ConsumerKey:       j.ConsumerKey,
+		PrivateKeyPath:    j.PrivateKeyPath,
+		AccessToken:       j.AccessToken,
+		AccessTokenSecret: j.AccessTokenSecret,
+	})
+}
+
+func loadAISuggestions(opts *newOptions, snippet string, fieldDefs []wizard.FieldDef, jiraContext string) (map[string]string, error) {
 	ui.Info(os.Stderr, "analyzing snippet...")
 
 	cfg := loadGlobalConfig()
@@ -202,13 +286,14 @@ func loadAISuggestions(opts *newOptions, snippet string, fieldDefs []wizard.Fiel
 
 	var fields []string
 	for _, fd := range fieldDefs {
-		if fd.Type != "select" && fd.Type != "multiselect" {
-			hint := fd.Name
-			if fd.Type == "text" || fd.Type == "list" {
-				hint = fmt.Sprintf("%s (%s)", fd.Name, fd.Type)
-			}
-			fields = append(fields, hint)
+		if fd.Type == "select" || fd.Type == "multiselect" || fd.Type == "jira" {
+			continue
 		}
+		hint := fd.Name
+		if fd.Type == "text" || fd.Type == "list" {
+			hint = fmt.Sprintf("%s (%s)", fd.Name, fd.Type)
+		}
+		fields = append(fields, hint)
 	}
 	if len(fields) == 0 {
 		fields = []string{"title", "tags"}
@@ -217,7 +302,7 @@ func loadAISuggestions(opts *newOptions, snippet string, fieldDefs []wizard.Fiel
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	suggestions, err := ai.Suggest(ctx, snippet, fields, docLanguage, aiKey, modelName, aiDepth)
+	suggestions, err := ai.Suggest(ctx, compress.ZipSnippet(snippet), fields, docLanguage, aiKey, modelName, aiDepth, jiraContext)
 	if err != nil {
 		if ctx.Err() != nil {
 			fmt.Fprintln(os.Stderr)
@@ -232,9 +317,6 @@ func loadAISuggestions(opts *newOptions, snippet string, fieldDefs []wizard.Fiel
 	return suggestions, nil
 }
 
-// maybeCaptureSmartSnippet opens an editor to capture a snippet when --smart is
-// set but no snippet was provided via --file, --clipboard, or --diff. Returns
-// the (possibly updated) snippet and false if the operation should be aborted.
 func maybeCaptureSmartSnippet(opts *newOptions, snippet string) (string, bool) {
 	if !opts.smart || snippet != "" {
 		return snippet, true
@@ -438,10 +520,31 @@ func runNew(recordType string, opts *newOptions) func(cmd *cobra.Command, args [
 
 			var suggestions map[string]string
 			if opts.smart && hasSnippet {
+				projectJiraURL := loadProjectJiraURL(paths.ConfigsDir)
+				hasJiraField := false
+				for _, fd := range fieldDefs {
+					if fd.Type == "jira" {
+						hasJiraField = true
+						break
+					}
+				}
+				warnIfJiraNotConfiguredForProject(projectJiraURL, hasJiraField)
+				cardKey, jiraCtx := collectJiraContext(fieldDefs, projectJiraURL)
 				var aiErr error
-				suggestions, aiErr = loadAISuggestions(opts, snippetFromSource, fieldDefs)
+				suggestions, aiErr = loadAISuggestions(opts, snippetFromSource, fieldDefs, jiraCtx)
 				if aiErr != nil {
 					return
+				}
+				if suggestions == nil {
+					suggestions = map[string]string{}
+				}
+				if cardKey != "" {
+					for _, fd := range fieldDefs {
+						if fd.Type == "jira" {
+							suggestions[fd.Name] = cardKey
+							break
+						}
+					}
 				}
 			}
 

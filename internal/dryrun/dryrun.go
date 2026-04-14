@@ -7,7 +7,7 @@ import (
 	"github.com/pedrohpereira74/sadr/internal/enricher"
 )
 
-func EstimateTokens(text string) int {
+func estimateTokens(text string) int {
 	return len(text) / 4
 }
 

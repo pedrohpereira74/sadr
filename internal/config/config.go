@@ -9,8 +9,9 @@ import (
 )
 
 type Config struct {
-	Fields []Field   `yaml:"fields"`
-	Ask    AskConfig `yaml:"ask"`
+	Fields []Field           `yaml:"fields"`
+	Ask    AskConfig         `yaml:"ask"`
+	Jira   ProjectJiraConfig `yaml:"jira"`
 }
 
 type AskConfig struct {
@@ -19,10 +20,28 @@ type AskConfig struct {
 }
 
 type GlobalConfig struct {
-	Username string   `yaml:"username"`
-	Editor   string   `yaml:"editor"`
-	Language string   `yaml:"language"`
-	AI       AIConfig `yaml:"ai"`
+	Username string     `yaml:"username"`
+	Editor   string     `yaml:"editor"`
+	Language string     `yaml:"language"`
+	AI       AIConfig   `yaml:"ai"`
+	Jira     JiraConfig `yaml:"jira"`
+}
+
+type JiraConfig struct {
+	Username               string `yaml:"username"`
+	Password               string `yaml:"password"`
+	PasswordEnv            string `yaml:"password_env"`
+	Token                  string `yaml:"token"`
+	TokenEnv               string `yaml:"token_env"`
+	ConsumerKey            string `yaml:"consumer_key"`
+	PrivateKeyPath         string `yaml:"private_key_path"`
+	AccessToken            string `yaml:"access_token"`
+	AccessTokenSecret      string `yaml:"access_token_secret"`
+	DisableProjectWarning  bool   `yaml:"disable_project_warning"`
+}
+
+type ProjectJiraConfig struct {
+	URL string `yaml:"url"`
 }
 type AIConfig struct {
 	Provider  string `yaml:"provider"`
@@ -88,6 +107,7 @@ func validate(cfg Config) error {
 		"multitext":   true,
 		"multiselect": true,
 		"list":        true,
+		"jira":        true,
 	}
 	reserved := map[string]bool{"snippet": true, "file_ref": true}
 	seen := make(map[string]bool, len(cfg.Fields))

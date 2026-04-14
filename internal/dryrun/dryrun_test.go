@@ -7,14 +7,14 @@ import (
 
 func TestEstimateTokens(t *testing.T) {
 	text := strings.Repeat("a", 400)
-	tokens := EstimateTokens(text)
+	tokens := estimateTokens(text)
 	if tokens != 100 {
 		t.Errorf("expected 100 tokens, got %d", tokens)
 	}
 }
 
 func TestEstimateTokensEmpty(t *testing.T) {
-	if EstimateTokens("") != 0 {
+	if estimateTokens("") != 0 {
 		t.Error("expected 0 tokens for empty string")
 	}
 }

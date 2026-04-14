@@ -6,12 +6,12 @@ import (
 )
 
 func TestInfoWritesToWriter(t *testing.T) {
-	SetTTY(true)
+	setTTY(true)
 	var buf bytes.Buffer
 	Info(&buf, "sadr-001 saved — Congrats!")
 
 	output := buf.String()
-	if output != "sadr-001 saved — Congrats!\n" {
+	if output != symInfo+"sadr-001 saved — Congrats!\n" {
 		t.Errorf("expected brand voice output, got '%s'", output)
 	}
 }
@@ -21,15 +21,15 @@ func TestErrorWritesToWriter(t *testing.T) {
 	Error(&buf, "Something went wrong")
 
 	output := buf.String()
-	if output != "Something went wrong\n" {
+	if output != symError+"Something went wrong\n" {
 		t.Errorf("expected error output, got '%s'", output)
 	}
 }
 
 func TestInfoSuppressedWhenNotTTY(t *testing.T) {
 	var buf bytes.Buffer
-	SetTTY(false)
-	defer SetTTY(true)
+	setTTY(false)
+	defer setTTY(true)
 
 	Info(&buf, "should not appear")
 
@@ -40,8 +40,8 @@ func TestInfoSuppressedWhenNotTTY(t *testing.T) {
 
 func TestErrorAlwaysShows(t *testing.T) {
 	var buf bytes.Buffer
-	SetTTY(false)
-	defer SetTTY(true)
+	setTTY(false)
+	defer setTTY(true)
 
 	Error(&buf, "always visible")
 

@@ -29,19 +29,3 @@ func Matches(r model.Record, query string, deep bool) bool {
 	}
 	return false
 }
-
-func Search(records []model.Record, query string, deep bool) []model.Record {
-	if query == "" {
-		return records
-	}
-	var results []model.Record
-	for _, r := range records {
-		if Matches(r, query, deep) {
-			results = append(results, r)
-		}
-	}
-	if results == nil {
-		return []model.Record{}
-	}
-	return results
-}

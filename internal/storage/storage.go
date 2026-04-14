@@ -404,19 +404,6 @@ func NextID(dir string) int {
 	return maxID + 1
 }
 
-func FindFileByID(dir string, id int) (string, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return "", err
-	}
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".md") && ParseFileID(entry.Name()) == id {
-			return filepath.Join(dir, entry.Name()), nil
-		}
-	}
-	return "", fmt.Errorf("#%d not found", id)
-}
-
 func determineBackticks(snippet string) string {
 	count := 3
 	for strings.Contains(snippet, strings.Repeat("`", count)) {

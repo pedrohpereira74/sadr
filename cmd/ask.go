@@ -158,6 +158,12 @@ func runAsk(opts *askOptions) {
 	}
 
 	enrichers := []enricher.Enricher{sourcecode.Enricher{}}
+	projectJiraURL := loadProjectJiraURL(paths.ConfigsDir)
+	if je := loadJiraEnricher(projectJiraURL); je != nil {
+		enrichers = append(enrichers, je)
+	} else {
+		warnIfJiraNotConfiguredForProject(projectJiraURL, false)
+	}
 
 	var contexts []enricher.RecordContext
 	for _, e := range filtered {

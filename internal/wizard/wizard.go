@@ -109,7 +109,7 @@ func fieldDefToStep(f FieldDef) step {
 	}
 
 	switch f.Type {
-	case "text", "multitext", "list":
+	case "text", "multitext", "list", "jira":
 		s.fieldType = "text"
 	case "select":
 		s.fieldType = "select"
@@ -268,7 +268,6 @@ func (m Model) Init() tea.Cmd {
 	return nil
 }
 
-// loadFilepickerFiles lazily loads project files into a filepicker step.
 func loadFilepickerFiles(current *step, projectRoot string) {
 	files, err := filepicker.ListProjectFiles(projectRoot)
 	if err != nil {
@@ -294,7 +293,6 @@ func loadFilepickerFiles(current *step, projectRoot string) {
 	}
 }
 
-// advanceStep increments the current step and prepares the next one.
 func (m Model) advanceStep() (tea.Model, tea.Cmd) {
 	m.currentStep++
 	if m.Completed() {
@@ -412,12 +410,15 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeySpace:
 		if current.fieldType == "multiselect" {
 			current.selectedMap[current.cursorPos] = !current.selectedMap[current.cursorPos]
-		}
-		if current.fieldType == "filepicker" && len(current.filtered) > 0 {
+		} else if current.fieldType == "filepicker" && len(current.filtered) > 0 {
 			idx := current.filteredToAllIndex(current.cursorPos)
 			if idx >= 0 {
 				current.selectedMap[idx] = !current.selectedMap[idx]
 			}
+		} else if current.fieldType == "text" || current.fieldType == "multitext" || current.fieldType == "list" {
+			var cmd tea.Cmd
+			m.textarea, cmd = m.textarea.Update(msg)
+			return m, cmd
 		}
 
 	default:
