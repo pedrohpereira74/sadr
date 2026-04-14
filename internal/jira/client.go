@@ -22,6 +22,19 @@ import (
 	"time"
 )
 
+type ClientConfig struct {
+	BaseURL           string
+	Username          string
+	Password          string
+	PasswordEnv       string
+	Token             string
+	TokenEnv          string
+	ConsumerKey       string
+	PrivateKeyPath    string
+	AccessToken       string
+	AccessTokenSecret string
+}
+
 type Client struct {
 	BaseURL           string
 	HTTP              *http.Client
@@ -281,19 +294,6 @@ func (c *Client) OAuthRequest(ctx context.Context, method, endpoint string, extr
 		return "", fmt.Errorf("oauth error (%d): %s", resp.StatusCode, string(body))
 	}
 	return string(body), nil
-}
-
-type ClientConfig struct {
-	BaseURL           string
-	Username          string
-	Password          string
-	PasswordEnv       string
-	Token             string
-	TokenEnv          string
-	ConsumerKey       string
-	PrivateKeyPath    string
-	AccessToken       string
-	AccessTokenSecret string
 }
 
 func NewClientFromConfig(cfg ClientConfig) *Client {
