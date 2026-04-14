@@ -13,11 +13,12 @@ import (
 )
 
 type configOptions struct {
-	global              bool
-	setAPIKey           string
-	setupJira           bool
-	setupJiraAdmin      bool
-	disableJiraWarning  bool
+	global             bool
+	setAPIKey          string
+	setupJira          bool
+	setupJiraAdmin     bool
+	setupAdmin         bool
+	disableJiraWarning bool
 }
 
 func confirmOverwriteImpl() string {
@@ -49,6 +50,10 @@ func newConfigCmd() *cobra.Command {
 		Long:  "Open a project config from .sadr/configs/. Use --global to edit your personal global configuration.",
 		Args:  cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
+			if opts.setupAdmin {
+				runSetupAdmin()
+				return
+			}
 			if opts.setupJiraAdmin {
 				runSetupJiraAdmin()
 				return
@@ -189,8 +194,9 @@ func newConfigCmd() *cobra.Command {
 	cmd.Flags().StringVar(&opts.setAPIKey, "set-api-key", "", "Set the Gemini API key in the global config directly")
 	cmd.Flags().BoolVar(&opts.setupJira, "setup-jira", false, "Authenticate with Jira (basic auth, bearer token, or oauth 1.0a)")
 	cmd.Flags().BoolVar(&opts.setupJiraAdmin, "setup-jira-admin", false, "Generate RSA key pair for Jira OAuth 1.0a application link (run once per organization)")
+	cmd.Flags().BoolVar(&opts.setupAdmin, "setup-admin", false, "Generate admin token for privileged commands")
 	cmd.Flags().BoolVar(&opts.disableJiraWarning, "disable-jira-warning", false, "Suppress the warning shown when jira credentials exist but the project is not configured for jira")
-	cmd.MarkFlagsMutuallyExclusive("global", "set-api-key", "setup-jira", "setup-jira-admin", "disable-jira-warning")
+	cmd.MarkFlagsMutuallyExclusive("global", "set-api-key", "setup-jira", "setup-jira-admin", "setup-admin", "disable-jira-warning")
 	return cmd
 }
 

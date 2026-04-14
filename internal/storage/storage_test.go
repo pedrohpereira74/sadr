@@ -282,6 +282,41 @@ func TestSaveRecordConcurrent(t *testing.T) {
 	}
 }
 
+func TestFormatBodyStatusRendered(t *testing.T) {
+	s := newTestStorage(t)
+	r, _ := model.NewRecordWithOptions("Status test", "full")
+	r.Fields["status"] = "accepted"
+
+	path, err := s.SaveRecord(r)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("unexpected error reading file: %v", err)
+	}
+
+	if !strings.Contains(string(data), "**Status:** `#accepted`") {
+		t.Errorf("expected status formatted as `#accepted`, got:\n%s", string(data))
+	}
+}
+
+func TestLoadRecordPreservesStatus(t *testing.T) {
+	s := newTestStorage(t)
+	r, _ := model.NewRecordWithOptions("Status roundtrip", "full")
+	r.Fields["status"] = "accepted"
+
+	path, _ := s.SaveRecord(r)
+	loaded, err := s.LoadRecord(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if loaded.Fields["status"] != "accepted" {
+		t.Errorf("expected status 'accepted', got '%s'", loaded.Fields["status"])
+	}
+}
+
 func TestCapitalizeKey(t *testing.T) {
 	tests := []struct {
 		input string

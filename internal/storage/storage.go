@@ -48,9 +48,9 @@ func (s *Storage) SaveRecord(r model.Record) (string, error) {
 	}
 
 	var content strings.Builder
-	fmt.Fprintf(&content, "---\n")
-	content.Write(yamlBytes)
-	fmt.Fprintf(&content, "---\n\n")
+	_, _ = fmt.Fprintf(&content, "---\n")
+	_, _ = content.Write(yamlBytes)
+	_, _ = fmt.Fprintf(&content, "---\n\n")
 
 	formatBody(&content, r)
 
@@ -113,23 +113,23 @@ func buildFrontmatter(r model.Record) map[string]any {
 }
 
 func formatBody(content *strings.Builder, r model.Record) {
-	fmt.Fprintf(content, "# %s\n\n", r.Title)
+	_, _ = fmt.Fprintf(content, "# %s\n\n", r.Title)
 
 	if tagsStr, ok := r.Fields[model.FieldTags]; ok && tagsStr != "" {
 		var formattedTags []string
 		for _, t := range model.ParseTags(tagsStr) {
 			formattedTags = append(formattedTags, "`#"+t+"`")
 		}
-		fmt.Fprintf(content, "**Tags:** %s\n\n", strings.Join(formattedTags, " "))
+		_, _ = fmt.Fprintf(content, "**Tags:** %s\n\n", strings.Join(formattedTags, " "))
 	}
 
 	if statusStr, ok := r.Fields[model.FieldStatus]; ok && statusStr != "" {
-		fmt.Fprintf(content, "**Status:** %s\n\n", statusStr)
+		_, _ = fmt.Fprintf(content, "**Status:** `#%s`\n\n", statusStr)
 	}
 
 	if r.Snippet != "" {
 		bt := determineBackticks(r.Snippet)
-		fmt.Fprintf(content, "## Snippet\n\n%s\n%s\n%s\n\n", bt, strings.TrimSpace(r.Snippet), bt)
+		_, _ = fmt.Fprintf(content, "## Snippet\n\n%s\n%s\n%s\n\n", bt, strings.TrimSpace(r.Snippet), bt)
 	}
 
 	written := map[string]bool{model.FieldTags: true, model.FieldStatus: true}
@@ -139,7 +139,7 @@ func formatBody(content *strings.Builder, r model.Record) {
 		if !ok || value == "" || written[key] {
 			continue
 		}
-		fmt.Fprintf(content, "## %s\n\n%s\n\n", capitalizeKey(key), strings.TrimSpace(value))
+		_, _ = fmt.Fprintf(content, "## %s\n\n%s\n\n", capitalizeKey(key), strings.TrimSpace(value))
 		written[key] = true
 	}
 
@@ -151,7 +151,7 @@ func formatBody(content *strings.Builder, r model.Record) {
 	}
 	sort.Strings(remaining)
 	for _, key := range remaining {
-		fmt.Fprintf(content, "## %s\n\n%s\n\n", capitalizeKey(key), strings.TrimSpace(r.Fields[key]))
+		_, _ = fmt.Fprintf(content, "## %s\n\n%s\n\n", capitalizeKey(key), strings.TrimSpace(r.Fields[key]))
 	}
 }
 
@@ -442,7 +442,7 @@ func splitSections(body string) (map[string]string, []string) {
 			buf.Reset()
 		} else {
 			if current != "" {
-				fmt.Fprintf(&buf, "%s\n", line)
+				_, _ = fmt.Fprintf(&buf, "%s\n", line)
 			}
 		}
 	}

@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/pedrohpereira74/sadr/internal/admin"
 )
 
 func TestConfigOpensLocal(t *testing.T) {
@@ -161,5 +163,52 @@ func TestConfigSetAPIKeyNoPromptWhenEmpty(t *testing.T) {
 	content, _ := os.ReadFile(configPath)
 	if !strings.Contains(string(content), "fresh-key") {
 		t.Error("expected new key to be written without prompting")
+	}
+}
+
+func TestSetupAdminCreatesHash(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "sadr-test-*")
+	t.Cleanup(func() { os.RemoveAll(dir) })
+
+	sadrRoot := filepath.Join(dir, ".sadr")
+	_ = os.MkdirAll(filepath.Join(sadrRoot, "configs"), 0755)
+	_ = os.WriteFile(filepath.Join(sadrRoot, "configs", "default-config.yaml"), []byte("fields: []\n"), 0644)
+
+	originalWd, _ := os.Getwd()
+	_ = os.Chdir(dir)
+	t.Cleanup(func() { os.Chdir(originalWd) })
+
+	resetCmd(findSubCmd("config"))
+	rootCmd.SetArgs([]string{"config", "--setup-admin"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !admin.IsConfigured(sadrRoot) {
+		t.Error("expected admin to be configured after --setup-admin")
+	}
+}
+
+func TestSetupAdminRegeneratesToken(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "sadr-test-*")
+	t.Cleanup(func() { os.RemoveAll(dir) })
+
+	sadrRoot := filepath.Join(dir, ".sadr")
+	_ = os.MkdirAll(filepath.Join(sadrRoot, "configs"), 0755)
+	_ = os.WriteFile(filepath.Join(sadrRoot, "configs", "default-config.yaml"), []byte("fields: []\n"), 0644)
+
+	token1, _ := admin.Setup(sadrRoot)
+
+	originalWd, _ := os.Getwd()
+	_ = os.Chdir(dir)
+	t.Cleanup(func() { os.Chdir(originalWd) })
+
+	resetCmd(findSubCmd("config"))
+	rootCmd.SetArgs([]string{"config", "--setup-admin"})
+	_ = rootCmd.Execute()
+
+	t.Setenv("SADR_ADMIN_TOKEN", token1)
+	if err := admin.RequireAdmin(sadrRoot); err == nil {
+		t.Error("expected old token to be invalid after regeneration")
 	}
 }
