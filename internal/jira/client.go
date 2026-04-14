@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"io"
 	"maps"
-	mathrand "math/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -97,7 +96,9 @@ func (c *Client) applyAuth(req *http.Request) error {
 }
 
 func (c *Client) applyOAuth(req *http.Request) error {
-	nonce := fmt.Sprintf("%x", mathrand.Int63())
+	nonceBytes := make([]byte, 16)
+	_, _ = rand.Read(nonceBytes)
+	nonce := fmt.Sprintf("%x", nonceBytes)
 	timestamp := fmt.Sprintf("%d", time.Now().Unix())
 
 	params := map[string]string{

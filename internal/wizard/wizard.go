@@ -488,6 +488,10 @@ func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
 				}
 			}
 		}
+		if editor == "" {
+			_ = os.Remove(m.tempFile)
+			return m.advanceStep()
+		}
 
 		c := exec.Command(editor, m.tempFile)
 		return m, tea.ExecProcess(c, func(err error) tea.Msg {

@@ -341,7 +341,9 @@ func saveJiraGlobalConfig(apply func(*config.JiraConfig)) error {
 	}
 	globalConfigPath := filepath.Join(home, ".sadr", "global-config.yaml")
 	cfg, _ := config.LoadGlobalFromFile(globalConfigPath)
+	disableWarning := cfg.Jira.DisableProjectWarning
 	cfg.Jira = config.JiraConfig{}
+	cfg.Jira.DisableProjectWarning = disableWarning
 	apply(&cfg.Jira)
 	return config.SaveGlobalConfig(globalConfigPath, cfg)
 }

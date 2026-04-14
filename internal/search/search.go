@@ -11,7 +11,7 @@ func Matches(r model.Record, query string, deep bool) bool {
 	if strings.Contains(strings.ToLower(r.Title), q) {
 		return true
 	}
-	if strings.Contains(strings.ToLower(r.Fields["tags"]), q) {
+	if strings.Contains(strings.ToLower(r.Fields[model.FieldTags]), q) {
 		return true
 	}
 	if deep {
@@ -19,7 +19,7 @@ func Matches(r model.Record, query string, deep bool) bool {
 			return true
 		}
 		for key, value := range r.Fields {
-			if key == "tags" {
+			if key == model.FieldTags {
 				continue
 			}
 			if strings.Contains(strings.ToLower(value), q) {

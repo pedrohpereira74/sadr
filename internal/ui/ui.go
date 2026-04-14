@@ -74,7 +74,11 @@ func Info(w io.Writer, msg string) {
 }
 
 func Error(w io.Writer, msg string) {
-	_, _ = fmt.Fprintf(w, "%s%s\n", styleError.Render(symError), msg)
+	sym := symError
+	if isTTY {
+		sym = styleError.Render(symError)
+	}
+	_, _ = fmt.Fprintf(w, "%s%s\n", sym, msg)
 }
 
 func Success(w io.Writer, msg string) {
@@ -85,7 +89,11 @@ func Success(w io.Writer, msg string) {
 }
 
 func Warning(w io.Writer, msg string) {
-	_, _ = fmt.Fprintf(w, "%s%s\n", styleWarning.Render(symWarning), msg)
+	sym := symWarning
+	if isTTY {
+		sym = styleWarning.Render(symWarning)
+	}
+	_, _ = fmt.Fprintf(w, "%s%s\n", sym, msg)
 }
 
 func Pause(seconds float64) {
