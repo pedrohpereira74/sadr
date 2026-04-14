@@ -9,9 +9,12 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/pedrohpereira74/sadr/internal/ai"
+	"github.com/pedrohpereira74/sadr/internal/compress"
 	"github.com/pedrohpereira74/sadr/internal/config"
+	jiraclient "github.com/pedrohpereira74/sadr/internal/jira"
 	"github.com/pedrohpereira74/sadr/internal/model"
 	"github.com/pedrohpereira74/sadr/internal/storage"
 	"github.com/pedrohpereira74/sadr/internal/ui"
@@ -73,39 +76,7 @@ func resolveConfigPath(configsDir, configFlag string) (string, error) {
 		}
 		return path, nil
 	}
-
-	entries, err := os.ReadDir(configsDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return "", fmt.Errorf("configs directory not found: %q", configsDir)
-		}
-		return "", fmt.Errorf("failed to read configs directory %q: %w", configsDir, err)
-	}
-	var configs []string
-	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".yaml") {
-			configs = append(configs, e.Name())
-		}
-	}
-
-	if len(configs) == 0 {
-		return "", fmt.Errorf("no config files found in %q", configsDir)
-	}
-
-	if len(configs) == 1 {
-		return filepath.Join(configsDir, configs[0]), nil
-	}
-
-	options := make([]selectOption, 0, len(configs))
-	for _, f := range configs {
-		name := configDisplayName(f)
-		options = append(options, selectOption{Label: name, Value: f})
-	}
-	chosen := runSelect("which config?", options)
-	if chosen == "" {
-		return "", fmt.Errorf("cancelled")
-	}
-	return filepath.Join(configsDir, chosen), nil
+	return pickConfigFile(configsDir)
 }
 
 func loadFieldDefs(configPath string) ([]wizard.FieldDef, error) {
@@ -153,7 +124,7 @@ func readSnippetFromSource(opts *newOptions) string {
 			ui.Error(os.Stderr, fmt.Sprintf("failed to read file: %v", err))
 			return ""
 		}
-		if info.Size() > 10<<20 {
+		if info.Size() > model.MaxSnippetFileSize {
 			ui.Error(os.Stderr, "file exceeds 10 MB limit.")
 			return ""
 		}
@@ -171,6 +142,9 @@ func readSnippetFromSource(opts *newOptions) string {
 		if err != nil {
 			ui.Error(os.Stderr, fmt.Sprintf("git diff failed: %v", err))
 			return ""
+		}
+		if len(output) > model.MaxSnippetFileSize {
+			output = output[:model.MaxSnippetFileSize]
 		}
 		content := strings.TrimSpace(string(output))
 		if content == "" {
@@ -213,25 +187,98 @@ func readClipboardImpl() (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
-func loadAISuggestions(opts *newOptions, snippet string, fieldDefs []wizard.FieldDef) (map[string]string, error) {
-	ui.Info(os.Stderr, "analyzing snippet...")
+func defaultJiraFetcher(ctx context.Context, client *jiraclient.Client, key string) (jiraclient.Issue, bool) {
+	issues, err := client.FetchAll(ctx, []string{key})
+	if err != nil {
+		return jiraclient.Issue{}, false
+	}
+	issue, ok := issues[key]
+	return issue, ok
+}
 
-	var docLanguage, aiKey, modelName string
-	var aiDepth bool
-
-	home, err := os.UserHomeDir()
-	if err == nil {
-		globalConfigPath := filepath.Join(home, ".sadr", "global-config.yaml")
-		if cfg, err := config.LoadGlobalFromFile(globalConfigPath); err == nil {
-			docLanguage = cfg.Language
-			aiKey = cfg.AI.APIKey
-			if aiKey == "" && cfg.AI.APIKeyEnv != "" {
-				aiKey = os.Getenv(cfg.AI.APIKeyEnv)
-			}
-			modelName = cfg.AI.Model
-			aiDepth = cfg.AI.AIDepth
+func collectJiraContext(fieldDefs []wizard.FieldDef, projectURL string) (cardKey, jiraContext string) {
+	var jiraField *wizard.FieldDef
+	for i, fd := range fieldDefs {
+		if fd.Type == "jira" {
+			jiraField = &fieldDefs[i]
+			break
 		}
 	}
+	if jiraField == nil {
+		return "", ""
+	}
+
+	client := loadJiraClient(projectURL)
+	if client == nil {
+		ui.Info(os.Stderr, "jira not configured — skipping card context. set up with: sadr config --setup-jira")
+		return "", ""
+	}
+
+	key := runTextarea(fmt.Sprintf("jira card key for '%s':", jiraField.Name), "e.g. PROJ-123")
+	key = strings.TrimSpace(key)
+
+	if key == "" {
+		if jiraField.Required {
+			ui.Info(os.Stderr, "jira card key is required but was skipped — continuing without it.")
+		}
+		return "", ""
+	}
+
+	ui.Info(os.Stderr, fmt.Sprintf("fetching %s...", key))
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	issue, ok := jiraFetcherFn(ctx, client, key)
+	if !ok {
+		ui.Info(os.Stderr, fmt.Sprintf("card %s not found — continuing without jira context.", key))
+		return key, ""
+	}
+
+	var parts []string
+	if issue.Summary != "" {
+		parts = append(parts, "Summary: "+issue.Summary)
+	}
+	if issue.Description != "" {
+		parts = append(parts, issue.Description)
+	}
+
+	return key, strings.Join(parts, "\n\n")
+}
+
+func loadJiraClient(projectURL string) *jiraclient.Client {
+	if projectURL == "" {
+		return nil
+	}
+	cfg := loadGlobalConfig()
+	j := cfg.Jira
+	if j.Username == "" && j.Token == "" && j.TokenEnv == "" && j.ConsumerKey == "" {
+		return nil
+	}
+	return jiraclient.NewClientFromConfig(jiraclient.ClientConfig{
+		BaseURL:           projectURL,
+		Username:          j.Username,
+		Password:          j.Password,
+		PasswordEnv:       j.PasswordEnv,
+		Token:             j.Token,
+		TokenEnv:          j.TokenEnv,
+		ConsumerKey:       j.ConsumerKey,
+		PrivateKeyPath:    j.PrivateKeyPath,
+		AccessToken:       j.AccessToken,
+		AccessTokenSecret: j.AccessTokenSecret,
+	})
+}
+
+func loadAISuggestions(opts *newOptions, snippet string, fieldDefs []wizard.FieldDef, jiraContext string) (map[string]string, error) {
+	ui.Info(os.Stderr, "analyzing snippet...")
+
+	cfg := loadGlobalConfig()
+	docLanguage := cfg.Language
+	aiKey := cfg.AI.APIKey
+	if aiKey == "" && cfg.AI.APIKeyEnv != "" {
+		aiKey = os.Getenv(cfg.AI.APIKeyEnv)
+	}
+	modelName := cfg.AI.Model
+	aiDepth := cfg.AI.AIDepth
 
 	if opts.model != "" {
 		modelName = opts.model
@@ -239,13 +286,14 @@ func loadAISuggestions(opts *newOptions, snippet string, fieldDefs []wizard.Fiel
 
 	var fields []string
 	for _, fd := range fieldDefs {
-		if fd.Type != "select" && fd.Type != "multiselect" {
-			hint := fd.Name
-			if fd.Type == "text" || fd.Type == "list" {
-				hint = fmt.Sprintf("%s (%s)", fd.Name, fd.Type)
-			}
-			fields = append(fields, hint)
+		if fd.Type == "select" || fd.Type == "multiselect" || fd.Type == "jira" {
+			continue
 		}
+		hint := fd.Name
+		if fd.Type == "text" || fd.Type == "list" {
+			hint = fmt.Sprintf("%s (%s)", fd.Name, fd.Type)
+		}
+		fields = append(fields, hint)
 	}
 	if len(fields) == 0 {
 		fields = []string{"title", "tags"}
@@ -254,7 +302,7 @@ func loadAISuggestions(opts *newOptions, snippet string, fieldDefs []wizard.Fiel
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	suggestions, err := ai.Suggest(ctx, snippet, fields, docLanguage, aiKey, modelName, aiDepth)
+	suggestions, err := ai.Suggest(ctx, compress.ZipSnippet(snippet), fields, docLanguage, aiKey, modelName, aiDepth, jiraContext)
 	if err != nil {
 		if ctx.Err() != nil {
 			fmt.Fprintln(os.Stderr)
@@ -269,6 +317,24 @@ func loadAISuggestions(opts *newOptions, snippet string, fieldDefs []wizard.Fiel
 	return suggestions, nil
 }
 
+func maybeCaptureSmartSnippet(opts *newOptions, snippet string) (string, bool) {
+	if !opts.smart || snippet != "" {
+		return snippet, true
+	}
+	ui.Info(os.Stderr, "opening editor to capture snippet for AI analysis...")
+	ui.Pause(1.5)
+	content, err := snippetCapturer()
+	if err != nil {
+		ui.Error(os.Stderr, fmt.Sprintf("failed to open editor: %v", err))
+		return "", false
+	}
+	if strings.TrimSpace(content) == "" {
+		ui.Info(os.Stderr, "--smart requires a snippet to analyze. operation aborted.")
+		return "", false
+	}
+	return content, true
+}
+
 func buildRecordFromWizard(result map[string]string, fieldDefs []wizard.FieldDef, recordType string, snippet string) (model.Record, error) {
 	r, err := model.NewRecordWithOptions(result["title"], recordType)
 	if err != nil {
@@ -276,23 +342,23 @@ func buildRecordFromWizard(result map[string]string, fieldDefs []wizard.FieldDef
 	}
 
 	for _, fd := range fieldDefs {
-		if fd.Name != "title" && fd.Name != "snippet" {
+		if fd.Name != model.FieldTitle && fd.Name != model.FieldSnippet {
 			r.FieldOrder = append(r.FieldOrder, strings.TrimSpace(fd.Name))
 		}
 	}
 
 	if snippet != "" {
 		r.Snippet = snippet
-	} else if result["snippet"] != "" {
-		r.Snippet = result["snippet"]
+	} else if result[model.FieldSnippet] != "" {
+		r.Snippet = result[model.FieldSnippet]
 	}
 
 	for key, value := range result {
 		key = strings.TrimSpace(key)
-		if key == "title" || key == "snippet" {
+		if key == model.FieldTitle || key == model.FieldSnippet {
 			continue
 		}
-		if key == "file_ref" {
+		if key == model.FieldFileRef {
 			r.FileRef = value
 			continue
 		}
@@ -327,7 +393,7 @@ func buildRecordFromWizard(result map[string]string, fieldDefs []wizard.FieldDef
 		r.Fields[key] = value
 	}
 
-	r.Fields["status"] = "active"
+	r.Fields[model.FieldStatus] = "active"
 
 	return r, nil
 }
@@ -415,23 +481,13 @@ func runNew(recordType string, opts *newOptions) func(cmd *cobra.Command, args [
 		if opts.diff && snippetFromSource == "" {
 			return
 		}
-		hasSnippet := snippetFromSource != ""
 
-		if opts.smart && !hasSnippet {
-			ui.Info(os.Stderr, "opening editor to capture snippet for AI analysis...")
-			ui.Pause(1.5)
-			content, editorErr := snippetCapturer()
-			if editorErr != nil {
-				ui.Error(os.Stderr, fmt.Sprintf("failed to open editor: %v", editorErr))
-				return
-			}
-			if strings.TrimSpace(content) == "" {
-				ui.Info(os.Stderr, "--smart requires a snippet to analyze. operation aborted.")
-				return
-			}
-			snippetFromSource = content
-			hasSnippet = true
+		var ok bool
+		snippetFromSource, ok = maybeCaptureSmartSnippet(opts, snippetFromSource)
+		if !ok {
+			return
 		}
+		hasSnippet := snippetFromSource != ""
 
 		if opts.model != "" {
 			opts.smart = true
@@ -464,10 +520,31 @@ func runNew(recordType string, opts *newOptions) func(cmd *cobra.Command, args [
 
 			var suggestions map[string]string
 			if opts.smart && hasSnippet {
+				projectJiraURL := loadProjectJiraURL(paths.ConfigsDir)
+				hasJiraField := false
+				for _, fd := range fieldDefs {
+					if fd.Type == "jira" {
+						hasJiraField = true
+						break
+					}
+				}
+				warnIfJiraNotConfiguredForProject(projectJiraURL, hasJiraField)
+				cardKey, jiraCtx := collectJiraContext(fieldDefs, projectJiraURL)
 				var aiErr error
-				suggestions, aiErr = loadAISuggestions(opts, snippetFromSource, fieldDefs)
+				suggestions, aiErr = loadAISuggestions(opts, snippetFromSource, fieldDefs, jiraCtx)
 				if aiErr != nil {
 					return
+				}
+				if suggestions == nil {
+					suggestions = map[string]string{}
+				}
+				if cardKey != "" {
+					for _, fd := range fieldDefs {
+						if fd.Type == "jira" {
+							suggestions[fd.Name] = cardKey
+							break
+						}
+					}
 				}
 			}
 
@@ -533,18 +610,20 @@ func captureSnippetFromEditorImpl() (string, error) {
 	}
 	tmpName := tmpFile.Name()
 	_ = tmpFile.Close()
-	defer func() { _ = os.Remove(tmpName) }()
 
 	editor := findEditor()
 	if editor == "" {
+		_ = os.Remove(tmpName)
 		return "", fmt.Errorf("no editor found. set $EDITOR or $VISUAL")
 	}
 
 	if err := openEditorImpl(editor, tmpName); err != nil {
+		_ = os.Remove(tmpName)
 		return "", err
 	}
 
 	content, err := os.ReadFile(tmpName)
+	_ = os.Remove(tmpName)
 	if err != nil {
 		return "", err
 	}

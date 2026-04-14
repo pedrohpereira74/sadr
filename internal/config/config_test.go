@@ -172,6 +172,95 @@ fields:
 	}
 }
 
+func TestValidateDuplicateFieldNames(t *testing.T) {
+	yamlData := `
+fields:
+  - name: context
+    type: text
+    required: true
+  - name: context
+    type: text
+    required: false
+`
+	_, err := LoadFromString(yamlData)
+	if err == nil {
+		t.Fatal("expected error for duplicate field name, got nil")
+	}
+}
+
+func TestJiraFieldTypeIsValid(t *testing.T) {
+	yamlData := `
+fields:
+  - name: jira_ticket
+    type: jira
+    required: false
+`
+	_, err := LoadFromString(yamlData)
+	if err != nil {
+		t.Fatalf("expected jira type to be valid, got error: %v", err)
+	}
+}
+
+func TestJiraFieldTypeRequiredTrue(t *testing.T) {
+	yamlData := `
+fields:
+  - name: jira_ticket
+    type: jira
+    required: true
+`
+	cfg, err := LoadFromString(yamlData)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Fields[0].Required == nil || !*cfg.Fields[0].Required {
+		t.Error("expected required=true for jira field")
+	}
+}
+
+func TestGlobalConfigParsesJiraConfig(t *testing.T) {
+	yamlData := `
+jira:
+  username: "pedro"
+  password_env: "JIRA_PASSWORD"
+  token_env: "JIRA_TOKEN"
+  consumer_key: "sadr-cli"
+  private_key_path: "~/.sadr/jira_rsa.pem"
+  access_token: "abc123"
+  access_token_secret: "secret456"
+`
+	cfg, err := LoadGlobalFromString(yamlData)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Jira.Username != "pedro" {
+		t.Errorf("expected username 'pedro', got '%s'", cfg.Jira.Username)
+	}
+	if cfg.Jira.ConsumerKey != "sadr-cli" {
+		t.Errorf("expected consumer_key 'sadr-cli', got '%s'", cfg.Jira.ConsumerKey)
+	}
+	if cfg.Jira.AccessToken != "abc123" {
+		t.Errorf("expected access_token 'abc123', got '%s'", cfg.Jira.AccessToken)
+	}
+}
+
+func TestProjectConfigParsesJiraURL(t *testing.T) {
+	yamlData := `
+jira:
+  url: "https://jira.example.com"
+fields:
+  - name: title
+    type: text
+    required: true
+`
+	cfg, err := LoadFromString(yamlData)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Jira.URL != "https://jira.example.com" {
+		t.Errorf("expected jira url 'https://jira.example.com', got '%s'", cfg.Jira.URL)
+	}
+}
+
 func TestLoadGlobalFromFileReadsYAML(t *testing.T) {
 	dir := t.TempDir()
 	path := dir + "/config.yaml"

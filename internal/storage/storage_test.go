@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -241,6 +242,43 @@ func TestListRecordEntries(t *testing.T) {
 	}
 	if entries[1].FileID != 2 {
 		t.Errorf("expected second entry FileID 2, got %d", entries[1].FileID)
+	}
+}
+
+func TestSaveRecordConcurrent(t *testing.T) {
+	s := newTestStorage(t)
+	const n = 20
+
+	errs := make(chan error, n)
+	for i := range n {
+		go func(i int) {
+			r, _ := model.NewRecordWithOptions(fmt.Sprintf("concurrent record %d", i), "full")
+			_, err := s.SaveRecord(r)
+			errs <- err
+		}(i)
+	}
+
+	for range n {
+		if err := <-errs; err != nil {
+			t.Errorf("concurrent SaveRecord failed: %v", err)
+		}
+	}
+
+	records, err := s.ListRecords()
+	if err != nil {
+		t.Fatalf("unexpected error listing records: %v", err)
+	}
+	if len(records) != n {
+		t.Errorf("expected %d records after concurrent writes, got %d", n, len(records))
+	}
+
+	seen := map[int]bool{}
+	entries, _ := s.ListRecordEntries()
+	for _, e := range entries {
+		if seen[e.FileID] {
+			t.Errorf("duplicate file ID %d found", e.FileID)
+		}
+		seen[e.FileID] = true
 	}
 }
 

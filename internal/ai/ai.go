@@ -21,8 +21,8 @@ const (
 
 	depthInstructions = `
 DEPTH INSTRUCTIONS - APPLY ONLY TO PERTINENT FIELDS:
-5. For "text" fields: Write DETAILED, thorough explanations. Minimum 2-3 sentences. Analyze trade-offs, hidden coupling, performance implications, and architectural debt. Be precise and opinionated. Justify your reasoning with concrete technical arguments.
-6. For "list" fields: Return items separated by commas with NO bullet points. You MUST use descriptive full phrases, not single words or identifiers (e.g. "Implementing a dedicated Auth microservice, Using a standard OAuth flow").`
+8. For "text" fields: Write DETAILED, thorough explanations. Minimum 2-3 sentences. Analyze trade-offs, hidden coupling, performance implications, and architectural debt. Be precise and opinionated. Justify your reasoning with concrete technical arguments.
+9. For "list" fields: Return items separated by commas with NO bullet points. You MUST use descriptive full phrases, not single words or identifiers (e.g. "Implementing a dedicated Auth microservice, Using a standard OAuth flow").`
 
 	promptTemplate = `%s
 Your task is to analyze the provided code snippet and extract or deduce the requested metadata.
@@ -35,19 +35,20 @@ CRITICAL RULES - FAILURE TO COMPLY WILL BREAK THE SYSTEM:
 DO NOT translate, rename, add, or omit any keys. The keys must remain exactly as listed above.
 4. CONTENT LANGUAGE: The VALUES inside the JSON must be written in: %s.
 5. VOICE: Write in third person, impersonal, technical report style. NEVER use first person ("I", "we", "my", "our"). Describe what the code does, not what you did or observed.
-6. TITLE LENGTH: If a "title" key is present, it MUST be a short, concise phrase of at most 10 words. Do NOT write full sentences or descriptions as titles.
-7. FIELD TYPES: Some keys above may include a type hint in parentheses, e.g. "consequences (text)". Use ONLY the key name (without the hint) in the JSON output. Respect the type:
+6. EMPTY FIELDS: If you cannot provide a meaningful, specific answer for a field based on the snippet (e.g. no real alternatives exist, the information is not inferable), return "none identified" translated to the content language defined in rule 4. DO NOT fabricate or pad answers just to fill a field.
+7. TITLE LENGTH: If a "title" key is present, it MUST be a short, concise phrase of at most 10 words. Do NOT write full sentences or descriptions as titles.
+8. FIELD TYPES: Some keys above may include a type hint in parentheses, e.g. "consequences (text)". Use ONLY the key name (without the hint) in the JSON output. Respect the type:
    - "(text)": Write complete, flowing prose. Use full sentences separated by periods. Do NOT use comma-separated lists.
    - "(list)": Return items separated by commas with NO bullet points.
    If no type hint is given, default to text behavior.
 %s
-CODE SNIPPET TO ANALYZE:
+%sCODE SNIPPET TO ANALYZE:
 ---
 %s
 ---`
 )
 
-func BuildPrompt(snippet string, fields []string, language string, depth bool) string {
+func BuildPrompt(snippet string, fields []string, language string, depth bool, jiraContext string) string {
 	if language == "" {
 		language = "English"
 	}
@@ -60,7 +61,12 @@ func BuildPrompt(snippet string, fields []string, language string, depth bool) s
 		depthBlock = depthInstructions
 	}
 
-	return fmt.Sprintf(promptTemplate, persona, strings.Join(fields, ", "), language, depthBlock, snippet)
+	jiraSection := ""
+	if jiraContext != "" {
+		jiraSection = "JIRA ISSUE CONTEXT:\n---\n" + jiraContext + "\n---\n\n"
+	}
+
+	return fmt.Sprintf(promptTemplate, persona, strings.Join(fields, ", "), language, depthBlock, jiraSection, snippet)
 }
 
 func ParseResponse(response string) (map[string]string, error) {
@@ -189,8 +195,8 @@ func GenerateText(ctx context.Context, prompt string, apiKey string, model strin
 	return geminiResp.Candidates[0].Content.Parts[0].Text, nil
 }
 
-func Suggest(ctx context.Context, snippet string, fields []string, language string, apiKey string, model string, depth bool) (map[string]string, error) {
-	prompt := BuildPrompt(snippet, fields, language, depth)
+func Suggest(ctx context.Context, snippet string, fields []string, language string, apiKey string, model string, depth bool, jiraContext string) (map[string]string, error) {
+	prompt := BuildPrompt(snippet, fields, language, depth, jiraContext)
 	text, err := GenerateText(ctx, prompt, apiKey, model, 0)
 	if err != nil {
 		return nil, err

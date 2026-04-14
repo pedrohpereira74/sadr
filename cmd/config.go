@@ -13,8 +13,11 @@ import (
 )
 
 type configOptions struct {
-	global    bool
-	setAPIKey string
+	global              bool
+	setAPIKey           string
+	setupJira           bool
+	setupJiraAdmin      bool
+	disableJiraWarning  bool
 }
 
 func confirmOverwriteImpl() string {
@@ -46,6 +49,19 @@ func newConfigCmd() *cobra.Command {
 		Long:  "Open a project config from .sadr/configs/. Use --global to edit your personal global configuration.",
 		Args:  cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
+			if opts.setupJiraAdmin {
+				runSetupJiraAdmin()
+				return
+			}
+			if opts.setupJira {
+				runSetupJira()
+				return
+			}
+			if opts.disableJiraWarning {
+				runDisableJiraWarning()
+				return
+			}
+
 			if opts.setAPIKey != "" {
 				home, err := os.UserHomeDir()
 				if err != nil {
@@ -54,7 +70,7 @@ func newConfigCmd() *cobra.Command {
 				}
 
 				globalDir := filepath.Join(home, ".sadr")
-				_ = os.MkdirAll(globalDir, 0755)
+				_ = os.MkdirAll(globalDir, 0700)
 				configPath := filepath.Join(globalDir, "global-config.yaml")
 
 				content, err := os.ReadFile(configPath)
@@ -153,31 +169,14 @@ func newConfigCmd() *cobra.Command {
 					return
 				}
 			} else {
-				entries, _ := os.ReadDir(paths.ConfigsDir)
-				var configs []string
-				for _, e := range entries {
-					if !e.IsDir() && strings.HasSuffix(e.Name(), ".yaml") {
-						configs = append(configs, e.Name())
+				chosen, err := pickConfigFile(paths.ConfigsDir)
+				if err != nil {
+					if err.Error() != "cancelled" {
+						ui.Error(os.Stderr, err.Error())
 					}
-				}
-				if len(configs) == 0 {
-					ui.Error(os.Stderr, "no configs found in .sadr/configs/")
 					return
 				}
-				if len(configs) == 1 {
-					targetConfig = filepath.Join(paths.ConfigsDir, configs[0])
-				} else {
-					options := make([]selectOption, 0, len(configs))
-					for _, f := range configs {
-						name := configDisplayName(f)
-						options = append(options, selectOption{Label: name, Value: f})
-					}
-					chosen := runSelect("which config?", options)
-					if chosen == "" {
-						return
-					}
-					targetConfig = filepath.Join(paths.ConfigsDir, chosen)
-				}
+				targetConfig = chosen
 			}
 
 			if err := editorRunner(editor, targetConfig); err != nil {
@@ -188,7 +187,10 @@ func newConfigCmd() *cobra.Command {
 
 	cmd.Flags().BoolVar(&opts.global, "global", false, "Open global config (creates ~/.sadr/ on first use)")
 	cmd.Flags().StringVar(&opts.setAPIKey, "set-api-key", "", "Set the Gemini API key in the global config directly")
-	cmd.MarkFlagsMutuallyExclusive("global", "set-api-key")
+	cmd.Flags().BoolVar(&opts.setupJira, "setup-jira", false, "Authenticate with Jira (basic auth, bearer token, or oauth 1.0a)")
+	cmd.Flags().BoolVar(&opts.setupJiraAdmin, "setup-jira-admin", false, "Generate RSA key pair for Jira OAuth 1.0a application link (run once per organization)")
+	cmd.Flags().BoolVar(&opts.disableJiraWarning, "disable-jira-warning", false, "Suppress the warning shown when jira credentials exist but the project is not configured for jira")
+	cmd.MarkFlagsMutuallyExclusive("global", "set-api-key", "setup-jira", "setup-jira-admin", "disable-jira-warning")
 	return cmd
 }
 

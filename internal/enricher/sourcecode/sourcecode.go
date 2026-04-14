@@ -20,11 +20,13 @@ func (e Enricher) Enrich(ctx enricher.RecordContext, record model.Record, projec
 		return ctx
 	}
 
+	seen := map[string]bool{}
 	for p := range strings.SplitSeq(record.FileRef, ",") {
 		p = strings.TrimSpace(p)
-		if p == "" || filepath.IsAbs(p) {
+		if p == "" || filepath.IsAbs(p) || seen[p] {
 			continue
 		}
+		seen[p] = true
 
 		fullPath := filepath.Join(projectRoot, p)
 		rel, err := filepath.Rel(projectRoot, fullPath)

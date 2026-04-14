@@ -109,7 +109,7 @@ func fieldDefToStep(f FieldDef) step {
 	}
 
 	switch f.Type {
-	case "text", "multitext", "list":
+	case "text", "multitext", "list", "jira":
 		s.fieldType = "text"
 	case "select":
 		s.fieldType = "select"
@@ -268,6 +268,44 @@ func (m Model) Init() tea.Cmd {
 	return nil
 }
 
+func loadFilepickerFiles(current *step, projectRoot string) {
+	files, err := filepicker.ListProjectFiles(projectRoot)
+	if err != nil {
+		return
+	}
+	current.allFiles = files
+	if len(current.suggestedFiles) > 0 {
+		suggested := map[string]bool{}
+		for _, f := range current.suggestedFiles {
+			suggested[f] = true
+		}
+		for i, f := range current.allFiles {
+			if suggested[f] {
+				current.selectedMap[i] = true
+			}
+		}
+		sorted := make([]string, len(current.suggestedFiles))
+		copy(sorted, current.suggestedFiles)
+		sort.Strings(sorted)
+		current.filtered = sorted
+	} else {
+		current.filtered = files
+	}
+}
+
+func (m Model) advanceStep() (tea.Model, tea.Cmd) {
+	m.currentStep++
+	if m.Completed() {
+		m.done = true
+		return m, tea.Quit
+	}
+	if m.steps[m.currentStep].fieldType == "text" {
+		m.textarea.Reset()
+		m.textarea.SetValue(m.steps[m.currentStep].value)
+	}
+	return m, nil
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.Completed() || m.quitting {
 		return m, tea.Quit
@@ -276,28 +314,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	current := &m.steps[m.currentStep]
 
 	if current.fieldType == "filepicker" && current.allFiles == nil && m.projectRoot != "" {
-		files, err := filepicker.ListProjectFiles(m.projectRoot)
-		if err == nil {
-			current.allFiles = files
-
-			if len(current.suggestedFiles) > 0 {
-				suggested := map[string]bool{}
-				for _, f := range current.suggestedFiles {
-					suggested[f] = true
-				}
-				for i, f := range current.allFiles {
-					if suggested[f] {
-						current.selectedMap[i] = true
-					}
-				}
-				sorted := make([]string, len(current.suggestedFiles))
-				copy(sorted, current.suggestedFiles)
-				sort.Strings(sorted)
-				current.filtered = sorted
-			} else {
-				current.filtered = files
-			}
-		}
+		loadFilepickerFiles(current, m.projectRoot)
 	}
 
 	switch msg := msg.(type) {
@@ -305,235 +322,235 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.textarea.SetWidth(msg.Width - 4)
-		if msg.Height > 8 {
-			m.textarea.SetHeight(msg.Height - 8)
-		}
+		m.textarea.SetHeight(max(2, msg.Height-8))
 		return m, nil
 
 	case editorFinishedMsg:
 		current.value = msg.content
-		m.currentStep++
-		if m.Completed() {
-			m.done = true
-			return m, tea.Quit
-		}
-		return m, nil
+		return m.advanceStep()
 
 	case tea.KeyMsg:
-		switch msg.Type {
-		case tea.KeyCtrlC:
-			m.quitting = true
-			return m, tea.Quit
-
-		case tea.KeyEsc:
-			if m.currentStep > 0 {
-				m.currentStep--
-				if m.steps[m.currentStep].fieldType == "text" {
-					m.textarea.Reset()
-					m.textarea.SetValue(m.steps[m.currentStep].value)
-				}
-			}
-			return m, nil
-
-		case tea.KeyTab:
-			if current.fieldType == "text" {
-				current.value = strings.TrimSpace(m.textarea.Value())
-			}
-			if current.required {
-				return m, nil
-			}
-			current.value = "N/A"
-			m.currentStep++
-			if m.Completed() {
-				m.done = true
-				return m, tea.Quit
-			}
-			if m.steps[m.currentStep].fieldType == "text" {
-				m.textarea.Reset()
-				m.textarea.SetValue(m.steps[m.currentStep].value)
-			}
-			return m, nil
-
-		case tea.KeyEnter:
-			if current.fieldType == "editor" {
-				tmpFile, err := os.CreateTemp("", "sadr-snippet-*.txt")
-				if err != nil {
-					m.currentStep++
-					return m, nil
-				}
-				m.tempFile = tmpFile.Name()
-				_ = tmpFile.Close()
-
-				editor := os.Getenv("EDITOR")
-				if editor == "" {
-					editor = os.Getenv("VISUAL")
-				}
-				if editor == "" {
-					editor = "vim"
-				}
-
-				c := exec.Command(editor, m.tempFile)
-				return m, tea.ExecProcess(c, func(err error) tea.Msg {
-					content, readErr := os.ReadFile(m.tempFile)
-					_ = os.Remove(m.tempFile)
-					if err != nil || readErr != nil {
-						return editorFinishedMsg{content: "", err: err}
-					}
-					return editorFinishedMsg{content: strings.TrimSpace(string(content))}
-				})
-			}
-
-			if current.fieldType == "filepicker" {
-				if string(current.filterInput) == ":skip" {
-					current.value = "N/A"
-				} else {
-					var selected []string
-					for i, f := range current.allFiles {
-						if current.selectedMap[i] {
-							selected = append(selected, f)
-						}
-					}
-					if len(selected) == 0 {
-						return m, nil
-					}
-					current.value = strings.Join(selected, ",")
-				}
-			}
-
-			if current.fieldType == "select" {
-				current.value = current.options[current.cursorPos]
-			}
-
-			if current.fieldType == "multiselect" {
-				var selected []string
-				for i, opt := range current.options {
-					if current.selectedMap[i] {
-						selected = append(selected, opt)
-					}
-				}
-				current.value = strings.Join(selected, ",")
-			}
-
-			if current.fieldType == "text" {
-				current.value = strings.TrimSpace(m.textarea.Value())
-				if current.value == ":skip" {
-					current.value = "N/A"
-				}
-			}
-
-			if current.fieldType == "text" && current.value == "" {
-				return m, nil
-			}
-
-			if current.value == "" && current.required {
-				return m, nil
-			}
-
-			m.currentStep++
-			if m.Completed() {
-				m.done = true
-				return m, tea.Quit
-			}
-			if m.steps[m.currentStep].fieldType == "text" {
-				m.textarea.Reset()
-				m.textarea.SetValue(m.steps[m.currentStep].value)
-			}
-			return m, nil
-
-		case tea.KeyUp:
-			if current.fieldType == "text" {
-				var cmd tea.Cmd
-				m.textarea, cmd = m.textarea.Update(msg)
-				return m, cmd
-			}
-			if current.fieldType == "filepicker" && current.cursorPos > 0 {
-				current.cursorPos--
-				if current.cursorPos < current.scrollOffset {
-					current.scrollOffset = current.cursorPos
-				}
-			}
-			if (current.fieldType == "multiselect" || current.fieldType == "select") && current.cursorPos > 0 {
-				current.cursorPos--
-				if current.cursorPos < current.scrollOffset {
-					current.scrollOffset = current.cursorPos
-				}
-			}
-
-		case tea.KeyDown:
-			if current.fieldType == "text" {
-				var cmd tea.Cmd
-				m.textarea, cmd = m.textarea.Update(msg)
-				return m, cmd
-			}
-			if current.fieldType == "filepicker" && current.cursorPos < len(current.filtered)-1 {
-				visible := m.visibleFileCount()
-				current.cursorPos++
-				if current.cursorPos >= current.scrollOffset+visible {
-					current.scrollOffset = current.cursorPos - visible + 1
-				}
-			}
-			if (current.fieldType == "multiselect" || current.fieldType == "select") && current.cursorPos < len(current.options)-1 {
-				current.cursorPos++
-				visible := m.visibleOptionCount()
-				if current.cursorPos >= current.scrollOffset+visible {
-					current.scrollOffset = current.cursorPos - visible + 1
-				}
-			}
-
-		case tea.KeySpace:
-			if current.fieldType == "multiselect" {
-				current.selectedMap[current.cursorPos] = !current.selectedMap[current.cursorPos]
-			}
-			if current.fieldType == "filepicker" && len(current.filtered) > 0 {
-				idx := current.filteredToAllIndex(current.cursorPos)
-				if idx >= 0 {
-					current.selectedMap[idx] = !current.selectedMap[idx]
-				}
-			}
-
-		default:
-			if (msg.String() == " " || msg.String() == "space") && current.fieldType == "multiselect" {
-				current.selectedMap[current.cursorPos] = !current.selectedMap[current.cursorPos]
-				return m, nil
-			}
-			if (msg.String() == " " || msg.String() == "space") && current.fieldType == "filepicker" && len(current.filtered) > 0 {
-				idx := current.filteredToAllIndex(current.cursorPos)
-				if idx >= 0 {
-					current.selectedMap[idx] = !current.selectedMap[idx]
-				}
-				return m, nil
-			}
-
-			if current.fieldType == "filepicker" {
-				if msg.Type == tea.KeyBackspace || msg.Type == tea.KeyDelete {
-					if len(current.filterInput) > 0 {
-						current.filterInput = current.filterInput[:len(current.filterInput)-1]
-						current.filtered = current.applyFilter()
-						current.cursorPos = 0
-						current.scrollOffset = 0
-					}
-					return m, nil
-				}
-				if msg.Type == tea.KeyRunes {
-					current.filterInput = append(current.filterInput, msg.Runes...)
-					current.filtered = current.applyFilter()
-					current.cursorPos = 0
-					current.scrollOffset = 0
-					return m, nil
-				}
-				return m, nil
-			}
-
-			if current.fieldType == "text" {
-				var cmd tea.Cmd
-				m.textarea, cmd = m.textarea.Update(msg)
-				return m, cmd
-			}
-			return m, nil
-		}
+		return m.handleKeyMsg(msg)
 	}
 
 	return m, nil
+}
+
+func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	current := &m.steps[m.currentStep]
+
+	switch msg.Type {
+	case tea.KeyCtrlC:
+		m.quitting = true
+		return m, tea.Quit
+
+	case tea.KeyEsc:
+		if m.currentStep > 0 {
+			m.currentStep--
+			if m.steps[m.currentStep].fieldType == "text" {
+				m.textarea.Reset()
+				m.textarea.SetValue(m.steps[m.currentStep].value)
+			}
+		}
+		return m, nil
+
+	case tea.KeyTab:
+		if current.fieldType == "text" {
+			current.value = strings.TrimSpace(m.textarea.Value())
+		}
+		if current.required {
+			return m, nil
+		}
+		current.value = "N/A"
+		return m.advanceStep()
+
+	case tea.KeyEnter:
+		return m.handleEnterKey()
+
+	case tea.KeyUp:
+		if current.fieldType == "text" {
+			var cmd tea.Cmd
+			m.textarea, cmd = m.textarea.Update(msg)
+			return m, cmd
+		}
+		if current.fieldType == "filepicker" && current.cursorPos > 0 {
+			current.cursorPos--
+			if current.cursorPos < current.scrollOffset {
+				current.scrollOffset = current.cursorPos
+			}
+		}
+		if (current.fieldType == "multiselect" || current.fieldType == "select") && current.cursorPos > 0 {
+			current.cursorPos--
+			if current.cursorPos < current.scrollOffset {
+				current.scrollOffset = current.cursorPos
+			}
+		}
+
+	case tea.KeyDown:
+		if current.fieldType == "text" {
+			var cmd tea.Cmd
+			m.textarea, cmd = m.textarea.Update(msg)
+			return m, cmd
+		}
+		if current.fieldType == "filepicker" && current.cursorPos < len(current.filtered)-1 {
+			visible := m.visibleFileCount()
+			current.cursorPos++
+			if current.cursorPos >= current.scrollOffset+visible {
+				current.scrollOffset = current.cursorPos - visible + 1
+			}
+		}
+		if (current.fieldType == "multiselect" || current.fieldType == "select") && current.cursorPos < len(current.options)-1 {
+			current.cursorPos++
+			visible := m.visibleOptionCount()
+			if current.cursorPos >= current.scrollOffset+visible {
+				current.scrollOffset = current.cursorPos - visible + 1
+			}
+		}
+
+	case tea.KeySpace:
+		if current.fieldType == "multiselect" {
+			current.selectedMap[current.cursorPos] = !current.selectedMap[current.cursorPos]
+		} else if current.fieldType == "filepicker" && len(current.filtered) > 0 {
+			idx := current.filteredToAllIndex(current.cursorPos)
+			if idx >= 0 {
+				current.selectedMap[idx] = !current.selectedMap[idx]
+			}
+		} else if current.fieldType == "text" || current.fieldType == "multitext" || current.fieldType == "list" {
+			var cmd tea.Cmd
+			m.textarea, cmd = m.textarea.Update(msg)
+			return m, cmd
+		}
+
+	default:
+		if (msg.String() == " " || msg.String() == "space") && current.fieldType == "multiselect" {
+			current.selectedMap[current.cursorPos] = !current.selectedMap[current.cursorPos]
+			return m, nil
+		}
+		if (msg.String() == " " || msg.String() == "space") && current.fieldType == "filepicker" && len(current.filtered) > 0 {
+			idx := current.filteredToAllIndex(current.cursorPos)
+			if idx >= 0 {
+				current.selectedMap[idx] = !current.selectedMap[idx]
+			}
+			return m, nil
+		}
+
+		if current.fieldType == "filepicker" {
+			if msg.Type == tea.KeyBackspace || msg.Type == tea.KeyDelete {
+				if len(current.filterInput) > 0 {
+					current.filterInput = current.filterInput[:len(current.filterInput)-1]
+					current.filtered = current.applyFilter()
+					current.cursorPos = 0
+					current.scrollOffset = 0
+				}
+				return m, nil
+			}
+			if msg.Type == tea.KeyRunes {
+				current.filterInput = append(current.filterInput, msg.Runes...)
+				current.filtered = current.applyFilter()
+				current.cursorPos = 0
+				current.scrollOffset = 0
+				return m, nil
+			}
+			return m, nil
+		}
+
+		if current.fieldType == "text" {
+			var cmd tea.Cmd
+			m.textarea, cmd = m.textarea.Update(msg)
+			return m, cmd
+		}
+		return m, nil
+	}
+
+	return m, nil
+}
+
+func (m Model) handleEnterKey() (tea.Model, tea.Cmd) {
+	current := &m.steps[m.currentStep]
+
+	if current.fieldType == "editor" {
+		tmpFile, err := os.CreateTemp("", "sadr-snippet-*.txt")
+		if err != nil {
+			return m.advanceStep()
+		}
+		m.tempFile = tmpFile.Name()
+		_ = tmpFile.Close()
+
+		editor := os.Getenv("EDITOR")
+		if editor == "" {
+			editor = os.Getenv("VISUAL")
+		}
+		if editor == "" {
+			for _, candidate := range []string{"vim", "nano", "vi"} {
+				if _, err := exec.LookPath(candidate); err == nil {
+					editor = candidate
+					break
+				}
+			}
+		}
+		if editor == "" {
+			_ = os.Remove(m.tempFile)
+			return m.advanceStep()
+		}
+
+		c := exec.Command(editor, m.tempFile)
+		return m, tea.ExecProcess(c, func(err error) tea.Msg {
+			content, readErr := os.ReadFile(m.tempFile)
+			_ = os.Remove(m.tempFile)
+			if err != nil || readErr != nil {
+				return editorFinishedMsg{content: "", err: err}
+			}
+			return editorFinishedMsg{content: strings.TrimSpace(string(content))}
+		})
+	}
+
+	if current.fieldType == "filepicker" {
+		if string(current.filterInput) == ":skip" {
+			current.value = "N/A"
+		} else {
+			var selected []string
+			for i, f := range current.allFiles {
+				if current.selectedMap[i] {
+					selected = append(selected, f)
+				}
+			}
+			if len(selected) == 0 {
+				return m, nil
+			}
+			current.value = strings.Join(selected, ",")
+		}
+	}
+
+	if current.fieldType == "select" {
+		current.value = current.options[current.cursorPos]
+	}
+
+	if current.fieldType == "multiselect" {
+		var selected []string
+		for i, opt := range current.options {
+			if current.selectedMap[i] {
+				selected = append(selected, opt)
+			}
+		}
+		current.value = strings.Join(selected, ",")
+	}
+
+	if current.fieldType == "text" {
+		current.value = strings.TrimSpace(m.textarea.Value())
+		if current.value == ":skip" {
+			current.value = "N/A"
+		}
+	}
+
+	if current.fieldType == "text" && current.value == "" {
+		return m, nil
+	}
+
+	if current.value == "" && current.required {
+		return m, nil
+	}
+
+	return m.advanceStep()
 }
 
 func (m Model) View() string {
@@ -541,7 +558,7 @@ func (m Model) View() string {
 		return ""
 	}
 	if m.Completed() {
-		return ":(  Done!\n"
+		return "Done!\n"
 	}
 
 	current := m.steps[m.currentStep]
@@ -557,7 +574,7 @@ func (m Model) View() string {
 		requiredHint = " (required)"
 	}
 
-	fmt.Fprintf(&b, "\n:(  %s%s\n\n", current.prompt, requiredHint)
+	fmt.Fprintf(&b, "\n%s%s\n\n", current.prompt, requiredHint)
 
 	if current.fieldType == "text" {
 		fmt.Fprintf(&b, "  \n%s\n\n", m.textarea.View())

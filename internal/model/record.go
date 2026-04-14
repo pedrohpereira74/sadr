@@ -6,8 +6,29 @@ import (
 	"time"
 )
 
+func ParseTags(s string) []string {
+	var tags []string
+	for t := range strings.SplitSeq(s, ",") {
+		t = strings.TrimSpace(t)
+		if t != "" {
+			tags = append(tags, t)
+		}
+	}
+	return tags
+}
+
 const SchemaVersion = 1
 const NoFileRef = "N/A"
+
+const (
+	FieldTitle   = "title"
+	FieldTags    = "tags"
+	FieldSnippet = "snippet"
+	FieldStatus  = "status"
+	FieldFileRef = "file_ref"
+
+	MaxSnippetFileSize = 10 << 20 // 10 MB
+)
 
 type Record struct {
 	Title         string

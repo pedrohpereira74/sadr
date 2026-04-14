@@ -14,6 +14,8 @@ import (
 	"github.com/pedrohpereira74/sadr/internal/ask"
 	"github.com/pedrohpereira74/sadr/internal/config"
 	"github.com/pedrohpereira74/sadr/internal/discover"
+	jiraenricher "github.com/pedrohpereira74/sadr/internal/enricher/jira"
+	jiraclient "github.com/pedrohpereira74/sadr/internal/jira"
 	"github.com/pedrohpereira74/sadr/internal/storage"
 	"github.com/pedrohpereira74/sadr/internal/ui"
 )
@@ -39,6 +41,10 @@ func DefaultPersonas() []ask.Persona {
 		{
 			Name:        "DevOps Engineer",
 			Instruction: "Analyze decisions strictly through a DevOps lens: deployment risks, infrastructure concerns, CI/CD impacts, and operational reliability. If a finding is not directly related to deployment or operations, do not include it.",
+		},
+		{
+			Name:        "UX Designer",
+			Instruction: "Analyze decisions strictly through a UX and product design lens: user flows, interface consistency, accessibility, and the impact of technical decisions on the end-user experience. If a finding is not directly related to usability or design, do not include it.",
 		},
 	}
 }
@@ -94,16 +100,73 @@ func selectPersona() ask.Persona {
 	return ask.Persona{}
 }
 
-func loadAIConfig() (string, string) {
+func warnIfJiraNotConfiguredForProject(projectJiraURL string, hasJiraField bool) {
+	cfg := loadGlobalConfig()
+	j := cfg.Jira
+	if j.DisableProjectWarning {
+		return
+	}
+	hasCredentials := j.Username != "" || j.Token != "" || j.TokenEnv != "" || j.ConsumerKey != ""
+	if !hasCredentials {
+		return
+	}
+	if projectJiraURL == "" && !hasJiraField {
+		ui.Warning(os.Stderr, "jira credentials configured but this project has no jira setup.")
+		ui.Warning(os.Stderr, "add 'jira.url' and a field of type 'jira' to your .sadr/configs/*.yaml to enable it.")
+		ui.Warning(os.Stderr, "to suppress this warning: sadr config --disable-jira-warning")
+	}
+}
+
+func loadProjectJiraURL(configsDir string) string {
+	entries, err := os.ReadDir(configsDir)
+	if err != nil {
+		return ""
+	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".yaml") {
+			continue
+		}
+		cfg, err := config.LoadFromFile(filepath.Join(configsDir, e.Name()))
+		if err != nil {
+			continue
+		}
+		if cfg.Jira.URL != "" {
+			return cfg.Jira.URL
+		}
+	}
+	return ""
+}
+
+func loadJiraEnricher(projectURL string) *jiraenricher.Enricher {
+	cfg := loadGlobalConfig()
+	j := cfg.Jira
+	return jiraenricher.New(projectURL, jiraclient.ClientConfig{
+		Username:          j.Username,
+		Password:          j.Password,
+		PasswordEnv:       j.PasswordEnv,
+		Token:             j.Token,
+		TokenEnv:          j.TokenEnv,
+		ConsumerKey:       j.ConsumerKey,
+		PrivateKeyPath:    j.PrivateKeyPath,
+		AccessToken:       j.AccessToken,
+		AccessTokenSecret: j.AccessTokenSecret,
+	})
+}
+
+func loadGlobalConfig() config.GlobalConfig {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", ""
+		return config.GlobalConfig{}
 	}
-	globalConfigPath := filepath.Join(home, ".sadr", "global-config.yaml")
-	cfg, err := config.LoadGlobalFromFile(globalConfigPath)
+	cfg, err := config.LoadGlobalFromFile(filepath.Join(home, ".sadr", "global-config.yaml"))
 	if err != nil {
-		return "", ""
+		return config.GlobalConfig{}
 	}
+	return cfg
+}
+
+func loadAIConfig() (string, string) {
+	cfg := loadGlobalConfig()
 	apiKey := cfg.AI.APIKey
 	if apiKey == "" && cfg.AI.APIKeyEnv != "" {
 		apiKey = os.Getenv(cfg.AI.APIKeyEnv)
@@ -112,15 +175,7 @@ func loadAIConfig() (string, string) {
 }
 
 func loadLanguageConfig() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "English"
-	}
-	globalConfigPath := filepath.Join(home, ".sadr", "global-config.yaml")
-	cfg, err := config.LoadGlobalFromFile(globalConfigPath)
-	if err != nil {
-		return "English"
-	}
+	cfg := loadGlobalConfig()
 	if cfg.Language == "" {
 		return "English"
 	}
@@ -139,15 +194,7 @@ func parseID(raw string) (int, error) {
 }
 
 func loadUsername() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	cfg, err := config.LoadGlobalFromFile(filepath.Join(home, ".sadr", "global-config.yaml"))
-	if err != nil {
-		return ""
-	}
-	return cfg.Username
+	return loadGlobalConfig().Username
 }
 
 func allUserRecordsDirs(sadrRoot string) []string {
@@ -175,11 +222,44 @@ func listAllRecordEntries(sadrRoot string) ([]storage.RecordEntry, error) {
 		s := storage.NewStorage(dir)
 		entries, err := s.ListRecordEntries()
 		if err != nil {
+			ui.Warning(os.Stderr, fmt.Sprintf("skipping %s: %v", dir, err))
 			continue
 		}
 		all = append(all, entries...)
 	}
 	return all, nil
+}
+
+func pickConfigFile(configsDir string) (string, error) {
+	entries, err := os.ReadDir(configsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("configs directory not found: %q", configsDir)
+		}
+		return "", fmt.Errorf("failed to read configs directory %q: %w", configsDir, err)
+	}
+	var configs []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".yaml") {
+			configs = append(configs, e.Name())
+		}
+	}
+	if len(configs) == 0 {
+		return "", fmt.Errorf("no config files found in %q", configsDir)
+	}
+	if len(configs) == 1 {
+		return filepath.Join(configsDir, configs[0]), nil
+	}
+	options := make([]selectOption, 0, len(configs))
+	for _, f := range configs {
+		name := configDisplayName(f)
+		options = append(options, selectOption{Label: name, Value: f})
+	}
+	chosen := runSelect("which config?", options)
+	if chosen == "" {
+		return "", fmt.Errorf("cancelled")
+	}
+	return filepath.Join(configsDir, chosen), nil
 }
 
 func parseUserID(raw string) (username string, id int, err error) {
@@ -241,7 +321,7 @@ func (m selectModel) View() string {
 		return ""
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "\n:(  %s\n\n", m.prompt)
+	fmt.Fprintf(&b, "\n%s\n\n", m.prompt)
 	for i, opt := range m.options {
 		cursor := "  "
 		if i == m.cursor {
@@ -294,7 +374,7 @@ func (m textareaModel) View() string {
 	if m.done {
 		return ""
 	}
-	return fmt.Sprintf("\n:(  %s\n\n%s\n\n  (Enter to confirm, Esc to cancel)\n", m.prompt, m.textarea.View())
+	return fmt.Sprintf("\n%s\n\n%s\n\n  (Enter to confirm, Esc to cancel)\n", m.prompt, m.textarea.View())
 }
 
 func runTextarea(prompt string, placeholder string) string {

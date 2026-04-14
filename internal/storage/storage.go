@@ -8,6 +8,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -25,6 +26,7 @@ var (
 
 type Storage struct {
 	Dir string
+	mu  sync.Mutex
 }
 
 type RecordEntry struct {
@@ -54,6 +56,10 @@ func (s *Storage) SaveRecord(r model.Record) (string, error) {
 
 	slug := Slugify(r.Title)
 	data := []byte(content.String())
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	nextID := s.getMaxID() + 1
 
 	for range 100 {
@@ -95,19 +101,12 @@ func buildFrontmatter(r model.Record) map[string]any {
 		fm["author"] = r.Author
 	}
 
-	if tagsStr, ok := r.Fields["tags"]; ok && tagsStr != "" {
-		var clean []string
-		for t := range strings.SplitSeq(tagsStr, ",") {
-			t = strings.TrimSpace(t)
-			if t != "" {
-				clean = append(clean, t)
-			}
-		}
-		fm["tags"] = clean
+	if tagsStr, ok := r.Fields[model.FieldTags]; ok && tagsStr != "" {
+		fm[model.FieldTags] = model.ParseTags(tagsStr)
 	}
 
-	if statusStr, ok := r.Fields["status"]; ok && statusStr != "" {
-		fm["status"] = statusStr
+	if statusStr, ok := r.Fields[model.FieldStatus]; ok && statusStr != "" {
+		fm[model.FieldStatus] = statusStr
 	}
 
 	return fm
@@ -116,15 +115,15 @@ func buildFrontmatter(r model.Record) map[string]any {
 func formatBody(content *strings.Builder, r model.Record) {
 	fmt.Fprintf(content, "# %s\n\n", r.Title)
 
-	if tagsStr, ok := r.Fields["tags"]; ok && tagsStr != "" {
+	if tagsStr, ok := r.Fields[model.FieldTags]; ok && tagsStr != "" {
 		var formattedTags []string
-		for t := range strings.SplitSeq(tagsStr, ",") {
-			formattedTags = append(formattedTags, "`#"+strings.TrimSpace(t)+"`")
+		for _, t := range model.ParseTags(tagsStr) {
+			formattedTags = append(formattedTags, "`#"+t+"`")
 		}
 		fmt.Fprintf(content, "**Tags:** %s\n\n", strings.Join(formattedTags, " "))
 	}
 
-	if statusStr, ok := r.Fields["status"]; ok && statusStr != "" {
+	if statusStr, ok := r.Fields[model.FieldStatus]; ok && statusStr != "" {
 		fmt.Fprintf(content, "**Status:** %s\n\n", statusStr)
 	}
 
@@ -133,7 +132,7 @@ func formatBody(content *strings.Builder, r model.Record) {
 		fmt.Fprintf(content, "## Snippet\n\n%s\n%s\n%s\n\n", bt, strings.TrimSpace(r.Snippet), bt)
 	}
 
-	written := map[string]bool{"tags": true, "status": true}
+	written := map[string]bool{model.FieldTags: true, model.FieldStatus: true}
 
 	for _, key := range r.FieldOrder {
 		value, ok := r.Fields[key]
@@ -201,7 +200,7 @@ func (s *Storage) LoadRecord(path string) (model.Record, error) {
 
 	validTypes := map[string]bool{"full": true, "snippet": true, "adr": true}
 	if !validTypes[recordType] {
-		_, _ = fmt.Fprintf(os.Stderr, ":(  warning: record has unknown type '%s'\n", recordType)
+		_, _ = fmt.Fprintf(os.Stderr, "warning: record has unknown type '%s'\n", recordType)
 	}
 
 	r := model.Record{
@@ -214,16 +213,16 @@ func (s *Storage) LoadRecord(path string) (model.Record, error) {
 		Fields:        map[string]string{},
 	}
 
-	if tags, ok := front["tags"].([]any); ok {
+	if tags, ok := front[model.FieldTags].([]any); ok {
 		strs := make([]string, len(tags))
 		for i, v := range tags {
 			strs[i] = fmt.Sprintf("%v", v)
 		}
-		r.Fields["tags"] = strings.Join(strs, ",")
+		r.Fields[model.FieldTags] = strings.Join(strs, ",")
 	}
 
-	if status, ok := front["status"].(string); ok && status != "" {
-		r.Fields["status"] = status
+	if status, ok := front[model.FieldStatus].(string); ok && status != "" {
+		r.Fields[model.FieldStatus] = status
 	}
 
 	body := strings.TrimSpace(parts[2])
@@ -231,7 +230,7 @@ func (s *Storage) LoadRecord(path string) (model.Record, error) {
 	for name, value := range sections {
 		normalized := strings.ToLower(name)
 		normalized = strings.ReplaceAll(normalized, " ", "_")
-		if normalized == "snippet" {
+		if normalized == model.FieldSnippet {
 			r.Snippet = extractCodeBlock(value)
 		} else {
 			r.Fields[normalized] = strings.TrimSpace(value)
@@ -241,7 +240,7 @@ func (s *Storage) LoadRecord(path string) (model.Record, error) {
 	for _, name := range sectionOrder {
 		normalized := strings.ToLower(name)
 		normalized = strings.ReplaceAll(normalized, " ", "_")
-		if normalized != "snippet" {
+		if normalized != model.FieldSnippet {
 			r.FieldOrder = append(r.FieldOrder, normalized)
 		}
 	}
@@ -267,7 +266,7 @@ func (s *Storage) ListRecordEntries() ([]RecordEntry, error) {
 		path := filepath.Join(s.Dir, entry.Name())
 		r, err := s.LoadRecord(path)
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, ":(  Skipping invalid record %s: %v\n", entry.Name(), err)
+			_, _ = fmt.Fprintf(os.Stderr, "Skipping invalid record %s: %v\n", entry.Name(), err)
 			continue
 		}
 		records = append(records, RecordEntry{
@@ -403,19 +402,6 @@ func NextID(dir string) int {
 		}
 	}
 	return maxID + 1
-}
-
-func FindFileByID(dir string, id int) (string, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return "", err
-	}
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".md") && ParseFileID(entry.Name()) == id {
-			return filepath.Join(dir, entry.Name()), nil
-		}
-	}
-	return "", fmt.Errorf("#%d not found", id)
 }
 
 func determineBackticks(snippet string) string {

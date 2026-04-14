@@ -9,8 +9,9 @@ import (
 )
 
 type Config struct {
-	Fields []Field   `yaml:"fields"`
-	Ask    AskConfig `yaml:"ask"`
+	Fields []Field           `yaml:"fields"`
+	Ask    AskConfig         `yaml:"ask"`
+	Jira   ProjectJiraConfig `yaml:"jira"`
 }
 
 type AskConfig struct {
@@ -19,10 +20,28 @@ type AskConfig struct {
 }
 
 type GlobalConfig struct {
-	Username string   `yaml:"username"`
-	Editor   string   `yaml:"editor"`
-	Language string   `yaml:"language"`
-	AI       AIConfig `yaml:"ai"`
+	Username string     `yaml:"username"`
+	Editor   string     `yaml:"editor"`
+	Language string     `yaml:"language"`
+	AI       AIConfig   `yaml:"ai"`
+	Jira     JiraConfig `yaml:"jira"`
+}
+
+type JiraConfig struct {
+	Username               string `yaml:"username"`
+	Password               string `yaml:"password"`
+	PasswordEnv            string `yaml:"password_env"`
+	Token                  string `yaml:"token"`
+	TokenEnv               string `yaml:"token_env"`
+	ConsumerKey            string `yaml:"consumer_key"`
+	PrivateKeyPath         string `yaml:"private_key_path"`
+	AccessToken            string `yaml:"access_token"`
+	AccessTokenSecret      string `yaml:"access_token_secret"`
+	DisableProjectWarning  bool   `yaml:"disable_project_warning"`
+}
+
+type ProjectJiraConfig struct {
+	URL string `yaml:"url"`
 }
 type AIConfig struct {
 	Provider  string `yaml:"provider"`
@@ -73,25 +92,37 @@ func LoadGlobalFromFile(path string) (GlobalConfig, error) {
 	return LoadGlobalFromString(string(data))
 }
 
-func validate(cfg Config) error {
-	ValidTypes := []string{
-		"text",
-		"select",
-		"multitext",
-		"multiselect",
-		"list",
+func SaveGlobalConfig(path string, cfg GlobalConfig) error {
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return err
 	}
+	return os.WriteFile(path, data, 0600)
+}
+
+func validate(cfg Config) error {
+	validTypes := map[string]bool{
+		"text":        true,
+		"select":      true,
+		"multitext":   true,
+		"multiselect": true,
+		"list":        true,
+		"jira":        true,
+	}
+	reserved := map[string]bool{"snippet": true, "file_ref": true}
+	seen := make(map[string]bool, len(cfg.Fields))
 	for _, field := range cfg.Fields {
 		if field.Name == "" {
 			return errors.New("field name must not be empty")
 		}
-		found := false
-		for _, validType := range ValidTypes {
-			if field.Type == validType {
-				found = true
-			}
+		if reserved[field.Name] {
+			return fmt.Errorf("field name %q is reserved", field.Name)
 		}
-		if !found {
+		if seen[field.Name] {
+			return fmt.Errorf("duplicate field name: %q", field.Name)
+		}
+		seen[field.Name] = true
+		if !validTypes[field.Type] {
 			return fmt.Errorf("invalid type '%s' for field '%s'", field.Type, field.Name)
 		}
 		if field.Required == nil {
@@ -102,5 +133,4 @@ func validate(cfg Config) error {
 		}
 	}
 	return nil
-
 }

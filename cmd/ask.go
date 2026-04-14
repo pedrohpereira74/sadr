@@ -52,6 +52,49 @@ func newAskCmd() *cobra.Command {
 	return cmd
 }
 
+func filterRecordEntries(entries []storage.RecordEntry, opts *askOptions, cfg config.AskConfig) []storage.RecordEntry {
+	cutoff := parseRangeCutoff(cfg.Range)
+	var result []storage.RecordEntry
+	for _, e := range entries {
+		if opts.tags != "" && !search.HasAnyTag(e.Record.Fields["tags"], opts.tags) {
+			continue
+		}
+		if opts.field != "" {
+			parts := strings.SplitN(opts.field, "=", 2)
+			if e.Record.Fields[parts[0]] != parts[1] {
+				continue
+			}
+		}
+		status := e.Record.Fields["status"]
+		if status == "proposed" || status == "deprecated" || status == "superseded" {
+			continue
+		}
+		if !cutoff.IsZero() && e.Record.CreatedAt.Before(cutoff) {
+			continue
+		}
+		result = append(result, e)
+	}
+	if cfg.Limit > 0 && len(result) > cfg.Limit {
+		result = result[len(result)-cfg.Limit:]
+	}
+	return result
+}
+
+func writeAnswerFile(answersDir string, persona ask.Persona, question, response string) (string, error) {
+	if err := os.MkdirAll(answersDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create answers directory: %v", err)
+	}
+	slug := PersonaSlug(persona.Name)
+	nextID := storage.NextID(answersDir)
+	filename := fmt.Sprintf("sadr-answer-%04d-%s.md", nextID, slug)
+	outputPath := filepath.Join(answersDir, filename)
+	content := fmt.Sprintf("**Persona:** %s  \n**Question:** %s\n\n---\n\n%s\n", persona.Name, question, response)
+	if err := os.WriteFile(outputPath, []byte(content), 0644); err != nil {
+		return "", fmt.Errorf("failed to save answer: %v", err)
+	}
+	return outputPath, nil
+}
+
 func runAsk(opts *askOptions) {
 	paths, err := resolvePaths(opts.global)
 	if err != nil {
@@ -88,42 +131,8 @@ func runAsk(opts *askOptions) {
 		return
 	}
 
-	var filtered []storage.RecordEntry
-	for _, e := range entries {
-		match := true
-		if opts.tags != "" && !search.HasAnyTag(e.Record.Fields["tags"], opts.tags) {
-			match = false
-		}
-		if match && opts.field != "" {
-			parts := strings.SplitN(opts.field, "=", 2)
-			if e.Record.Fields[parts[0]] != parts[1] {
-				match = false
-			}
-		}
-		if match {
-			filtered = append(filtered, e)
-		}
-	}
-
 	askCfg := loadAskConfig(paths.ConfigsDir)
-	cutoff := parseRangeCutoff(askCfg.Range)
-
-	var askFiltered []storage.RecordEntry
-	for _, e := range filtered {
-		status := e.Record.Fields["status"]
-		if status == "proposed" || status == "deprecated" || status == "superseded" {
-			continue
-		}
-		if !cutoff.IsZero() && e.Record.CreatedAt.Before(cutoff) {
-			continue
-		}
-		askFiltered = append(askFiltered, e)
-	}
-	filtered = askFiltered
-
-	if askCfg.Limit > 0 && len(filtered) > askCfg.Limit {
-		filtered = filtered[len(filtered)-askCfg.Limit:]
-	}
+	filtered := filterRecordEntries(entries, opts, askCfg)
 
 	if len(filtered) == 0 {
 		ui.Info(os.Stderr, "nothing here yet. run 'sadr new' to capture your first snippet.")
@@ -149,6 +158,12 @@ func runAsk(opts *askOptions) {
 	}
 
 	enrichers := []enricher.Enricher{sourcecode.Enricher{}}
+	projectJiraURL := loadProjectJiraURL(paths.ConfigsDir)
+	if je := loadJiraEnricher(projectJiraURL); je != nil {
+		enrichers = append(enrichers, je)
+	} else {
+		warnIfJiraNotConfiguredForProject(projectJiraURL, false)
+	}
 
 	var contexts []enricher.RecordContext
 	for _, e := range filtered {
@@ -195,20 +210,9 @@ func runAsk(opts *askOptions) {
 		return
 	}
 
-	answersDir := paths.Answers
-	if err := os.MkdirAll(answersDir, 0755); err != nil {
-		ui.Error(os.Stderr, fmt.Sprintf("failed to create answers directory: %v", err))
-		return
-	}
-
-	slug := PersonaSlug(persona.Name)
-	nextID := storage.NextID(answersDir)
-	filename := fmt.Sprintf("sadr-answer-%04d-%s.md", nextID, slug)
-	outputPath := filepath.Join(answersDir, filename)
-
-	content := fmt.Sprintf("**Persona:** %s  \n**Question:** %s\n\n---\n\n%s\n", persona.Name, question, response)
-	if err := os.WriteFile(outputPath, []byte(content), 0644); err != nil {
-		ui.Error(os.Stderr, fmt.Sprintf("failed to save answer: %v", err))
+	outputPath, err := writeAnswerFile(paths.Answers, persona, question, response)
+	if err != nil {
+		ui.Error(os.Stderr, err.Error())
 		return
 	}
 	ui.Success(os.Stderr, fmt.Sprintf("answer saved to %s", filepath.Base(outputPath)))
