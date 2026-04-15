@@ -23,14 +23,15 @@ import (
 )
 
 type newOptions struct {
-	title     string
-	global    bool
-	clipboard bool
-	file      string
-	smart     bool
-	model     string
-	diff      bool
-	config    string
+	title      string
+	global     bool
+	clipboard  bool
+	file       string
+	smart      bool
+	model      string
+	diff       bool
+	config     string
+	fineTuning bool
 }
 
 func newNewCmd() *cobra.Command {
@@ -63,6 +64,7 @@ func newNewCmd() *cobra.Command {
 	cmd.PersistentFlags().StringVar(&opts.model, "model", "", "Override AI model (auto-enables --smart)")
 	cmd.PersistentFlags().BoolVarP(&opts.diff, "diff", "d", false, "Read snippet from git diff")
 	cmd.PersistentFlags().StringVar(&opts.config, "config", "", "Use a specific config (e.g. db, api, default)")
+	cmd.PersistentFlags().BoolVar(&opts.fineTuning, "fine-tuning", false, "Prompt for a custom instruction to guide the AI (requires --smart)")
 	cmd.MarkFlagsMutuallyExclusive("clipboard", "file", "diff")
 	cmd.AddCommand(adrCmd, snippetCmd)
 	return cmd
@@ -268,7 +270,15 @@ func loadJiraClient(projectURL string) *jiraclient.Client {
 	})
 }
 
-func loadAISuggestions(opts *newOptions, snippet string, fieldDefs []wizard.FieldDef, jiraContext string) (map[string]string, error) {
+func collectFineTuningHint(opts *newOptions) string {
+	if !opts.fineTuning || !opts.smart {
+		return ""
+	}
+	hint := runTextarea("add a custom instruction to guide the AI (optional):", "e.g. focus on security implications, this is a React component...")
+	return strings.TrimSpace(hint)
+}
+
+func loadAISuggestions(opts *newOptions, snippet string, fieldDefs []wizard.FieldDef, jiraContext string, fineTuningHint string) (map[string]string, error) {
 	ui.Info(os.Stderr, "analyzing snippet...")
 
 	cfg := loadGlobalConfig()
@@ -302,7 +312,7 @@ func loadAISuggestions(opts *newOptions, snippet string, fieldDefs []wizard.Fiel
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	suggestions, err := ai.Suggest(ctx, compress.ZipSnippet(snippet), fields, docLanguage, aiKey, modelName, aiDepth, jiraContext)
+	suggestions, err := ai.Suggest(ctx, compress.ZipSnippet(snippet), fields, docLanguage, aiKey, modelName, aiDepth, jiraContext, fineTuningHint)
 	if err != nil {
 		if ctx.Err() != nil {
 			fmt.Fprintln(os.Stderr)
@@ -408,7 +418,7 @@ func extractFilesFromDiff(diffContent string) []string {
 			if len(parts) >= 4 {
 				bPath := parts[3]
 				if strings.HasPrefix(bPath, "b/") {
-					path := bPath[2:]
+					path := filepath.FromSlash(bPath[2:])
 					if !seen[path] {
 						seen[path] = true
 						files = append(files, path)
@@ -430,7 +440,7 @@ func listUntrackedFiles() []string {
 	for line := range strings.SplitSeq(strings.TrimSpace(string(output)), "\n") {
 		line = strings.TrimRight(line, "\r")
 		if line != "" {
-			files = append(files, line)
+			files = append(files, filepath.FromSlash(line))
 		}
 	}
 	return files
@@ -510,6 +520,7 @@ func runNew(recordType string, opts *newOptions) func(cmd *cobra.Command, args [
 		}
 
 		var r model.Record
+		var fineTuningHint string
 
 		if opts.title == "" {
 			fieldDefs, cfgErr := loadFieldDefs(configPath)
@@ -530,8 +541,9 @@ func runNew(recordType string, opts *newOptions) func(cmd *cobra.Command, args [
 				}
 				warnIfJiraNotConfiguredForProject(projectJiraURL, hasJiraField)
 				cardKey, jiraCtx := collectJiraContext(fieldDefs, projectJiraURL)
+				fineTuningHint = collectFineTuningHint(opts)
 				var aiErr error
-				suggestions, aiErr = loadAISuggestions(opts, snippetFromSource, fieldDefs, jiraCtx)
+				suggestions, aiErr = loadAISuggestions(opts, snippetFromSource, fieldDefs, jiraCtx, fineTuningHint)
 				if aiErr != nil {
 					return
 				}
@@ -590,6 +602,10 @@ func runNew(recordType string, opts *newOptions) func(cmd *cobra.Command, args [
 
 		if paths.Username != "" {
 			r.Author = paths.Username
+		}
+
+		if fineTuningHint != "" {
+			r.FineTuningHint = fineTuningHint
 		}
 
 		s := storage.NewStorage(recordsDir)

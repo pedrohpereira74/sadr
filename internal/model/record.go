@@ -31,15 +31,16 @@ const (
 )
 
 type Record struct {
-	Title         string
-	Type          string
-	Snippet       string
-	SchemaVersion int
-	FileRef       string
-	Author        string
-	Fields        map[string]string
-	FieldOrder    []string
-	CreatedAt     time.Time
+	Title          string
+	Type           string
+	Snippet        string
+	SchemaVersion  int
+	FileRef        string
+	Author         string
+	FineTuningHint string
+	Fields         map[string]string
+	FieldOrder     []string
+	CreatedAt      time.Time
 }
 
 func NewRecordWithOptions(title string, recordType string) (Record, error) {

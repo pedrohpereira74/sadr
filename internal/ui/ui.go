@@ -12,7 +12,7 @@ import (
 	"golang.org/x/term"
 )
 
-var isTTY = true
+var hasColor = true
 
 var symInfo, symSuccess, symError, symWarning string
 
@@ -23,7 +23,7 @@ var (
 )
 
 func init() {
-	isTTY = term.IsTerminal(int(os.Stdout.Fd()))
+	hasColor = term.IsTerminal(int(os.Stderr.Fd()))
 
 	if supportsUnicode() {
 		symInfo = "· "
@@ -31,7 +31,7 @@ func init() {
 		symError = "✗ "
 		symWarning = "! "
 	} else {
-		symInfo = "  "
+		symInfo = "- "
 		symSuccess = "+ "
 		symError = "x "
 		symWarning = "! "
@@ -39,10 +39,16 @@ func init() {
 }
 
 func supportsUnicode() bool {
+	// JetBrains IDEs (GoLand, IntelliJ, etc.) use JediTerm which supports UTF-8
+	if os.Getenv("TERMINAL_EMULATOR") != "" {
+		return true
+	}
 	if runtime.GOOS == "windows" {
+		// Windows Terminal
 		if os.Getenv("WT_SESSION") != "" {
 			return true
 		}
+		// VSCode, Hyper, etc.
 		if os.Getenv("TERM_PROGRAM") != "" {
 			return true
 		}
@@ -59,7 +65,7 @@ func supportsUnicode() bool {
 }
 
 func setTTY(v bool) {
-	isTTY = v
+	hasColor = v
 }
 
 var PauseFn = func(seconds float64) {
@@ -67,30 +73,28 @@ var PauseFn = func(seconds float64) {
 }
 
 func Info(w io.Writer, msg string) {
-	if !isTTY {
-		return
-	}
 	_, _ = fmt.Fprintf(w, "%s%s\n", symInfo, msg)
 }
 
 func Error(w io.Writer, msg string) {
 	sym := symError
-	if isTTY {
+	if hasColor {
 		sym = styleError.Render(symError)
 	}
 	_, _ = fmt.Fprintf(w, "%s%s\n", sym, msg)
 }
 
 func Success(w io.Writer, msg string) {
-	if !isTTY {
-		return
+	sym := symSuccess
+	if hasColor {
+		sym = styleSuccess.Render(symSuccess)
 	}
-	_, _ = fmt.Fprintf(w, "%s%s\n", styleSuccess.Render(symSuccess), msg)
+	_, _ = fmt.Fprintf(w, "%s%s\n", sym, msg)
 }
 
 func Warning(w io.Writer, msg string) {
 	sym := symWarning
-	if isTTY {
+	if hasColor {
 		sym = styleWarning.Render(symWarning)
 	}
 	_, _ = fmt.Fprintf(w, "%s%s\n", sym, msg)

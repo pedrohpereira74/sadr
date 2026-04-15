@@ -101,6 +101,10 @@ func buildFrontmatter(r model.Record) map[string]any {
 		fm["author"] = r.Author
 	}
 
+	if r.FineTuningHint != "" {
+		fm["fine_tuning_hint"] = r.FineTuningHint
+	}
+
 	if tagsStr, ok := r.Fields[model.FieldTags]; ok && tagsStr != "" {
 		fm[model.FieldTags] = model.ParseTags(tagsStr)
 	}
@@ -128,6 +132,9 @@ func formatBody(content *strings.Builder, r model.Record) {
 	}
 
 	if r.Snippet != "" {
+		if r.FineTuningHint != "" {
+			_, _ = fmt.Fprintf(content, "**Question:**\n> %s\n\n", r.FineTuningHint)
+		}
 		bt := determineBackticks(r.Snippet)
 		_, _ = fmt.Fprintf(content, "## Snippet\n\n%s\n%s\n%s\n\n", bt, strings.TrimSpace(r.Snippet), bt)
 	}
@@ -197,6 +204,7 @@ func (s *Storage) LoadRecord(path string) (model.Record, error) {
 	recordType, _ := front["type"].(string)
 	fileRef, _ := front["file_ref"].(string)
 	author, _ := front["author"].(string)
+	fineTuningHint, _ := front["fine_tuning_hint"].(string)
 
 	validTypes := map[string]bool{"full": true, "snippet": true, "adr": true}
 	if !validTypes[recordType] {
@@ -204,13 +212,14 @@ func (s *Storage) LoadRecord(path string) (model.Record, error) {
 	}
 
 	r := model.Record{
-		Title:         title,
-		Type:          recordType,
-		SchemaVersion: schemaVersion,
-		FileRef:       fileRef,
-		Author:        author,
-		CreatedAt:     createdAt,
-		Fields:        map[string]string{},
+		Title:          title,
+		Type:           recordType,
+		SchemaVersion:  schemaVersion,
+		FileRef:        fileRef,
+		Author:         author,
+		FineTuningHint: fineTuningHint,
+		CreatedAt:      createdAt,
+		Fields:         map[string]string{},
 	}
 
 	if tags, ok := front[model.FieldTags].([]any); ok {

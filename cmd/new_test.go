@@ -270,8 +270,9 @@ index 1234567..abcdefg 100644
  package handlers`
 
 	result := extractFilesFromDiff(diff)
-	if len(result) != 1 || result[0] != "src/handlers/auth.go" {
-		t.Errorf("expected ['src/handlers/auth.go'], got %v", result)
+	want := filepath.FromSlash("src/handlers/auth.go")
+	if len(result) != 1 || result[0] != want {
+		t.Errorf("expected [%q], got %v", want, result)
 	}
 }
 
@@ -293,7 +294,7 @@ index 1234567..abcdefg 100644`
 		t.Fatalf("expected 2 files, got %d", len(result))
 	}
 	if result[0] != "file1.go" || result[1] != "file2.go" {
-		t.Errorf("expected ['file1.go', 'file2.go'], got %v", result)
+		t.Errorf("expected [file1.go file2.go], got %v", result)
 	}
 }
 
