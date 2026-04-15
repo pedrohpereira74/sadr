@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/pedrohpereira74/sadr/internal/model"
 	"gopkg.in/yaml.v3"
 )
 
@@ -109,7 +110,11 @@ func validate(cfg Config) error {
 		"list":        true,
 		"jira":        true,
 	}
-	reserved := map[string]bool{"snippet": true, "file_ref": true}
+	reserved := map[string]bool{
+		model.FieldSnippet: true,
+		model.FieldFileRef: true,
+		model.FieldStatus:  true,
+	}
 	seen := make(map[string]bool, len(cfg.Fields))
 	for _, field := range cfg.Fields {
 		if field.Name == "" {

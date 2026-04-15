@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -163,6 +164,66 @@ func TestConfigSetAPIKeyNoPromptWhenEmpty(t *testing.T) {
 	content, _ := os.ReadFile(configPath)
 	if !strings.Contains(string(content), "fresh-key") {
 		t.Error("expected new key to be written without prompting")
+	}
+}
+
+func TestConfigCheckPassesOnValidConfig(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "sadr-test-*")
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	configsDir := filepath.Join(dir, ".sadr", "configs")
+	_ = os.MkdirAll(configsDir, 0755)
+	_ = os.WriteFile(filepath.Join(configsDir, "default-config.yaml"), []byte(`
+fields:
+  - name: title
+    type: text
+    required: true
+`), 0644)
+
+	originalWd, _ := os.Getwd()
+	_ = os.Chdir(dir)
+	t.Cleanup(func() { os.Chdir(originalWd) })
+
+	resetCmd(findSubCmd("config"))
+	rootCmd.SetArgs([]string{"config", "--check"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestConfigCheckReportsInvalidConfig(t *testing.T) {
+	dir, _ := os.MkdirTemp("", "sadr-test-*")
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	configsDir := filepath.Join(dir, ".sadr", "configs")
+	_ = os.MkdirAll(configsDir, 0755)
+	_ = os.WriteFile(filepath.Join(configsDir, "default-config.yaml"), []byte(`
+fields:
+  - name: status
+    type: text
+    required: false
+`), 0644)
+
+	originalWd, _ := os.Getwd()
+	_ = os.Chdir(dir)
+	t.Cleanup(func() { os.Chdir(originalWd) })
+
+	// redirect stderr to capture ui output
+	r, w, _ := os.Pipe()
+	oldStderr := os.Stderr
+	os.Stderr = w
+	t.Cleanup(func() { os.Stderr = oldStderr })
+
+	resetCmd(findSubCmd("config"))
+	rootCmd.SetArgs([]string{"config", "--check"})
+	_ = rootCmd.Execute()
+
+	w.Close()
+	os.Stderr = oldStderr
+
+	var buf strings.Builder
+	_, _ = io.Copy(&buf, r)
+
+	if !strings.Contains(buf.String(), "reserved") {
+		t.Errorf("expected reserved field error in output, got: %s", buf.String())
 	}
 }
 

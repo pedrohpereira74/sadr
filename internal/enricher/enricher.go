@@ -1,6 +1,8 @@
 package enricher
 
 import (
+	"strings"
+
 	"github.com/pedrohpereira74/sadr/internal/model"
 )
 
@@ -38,7 +40,7 @@ func BuildContext(record model.Record, enrichers []Enricher, projectRoot string)
 	ctx := RecordContext{
 		RecordTitle:   record.Title,
 		RecordType:    record.Type,
-		RecordTags:    record.Fields["tags"],
+		RecordTags:    strings.Join(record.Tags, ","),
 		RecordSnippet: record.Snippet,
 		RecordFields:  record.Fields,
 	}

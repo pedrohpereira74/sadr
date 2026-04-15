@@ -67,7 +67,7 @@ func TestLoadRecordReadsFile(t *testing.T) {
 	r, _ := model.NewRecordWithOptions("Use retry with backoff", "full")
 	r.Snippet = "client := retryablehttp.NewClient()"
 	r.FileRef = "internal/http/client.go"
-	r.Fields["status"] = "accepted"
+	r.Status = "accepted"
 	r.Fields["context"] = "The payment service was unreliable"
 
 	path, _ := s.SaveRecord(r)
@@ -85,8 +85,8 @@ func TestLoadRecordReadsFile(t *testing.T) {
 	if loaded.Snippet != "client := retryablehttp.NewClient()" {
 		t.Errorf("expected snippet content, got '%s'", loaded.Snippet)
 	}
-	if loaded.Fields["status"] != "accepted" {
-		t.Errorf("expected status 'accepted', got '%s'", loaded.Fields["status"])
+	if loaded.Status != "accepted" {
+		t.Errorf("expected status 'accepted', got '%s'", loaded.Status)
 	}
 }
 
@@ -285,7 +285,7 @@ func TestSaveRecordConcurrent(t *testing.T) {
 func TestFormatBodyStatusRendered(t *testing.T) {
 	s := newTestStorage(t)
 	r, _ := model.NewRecordWithOptions("Status test", "full")
-	r.Fields["status"] = "accepted"
+	r.Status = "accepted"
 
 	path, err := s.SaveRecord(r)
 	if err != nil {
@@ -305,15 +305,15 @@ func TestFormatBodyStatusRendered(t *testing.T) {
 func TestLoadRecordPreservesStatus(t *testing.T) {
 	s := newTestStorage(t)
 	r, _ := model.NewRecordWithOptions("Status roundtrip", "full")
-	r.Fields["status"] = "accepted"
+	r.Status = "accepted"
 
 	path, _ := s.SaveRecord(r)
 	loaded, err := s.LoadRecord(path)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if loaded.Fields["status"] != "accepted" {
-		t.Errorf("expected status 'accepted', got '%s'", loaded.Fields["status"])
+	if loaded.Status != "accepted" {
+		t.Errorf("expected status 'accepted', got '%s'", loaded.Status)
 	}
 }
 

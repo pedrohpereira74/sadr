@@ -68,7 +68,7 @@ func newExportCmd() *cobra.Command {
 			if opts.tags != "" {
 				count := 0
 				for _, e := range entries {
-					if search.HasAnyTag(e.Record.Fields["tags"], opts.tags) {
+					if search.HasAnyTag(e.Record.Tags, opts.tags) {
 						exportRecord(e.Record, e.FileID, paths.Exports, opts.adrOnly)
 						count++
 					}
@@ -115,11 +115,17 @@ func exportRecord(r model.Record, id int, exportsDir string, adrOnly bool) {
 		data.Snippet = ""
 	}
 
-	written := map[string]bool{}
-	if tags, ok := r.Fields["tags"]; ok && tags != "" {
-		data.Tags = strings.Join(model.ParseTags(tags), ", ")
-		written["tags"] = true
+	if len(r.Tags) > 0 {
+		data.Tags = strings.Join(r.Tags, ", ")
 	}
+	if r.Status != "" {
+		data.Status = r.Status
+	}
+	if r.FineTuningHint != "" {
+		data.Question = r.FineTuningHint
+	}
+
+	written := map[string]bool{}
 
 	for _, key := range r.FieldOrder {
 		value, ok := r.Fields[key]

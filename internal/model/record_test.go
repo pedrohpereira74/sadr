@@ -117,13 +117,17 @@ func TestRecordCanSetAndGetFields(t *testing.T) {
 	}
 
 	r.Fields["language"] = "go"
-	r.Fields["status"] = "accepted"
+	r.Status = "accepted"
+	r.Tags = []string{"api", "performance"}
 
 	if r.Fields["language"] != "go" {
 		t.Errorf("expected 'go', got '%s'", r.Fields["language"])
 	}
-	if r.Fields["status"] != "accepted" {
-		t.Errorf("expected 'accepted', got '%s'", r.Fields["status"])
+	if r.Status != "accepted" {
+		t.Errorf("expected 'accepted', got '%s'", r.Status)
+	}
+	if len(r.Tags) != 2 || r.Tags[0] != "api" {
+		t.Errorf("expected tags [api performance], got %v", r.Tags)
 	}
 }
 

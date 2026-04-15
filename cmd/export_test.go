@@ -27,15 +27,15 @@ func setupExportTest(t *testing.T) (dir string, username string) {
 	s := storage.NewStorage(recordsDir)
 	r1, _ := model.NewRecordWithOptions("Use retry with backoff", "full")
 	r1.Snippet = "client := retryablehttp.NewClient()"
-	r1.Fields["tags"] = "api,performance"
+	r1.Tags = []string{"api", "performance"}
 	_, _ = s.SaveRecord(r1)
 
 	r2, _ := model.NewRecordWithOptions("Redis cache strategy", "full")
-	r2.Fields["tags"] = "database,performance"
+	r2.Tags = []string{"database", "performance"}
 	_, _ = s.SaveRecord(r2)
 
 	r3, _ := model.NewRecordWithOptions("Auth token rotation", "full")
-	r3.Fields["tags"] = "security,api"
+	r3.Tags = []string{"security", "api"}
 	_, _ = s.SaveRecord(r3)
 
 	originalWd, _ := os.Getwd()

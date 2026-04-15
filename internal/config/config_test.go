@@ -11,10 +11,10 @@ fields:
   - name: title
     type: text
     required: true
-  - name: status
+  - name: priority
     type: select
     required: false
-    options: [proposed, accepted]
+    options: [low, high]
 `
 	cfg, err := LoadFromString(yamlData)
 	if err != nil {
@@ -31,15 +31,14 @@ fields:
 	}
 }
 
-
 func TestLoadFromStringParseFieldDefault(t *testing.T) {
 	yamlData := `
 fields:
-  - name: status
+  - name: priority
     type: select
     required: false
-    options: [proposed, accepted]
-    default: proposed
+    options: [low, high]
+    default: low
 `
 	cfg, err := LoadFromString(yamlData)
 	if err != nil {
@@ -48,8 +47,8 @@ fields:
 	if len(cfg.Fields) != 1 {
 		t.Fatalf("expected 1 field, got %d", len(cfg.Fields))
 	}
-	if cfg.Fields[0].Default != "proposed" {
-		t.Errorf("expected default to be 'proposed', got '%s'", cfg.Fields[0].Default)
+	if cfg.Fields[0].Default != "low" {
+		t.Errorf("expected default to be 'low', got '%s'", cfg.Fields[0].Default)
 	}
 }
 
@@ -125,13 +124,24 @@ fields:
 func TestLoadFromStringRejectsSelectWithoutOptions(t *testing.T) {
 	yamlData := `
 fields:
-  - name: status
+  - name: priority
     type: select
     required: true
 `
 	_, err := LoadFromString(yamlData)
 	if err == nil {
 		t.Fatal("expected error for select without options, got nil")
+	}
+}
+
+func TestLoadFromStringRejectsReservedFieldNames(t *testing.T) {
+	reserved := []string{"snippet", "file_ref", "status"}
+	for _, name := range reserved {
+		yamlData := "fields:\n  - name: " + name + "\n    type: text\n    required: false\n"
+		_, err := LoadFromString(yamlData)
+		if err == nil {
+			t.Errorf("expected error for reserved field name %q, got nil", name)
+		}
 	}
 }
 

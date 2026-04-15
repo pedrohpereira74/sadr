@@ -24,7 +24,7 @@ func setupEditTest(t *testing.T) string {
 
 	s := storage.NewStorage(recordsDir)
 	r, _ := model.NewRecordWithOptions("Editable record", "full")
-	r.Fields["status"] = "proposed"
+	r.Status = "proposed"
 	_, _ = s.SaveRecord(r)
 
 	originalWd, _ := os.Getwd()

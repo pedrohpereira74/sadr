@@ -56,7 +56,7 @@ func filterRecordEntries(entries []storage.RecordEntry, opts *askOptions, cfg co
 	cutoff := parseRangeCutoff(cfg.Range)
 	var result []storage.RecordEntry
 	for _, e := range entries {
-		if opts.tags != "" && !search.HasAnyTag(e.Record.Fields["tags"], opts.tags) {
+		if opts.tags != "" && !search.HasAnyTag(e.Record.Tags, opts.tags) {
 			continue
 		}
 		if opts.field != "" {
@@ -65,8 +65,7 @@ func filterRecordEntries(entries []storage.RecordEntry, opts *askOptions, cfg co
 				continue
 			}
 		}
-		status := e.Record.Fields["status"]
-		if status == "proposed" || status == "deprecated" || status == "superseded" {
+		if e.Record.Status == "proposed" || e.Record.Status == "deprecated" || e.Record.Status == "superseded" {
 			continue
 		}
 		if !cutoff.IsZero() && e.Record.CreatedAt.Before(cutoff) {
@@ -131,7 +130,11 @@ func runAsk(opts *askOptions) {
 		return
 	}
 
-	askCfg := loadAskConfig(paths.ConfigsDir)
+	askCfg, cfgErr := loadAskConfig(paths.ConfigsDir)
+	if cfgErr != nil {
+		ui.Error(os.Stderr, fmt.Sprintf("configuration error: %v\n\nfix your config file and try again, or run 'sadr config --check' for details.", cfgErr))
+		return
+	}
 	filtered := filterRecordEntries(entries, opts, askCfg)
 
 	if len(filtered) == 0 {
@@ -218,10 +221,13 @@ func runAsk(opts *askOptions) {
 	ui.Success(os.Stderr, fmt.Sprintf("answer saved to %s", filepath.Base(outputPath)))
 }
 
-func loadAskConfig(configsDir string) config.AskConfig {
+func loadAskConfig(configsDir string) (config.AskConfig, error) {
 	cfg, err := config.LoadFromFile(filepath.Join(configsDir, "default-config.yaml"))
 	if err != nil {
-		return config.AskConfig{Limit: 50, Range: "6m"}
+		if os.IsNotExist(err) {
+			return config.AskConfig{Limit: 50, Range: "6m"}, nil
+		}
+		return config.AskConfig{}, err
 	}
 	ask := cfg.Ask
 	if ask.Limit == 0 {
@@ -230,7 +236,7 @@ func loadAskConfig(configsDir string) config.AskConfig {
 	if ask.Range == "" {
 		ask.Range = "6m"
 	}
-	return ask
+	return ask, nil
 }
 
 func parseRangeCutoff(rangeStr string) time.Time {

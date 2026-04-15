@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/muesli/reflow/wordwrap"
 	"github.com/pedrohpereira74/sadr/internal/model"
@@ -147,7 +148,7 @@ func newSearchCmd() *cobra.Command {
 			}
 
 			for _, e := range matched {
-				tags := e.Record.Fields["tags"]
+				tags := strings.Join(e.Record.Tags, ",")
 				if tags == "" {
 					tags = "-"
 				}

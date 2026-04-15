@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/pedrohpereira74/sadr/internal/config"
 	"github.com/pedrohpereira74/sadr/internal/discover"
 	"github.com/pedrohpereira74/sadr/internal/templates"
 	"github.com/pedrohpereira74/sadr/internal/ui"
@@ -14,6 +15,7 @@ import (
 
 type configOptions struct {
 	global             bool
+	check              bool
 	setAPIKey          string
 	setupJira          bool
 	setupJiraAdmin     bool
@@ -50,6 +52,17 @@ func newConfigCmd() *cobra.Command {
 		Long:  "Open a project config from .sadr/configs/. Use --global to edit your personal global configuration.",
 		Args:  cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
+			if opts.check {
+				paths, err := resolvePaths(opts.global)
+				if err != nil {
+					if err.Error() != "cancelled" {
+						ui.Error(os.Stderr, err.Error())
+					}
+					return
+				}
+				runConfigCheck(paths.ConfigsDir)
+				return
+			}
 			if opts.setupAdmin {
 				runSetupAdmin()
 				return
@@ -186,18 +199,63 @@ func newConfigCmd() *cobra.Command {
 
 			if err := editorRunner(editor, targetConfig); err != nil {
 				ui.Error(os.Stderr, fmt.Sprintf("editor exited with error: %v", err))
+				return
 			}
+			validateConfigAfterEdit(targetConfig)
 		},
 	}
 
 	cmd.Flags().BoolVar(&opts.global, "global", false, "Open global config (creates ~/.sadr/ on first use)")
+	cmd.Flags().BoolVar(&opts.check, "check", false, "Validate all project configs and report errors")
 	cmd.Flags().StringVar(&opts.setAPIKey, "set-api-key", "", "Set the Gemini API key in the global config directly")
 	cmd.Flags().BoolVar(&opts.setupJira, "setup-jira", false, "Authenticate with Jira (basic auth, bearer token, or oauth 1.0a)")
 	cmd.Flags().BoolVar(&opts.setupJiraAdmin, "setup-jira-admin", false, "Generate RSA key pair for Jira OAuth 1.0a application link (run once per organization)")
 	cmd.Flags().BoolVar(&opts.setupAdmin, "setup-admin", false, "Generate admin token for privileged commands")
 	cmd.Flags().BoolVar(&opts.disableJiraWarning, "disable-jira-warning", false, "Suppress the warning shown when jira credentials exist but the project is not configured for jira")
+	cmd.MarkFlagsMutuallyExclusive("check", "set-api-key", "setup-jira", "setup-jira-admin", "setup-admin", "disable-jira-warning")
 	cmd.MarkFlagsMutuallyExclusive("global", "set-api-key", "setup-jira", "setup-jira-admin", "setup-admin", "disable-jira-warning")
 	return cmd
+}
+
+func runConfigCheck(configsDir string) {
+	entries, err := os.ReadDir(configsDir)
+	if err != nil {
+		ui.Error(os.Stderr, fmt.Sprintf("failed to read configs: %v", err))
+		return
+	}
+
+	checked := 0
+	hasError := false
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".yaml") {
+			continue
+		}
+		checked++
+		path := filepath.Join(configsDir, e.Name())
+		if _, err := config.LoadFromFile(path); err != nil {
+			ui.Error(os.Stderr, fmt.Sprintf("%s: %v", e.Name(), err))
+			hasError = true
+		} else {
+			ui.Success(os.Stderr, fmt.Sprintf("%s: ok", e.Name()))
+		}
+	}
+
+	if checked == 0 {
+		ui.Info(os.Stderr, "no config files found.")
+		return
+	}
+	if hasError {
+		ui.Info(os.Stderr, "fix the errors above and run 'sadr config --check' again.")
+	}
+}
+
+func validateConfigAfterEdit(configPath string) {
+	if _, err := config.LoadFromFile(configPath); err != nil {
+		ui.Warning(os.Stderr, fmt.Sprintf("config saved but has errors: %v", err))
+		ui.Info(os.Stderr, "run 'sadr config --check' to review all configs.")
+	} else {
+		ui.Success(os.Stderr, "config looks good.")
+	}
 }
 
 func init() {

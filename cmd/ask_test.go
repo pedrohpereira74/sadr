@@ -15,8 +15,8 @@ import (
 
 func makeEntry(title string, tags string, status string, createdAt time.Time) storage.RecordEntry {
 	r, _ := model.NewRecordWithOptions(title, "full")
-	r.Fields["tags"] = tags
-	r.Fields["status"] = status
+	r.Tags = model.ParseTags(tags)
+	r.Status = status
 	r.CreatedAt = createdAt
 	return storage.RecordEntry{Record: r, FileID: 1}
 }

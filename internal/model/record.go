@@ -33,6 +33,8 @@ const (
 type Record struct {
 	Title          string
 	Type           string
+	Status         string
+	Tags           []string
 	Snippet        string
 	SchemaVersion  int
 	FileRef        string

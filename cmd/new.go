@@ -352,7 +352,7 @@ func buildRecordFromWizard(result map[string]string, fieldDefs []wizard.FieldDef
 	}
 
 	for _, fd := range fieldDefs {
-		if fd.Name != model.FieldTitle && fd.Name != model.FieldSnippet {
+		if fd.Name != model.FieldTitle && fd.Name != model.FieldSnippet && fd.Name != model.FieldTags {
 			r.FieldOrder = append(r.FieldOrder, strings.TrimSpace(fd.Name))
 		}
 	}
@@ -370,6 +370,10 @@ func buildRecordFromWizard(result map[string]string, fieldDefs []wizard.FieldDef
 		}
 		if key == model.FieldFileRef {
 			r.FileRef = value
+			continue
+		}
+		if key == model.FieldTags {
+			r.Tags = model.ParseTags(value)
 			continue
 		}
 		if value == "" {
@@ -403,7 +407,7 @@ func buildRecordFromWizard(result map[string]string, fieldDefs []wizard.FieldDef
 		r.Fields[key] = value
 	}
 
-	r.Fields[model.FieldStatus] = "active"
+	r.Status = "active"
 
 	return r, nil
 }

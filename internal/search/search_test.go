@@ -73,10 +73,10 @@ func TestSearchByTags(t *testing.T) {
 	s := storage.NewStorage(dir)
 
 	r1, _ := model.NewRecordWithOptions("Cache strategy", "full")
-	r1.Fields["tags"] = "database,performance"
+	r1.Tags = []string{"database", "performance"}
 
 	r2, _ := model.NewRecordWithOptions("Auth flow", "full")
-	r2.Fields["tags"] = "security,api"
+	r2.Tags = []string{"security", "api"}
 
 	_, _ = s.SaveRecord(r1)
 	_, _ = s.SaveRecord(r2)

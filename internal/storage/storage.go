@@ -105,12 +105,12 @@ func buildFrontmatter(r model.Record) map[string]any {
 		fm["fine_tuning_hint"] = r.FineTuningHint
 	}
 
-	if tagsStr, ok := r.Fields[model.FieldTags]; ok && tagsStr != "" {
-		fm[model.FieldTags] = model.ParseTags(tagsStr)
+	if len(r.Tags) > 0 {
+		fm[model.FieldTags] = r.Tags
 	}
 
-	if statusStr, ok := r.Fields[model.FieldStatus]; ok && statusStr != "" {
-		fm[model.FieldStatus] = statusStr
+	if r.Status != "" {
+		fm[model.FieldStatus] = r.Status
 	}
 
 	return fm
@@ -119,16 +119,16 @@ func buildFrontmatter(r model.Record) map[string]any {
 func formatBody(content *strings.Builder, r model.Record) {
 	_, _ = fmt.Fprintf(content, "# %s\n\n", r.Title)
 
-	if tagsStr, ok := r.Fields[model.FieldTags]; ok && tagsStr != "" {
+	if len(r.Tags) > 0 {
 		var formattedTags []string
-		for _, t := range model.ParseTags(tagsStr) {
+		for _, t := range r.Tags {
 			formattedTags = append(formattedTags, "`#"+t+"`")
 		}
 		_, _ = fmt.Fprintf(content, "**Tags:** %s\n\n", strings.Join(formattedTags, " "))
 	}
 
-	if statusStr, ok := r.Fields[model.FieldStatus]; ok && statusStr != "" {
-		_, _ = fmt.Fprintf(content, "**Status:** `#%s`\n\n", statusStr)
+	if r.Status != "" {
+		_, _ = fmt.Fprintf(content, "**Status:** `#%s`\n\n", r.Status)
 	}
 
 	if r.Snippet != "" {
@@ -139,7 +139,7 @@ func formatBody(content *strings.Builder, r model.Record) {
 		_, _ = fmt.Fprintf(content, "## Snippet\n\n%s\n%s\n%s\n\n", bt, strings.TrimSpace(r.Snippet), bt)
 	}
 
-	written := map[string]bool{model.FieldTags: true, model.FieldStatus: true}
+	written := map[string]bool{}
 
 	for _, key := range r.FieldOrder {
 		value, ok := r.Fields[key]
@@ -227,11 +227,11 @@ func (s *Storage) LoadRecord(path string) (model.Record, error) {
 		for i, v := range tags {
 			strs[i] = fmt.Sprintf("%v", v)
 		}
-		r.Fields[model.FieldTags] = strings.Join(strs, ",")
+		r.Tags = strs
 	}
 
 	if status, ok := front[model.FieldStatus].(string); ok && status != "" {
-		r.Fields[model.FieldStatus] = status
+		r.Status = status
 	}
 
 	body := strings.TrimSpace(parts[2])

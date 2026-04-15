@@ -103,6 +103,8 @@ type ExportData struct {
 	HasFileRef bool
 	Snippet    string
 	Tags       string
+	Status     string
+	Question   string
 	Fields     []ExportField
 }
 
@@ -139,6 +141,12 @@ pre code {
 <h1>{{.Title}}</h1>
 {{- if .Tags}}
 <p><strong>Tags:</strong> {{.Tags}}</p>
+{{- end}}
+{{- if .Status}}
+<p><strong>Status:</strong> {{.Status}}</p>
+{{- end}}
+{{- if .Question}}
+<p><strong>Question:</strong> {{.Question}}</p>
 {{- end}}
 {{- if .Snippet}}
 <h2>Snippet</h2>

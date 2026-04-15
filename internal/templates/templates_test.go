@@ -61,6 +61,46 @@ func TestRenderRecordWithoutOptionalFields(t *testing.T) {
 	}
 }
 
+func TestRenderRecordWithStatusAndQuestion(t *testing.T) {
+	data := ExportData{
+		Title:    "Auth refactor",
+		Type:     "full",
+		Status:   "proposed",
+		Question: "focus on security implications",
+	}
+
+	html, err := RenderRecord(data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(html, "<strong>Status:</strong> proposed") {
+		t.Error("expected status block in HTML")
+	}
+	if !strings.Contains(html, "<strong>Question:</strong> focus on security implications") {
+		t.Error("expected question block in HTML")
+	}
+}
+
+func TestRenderRecordWithoutStatusAndQuestion(t *testing.T) {
+	data := ExportData{
+		Title: "No extras",
+		Type:  "adr",
+	}
+
+	html, err := RenderRecord(data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if strings.Contains(html, "Status:") {
+		t.Error("expected no status block when status is empty")
+	}
+	if strings.Contains(html, "Question:") {
+		t.Error("expected no question block when question is empty")
+	}
+}
+
 func TestRenderRecordEscapesHTML(t *testing.T) {
 	data := ExportData{
 		Title:   "<script>alert('xss')</script>",
