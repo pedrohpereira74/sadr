@@ -143,7 +143,7 @@ func newSearchCmd() *cobra.Command {
 			}
 
 			if len(matched) == 0 {
-				ui.Info(os.Stderr, "0 results. your search is sadr than your snippets.")
+				ui.Info(os.Stderr, "no results.")
 				return
 			}
 

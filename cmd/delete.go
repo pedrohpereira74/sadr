@@ -76,7 +76,7 @@ func newDeleteCmd() *cobra.Command {
 				return
 			}
 
-			ui.Success(os.Stderr, fmt.Sprintf("%s deleted — this will make your snippet sadr... and gone.", r.Title))
+			ui.Success(os.Stderr, fmt.Sprintf("%s deleted.", r.Title))
 		},
 	}
 

@@ -53,14 +53,28 @@ func newConfigCmd() *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			if opts.check {
-				paths, err := resolvePaths(opts.global)
-				if err != nil {
-					if err.Error() != "cancelled" {
-						ui.Error(os.Stderr, err.Error())
+				var configsDir string
+				if opts.global {
+					home, err := os.UserHomeDir()
+					if err != nil {
+						ui.Error(os.Stderr, fmt.Sprintf("could not find home directory: %v", err))
+						return
 					}
-					return
+					configsDir = filepath.Join(home, ".sadr", "configs")
+				} else {
+					dir, err := os.Getwd()
+					if err != nil {
+						ui.Error(os.Stderr, fmt.Sprintf("could not get working directory: %v", err))
+						return
+					}
+					paths, err := discover.FindSadrDir(dir)
+					if err != nil {
+						ui.Error(os.Stderr, "no local sadr project found. run 'sadr init' to create one, or use --global for personal configs.")
+						return
+					}
+					configsDir = paths.ConfigsDir
 				}
-				runConfigCheck(paths.ConfigsDir)
+				runConfigCheck(configsDir)
 				return
 			}
 			if opts.setupAdmin {
