@@ -71,6 +71,11 @@ func newExportCmd() *cobra.Command {
 
 			s := storage.NewStorage(paths.Records)
 
+			if opts.mode != "full" && opts.mode != "adr" && opts.mode != "snippet" {
+				ui.Error(os.Stderr, fmt.Sprintf("invalid --mode %q: must be full, adr, or snippet", opts.mode))
+				return
+			}
+
 			var exportMode hub.ExportMode
 			switch opts.mode {
 			case "adr":

@@ -59,7 +59,6 @@ func newSearchCmd() *cobra.Command {
 					ExportsDir: exportsDir,
 					UserFilter: opts.user,
 					FindEditor: findEditor,
-					OpenEditor: editorRunner,
 					OnExport: func(entry storage.RecordEntry, mode hub.ExportMode) error {
 						_, err := doExportRecord(entry.Record, entry.FileID, exportsDir, mode)
 						return err

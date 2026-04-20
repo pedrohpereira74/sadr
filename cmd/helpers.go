@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
@@ -539,27 +540,30 @@ func resolvePaths(global bool) (discover.SadrPaths, error) {
 }
 
 func truncateTitle(title, query string, maxLen int) string {
-	if len(title) <= maxLen {
+	runes := []rune(title)
+	if len(runes) <= maxLen {
 		return title
 	}
-	idx := strings.Index(strings.ToLower(title), strings.ToLower(query))
-	if idx < 0 {
-		return title[:maxLen-3] + "..."
+	byteIdx := strings.Index(strings.ToLower(title), strings.ToLower(query))
+	if byteIdx < 0 {
+		return string(runes[:maxLen-3]) + "..."
 	}
 	const dots = 3
 	window := maxLen - dots*2
-	half := (window - len(query)) / 2
-	start := max(idx-half, 0)
+	queryRunes := []rune(query)
+	half := (window - len(queryRunes)) / 2
+	runeIdx := utf8.RuneCountInString(title[:byteIdx])
+	start := max(runeIdx-half, 0)
 	end := start + window
-	if end > len(title) {
-		end = len(title)
+	if end > len(runes) {
+		end = len(runes)
 		start = max(end-window, 0)
 	}
-	result := title[start:end]
+	result := string(runes[start:end])
 	if start > 0 {
 		result = "..." + result
 	}
-	if end < len(title) {
+	if end < len(runes) {
 		result += "..."
 	}
 	return result

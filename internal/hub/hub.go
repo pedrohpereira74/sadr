@@ -65,7 +65,6 @@ type Options struct {
 	UserFilter string
 	OnExport   func(entry storage.RecordEntry, mode ExportMode) error
 	FindEditor func() string
-	OpenEditor func(editor, path string) error
 }
 
 type entriesLoadedMsg []storage.RecordEntry
@@ -368,27 +367,26 @@ func (m *Model) executeDelete() (tea.Model, tea.Cmd) {
 	s := storage.NewStorage(filepath.Dir(entry.Path))
 	err := s.DeleteRecord(entry.Path)
 
-	newAll := make([]storage.RecordEntry, 0, len(m.allEntries))
-	for _, e := range m.allEntries {
-		if e.Path != entry.Path {
-			newAll = append(newAll, e)
-		}
-	}
-	m.allEntries = newAll
-	m.applyFilter()
-	if m.cursor >= len(m.filtered) && m.cursor > 0 {
-		m.cursor--
-	}
-	m.state = stateReady
-	m.input.Focus()
-
 	if err != nil {
 		m.feedback = fmt.Sprintf("failed to delete: %v", err)
 		m.feedbackErr = true
 	} else {
+		newAll := make([]storage.RecordEntry, 0, len(m.allEntries))
+		for _, e := range m.allEntries {
+			if e.Path != entry.Path {
+				newAll = append(newAll, e)
+			}
+		}
+		m.allEntries = newAll
+		m.applyFilter()
+		if m.cursor >= len(m.filtered) && m.cursor > 0 {
+			m.cursor--
+		}
 		m.feedback = fmt.Sprintf("%s deleted.", entry.Record.Title)
 		m.feedbackErr = false
 	}
+	m.state = stateReady
+	m.input.Focus()
 	return m, textinput.Blink
 }
 

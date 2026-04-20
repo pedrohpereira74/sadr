@@ -2,6 +2,7 @@ package search
 
 import (
 	"strings"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/pedrohpereira74/sadr/internal/model"
@@ -74,30 +75,35 @@ func fuzzyContext(text, query string) string {
 	return extractContext(text, idx, len(bestWord))
 }
 
-func extractContext(text string, idx, matchLen int) string {
+func extractContext(text string, byteIdx, byteMatchLen int) string {
 	const maxLen = 30
 	const dots = 3
 	window := maxLen - dots*2
+
+	runes := []rune(text)
+	idx := utf8.RuneCountInString(text[:byteIdx])
+	matchLen := utf8.RuneCountInString(text[byteIdx : byteIdx+byteMatchLen])
+
 	half := 0
 	if matchLen < window {
 		half = (window - matchLen) / 2
 	}
 	start := max(idx-half, 0)
-	end := min(start+window, len(text))
+	end := min(start+window, len(runes))
 	if end-start < window {
 		start = max(end-window, 0)
 	}
 	idx = max(idx, start)
 	idx = min(idx, end)
 	matchEnd := min(idx+matchLen, end)
-	before := text[start:idx]
-	match := highlightStyle.Render(text[idx:matchEnd])
-	after := text[matchEnd:end]
+	before := string(runes[start:idx])
+	match := highlightStyle.Render(string(runes[idx:matchEnd]))
+	after := string(runes[matchEnd:end])
 	result := before + match + after
 	if start > 0 {
 		result = "..." + result
 	}
-	if end < len(text) {
+	if end < len(runes) {
 		result += "..."
 	}
 	return result
