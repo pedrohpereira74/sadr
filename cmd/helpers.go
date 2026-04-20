@@ -197,6 +197,13 @@ func loadUsername() string {
 	return loadGlobalConfig().Username
 }
 
+func resolveRecordDirs(global bool, paths discover.SadrPaths) []string {
+	if global {
+		return []string{paths.Records}
+	}
+	return allUserRecordsDirs(paths.Root)
+}
+
 func allUserRecordsDirs(sadrRoot string) []string {
 	entries, err := os.ReadDir(sadrRoot)
 	if err != nil {
@@ -374,7 +381,7 @@ func (m textareaModel) View() string {
 	if m.done {
 		return ""
 	}
-	return fmt.Sprintf("\n%s\n\n%s\n\n  (Enter to confirm, Esc to cancel)\n", m.prompt, m.textarea.View())
+	return fmt.Sprintf("\n%s\n\n%s\n\n%s", m.prompt, m.textarea.View(), ui.HintsBar("enter confirm", "esc cancel", "ctrl+c quit"))
 }
 
 func runTextarea(prompt string, placeholder string) string {
@@ -529,4 +536,31 @@ func resolvePaths(global bool) (discover.SadrPaths, error) {
 	}
 
 	return paths, nil
+}
+
+func truncateTitle(title, query string, maxLen int) string {
+	if len(title) <= maxLen {
+		return title
+	}
+	idx := strings.Index(strings.ToLower(title), strings.ToLower(query))
+	if idx < 0 {
+		return title[:maxLen-3] + "..."
+	}
+	const dots = 3
+	window := maxLen - dots*2
+	half := (window - len(query)) / 2
+	start := max(idx-half, 0)
+	end := start + window
+	if end > len(title) {
+		end = len(title)
+		start = max(end-window, 0)
+	}
+	result := title[start:end]
+	if start > 0 {
+		result = "..." + result
+	}
+	if end < len(title) {
+		result += "..."
+	}
+	return result
 }

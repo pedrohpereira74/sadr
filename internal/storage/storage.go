@@ -40,6 +40,10 @@ func NewStorage(dir string) *Storage {
 	return &Storage{Dir: dir}
 }
 
+func LoadRecord(path string) (model.Record, error) {
+	return NewStorage("").LoadRecord(path)
+}
+
 func (s *Storage) SaveRecord(r model.Record) (string, error) {
 	frontmatter := buildFrontmatter(r)
 	yamlBytes, err := yaml.Marshal(frontmatter)

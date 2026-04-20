@@ -8,10 +8,12 @@ import (
 	"strings"
 
 	"github.com/muesli/reflow/wordwrap"
+	"github.com/pedrohpereira74/sadr/internal/hub"
 	"github.com/pedrohpereira74/sadr/internal/model"
 	"github.com/pedrohpereira74/sadr/internal/search"
 	"github.com/pedrohpereira74/sadr/internal/storage"
 	"github.com/pedrohpereira74/sadr/internal/ui"
+	"github.com/sahilm/fuzzy"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -45,6 +47,26 @@ func newSearchCmd() *cobra.Command {
 
 			if id > 0 && len(args) > 0 {
 				ui.Error(os.Stderr, "cannot use --id and a search query at the same time.")
+				return
+			}
+
+			if id == 0 && len(args) == 0 {
+				recordDirs := resolveRecordDirs(opts.global, paths)
+				exportsDir := paths.Exports
+				if err := hub.Run(hub.Options{
+					Mode:       hub.ModeSearch,
+					RecordDirs: recordDirs,
+					ExportsDir: exportsDir,
+					UserFilter: opts.user,
+					FindEditor: findEditor,
+					OpenEditor: editorRunner,
+					OnExport: func(entry storage.RecordEntry, mode hub.ExportMode) error {
+						_, err := doExportRecord(entry.Record, entry.FileID, exportsDir, mode)
+						return err
+					},
+				}); err != nil {
+					ui.Error(os.Stderr, fmt.Sprintf("hub error: %v", err))
+				}
 				return
 			}
 
@@ -135,9 +157,22 @@ func newSearchCmd() *cobra.Command {
 				}
 			}
 
+			titles := make([]string, len(searchEntries))
+			for i, e := range searchEntries {
+				titles[i] = e.Record.Title
+			}
+			fuzzyResults := fuzzy.Find(query, titles)
+			seen := make(map[int]bool, len(fuzzyResults))
 			var matched []storage.RecordEntry
-			for _, e := range searchEntries {
-				if search.Matches(e.Record, query, opts.deep) {
+			for _, r := range fuzzyResults {
+				seen[r.Index] = true
+				matched = append(matched, searchEntries[r.Index])
+			}
+			for i, e := range searchEntries {
+				if seen[i] {
+					continue
+				}
+				if search.MatchesTags(e.Record, query) || (opts.deep && search.MatchesDeep(e.Record, query)) {
 					matched = append(matched, e)
 				}
 			}
@@ -152,10 +187,16 @@ func newSearchCmd() *cobra.Command {
 				if tags == "" {
 					tags = "-"
 				}
+				title := truncateTitle(e.Record.Title, query, 40)
 				if e.Author != "" {
-					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s/%d\t%s\t%s\t%s\n", e.Author, e.FileID, e.Record.Type, e.Record.Title, tags)
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s/%d\t%s\t%s\t%s\n", e.Author, e.FileID, e.Record.Type, title, tags)
 				} else {
-					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", e.Record.Type, e.Record.Title, tags)
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", e.Record.Type, title, tags)
+				}
+				if opts.deep {
+					if ctx := search.DeepContext(e.Record, query); ctx != "" {
+						_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\t\t  %s\n", ctx)
+					}
 				}
 			}
 		},
