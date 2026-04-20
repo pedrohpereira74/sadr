@@ -1,6 +1,7 @@
 package search
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/pedrohpereira74/sadr/internal/model"
@@ -155,5 +156,175 @@ func TestMatchesDeepFindsInSnippet(t *testing.T) {
 	}
 	if Matches(r, "retryablehttp", false) {
 		t.Error("expected Matches to miss snippet content with deep=false")
+	}
+}
+
+// --- MatchesTags ---
+
+func TestMatchesTagsSingleTag(t *testing.T) {
+	r, _ := model.NewRecordWithOptions("Title", "full")
+	r.Tags = []string{"golang"}
+	if !MatchesTags(r, "golang") {
+		t.Error("expected tag match")
+	}
+}
+
+func TestMatchesTagsOneOfMany(t *testing.T) {
+	r, _ := model.NewRecordWithOptions("Title", "full")
+	r.Tags = []string{"golang", "backend", "api"}
+	if !MatchesTags(r, "backend") {
+		t.Error("expected match against one of multiple tags")
+	}
+}
+
+func TestMatchesTagsCaseInsensitive(t *testing.T) {
+	r, _ := model.NewRecordWithOptions("Title", "full")
+	r.Tags = []string{"Golang"}
+	if !MatchesTags(r, "GOLANG") {
+		t.Error("expected case-insensitive tag match")
+	}
+}
+
+func TestMatchesTagsNoMatch(t *testing.T) {
+	r, _ := model.NewRecordWithOptions("Title", "full")
+	r.Tags = []string{"golang"}
+	if MatchesTags(r, "python") {
+		t.Error("expected no tag match")
+	}
+}
+
+func TestMatchesTagsNilTags(t *testing.T) {
+	r, _ := model.NewRecordWithOptions("Title", "full")
+	if MatchesTags(r, "anything") {
+		t.Error("expected no match on nil tags")
+	}
+}
+
+// --- MatchesDeep ---
+
+func TestMatchesDeepSnippet(t *testing.T) {
+	r, _ := model.NewRecordWithOptions("Title", "full")
+	r.Snippet = "uses dependency injection pattern"
+	if !MatchesDeep(r, "injection") {
+		t.Error("expected snippet match")
+	}
+}
+
+func TestMatchesDeepField(t *testing.T) {
+	r, _ := model.NewRecordWithOptions("Title", "full")
+	r.Fields = map[string]string{"context": "uses event sourcing"}
+	if !MatchesDeep(r, "sourcing") {
+		t.Error("expected field match")
+	}
+}
+
+func TestMatchesDeepCaseInsensitive(t *testing.T) {
+	r, _ := model.NewRecordWithOptions("Title", "full")
+	r.Snippet = "Uses Dependency Injection"
+	if !MatchesDeep(r, "dependency") {
+		t.Error("expected case-insensitive snippet match")
+	}
+}
+
+func TestMatchesDeepNoMatch(t *testing.T) {
+	r, _ := model.NewRecordWithOptions("Title", "full")
+	r.Snippet = "something completely different"
+	r.Fields = map[string]string{"k": "v"}
+	if MatchesDeep(r, "zzz") {
+		t.Error("expected no deep match")
+	}
+}
+
+// --- DeepContext ---
+
+func TestDeepContextEmptyRecord(t *testing.T) {
+	r, _ := model.NewRecordWithOptions("Title", "full")
+	if got := DeepContext(r, "anything"); got != "" {
+		t.Errorf("expected empty context, got %q", got)
+	}
+}
+
+func TestDeepContextNoMatch(t *testing.T) {
+	r, _ := model.NewRecordWithOptions("Title", "full")
+	r.Snippet = "completely different text"
+	if got := DeepContext(r, "zzz"); got != "" {
+		t.Errorf("expected empty context for no match, got %q", got)
+	}
+}
+
+func TestDeepContextSnippetMatchContainsWord(t *testing.T) {
+	r, _ := model.NewRecordWithOptions("Title", "full")
+	r.Snippet = "contains the keyword right here in the snippet"
+	got := DeepContext(r, "keyword")
+	if got == "" {
+		t.Fatal("expected non-empty context")
+	}
+	if !strings.Contains(got, "keyword") {
+		t.Errorf("context should contain the matched word, got %q", got)
+	}
+}
+
+func TestDeepContextPrefersSnippetOverFields(t *testing.T) {
+	r, _ := model.NewRecordWithOptions("Title", "full")
+	r.Snippet = "snippet has needle"
+	r.Fields = map[string]string{"ctx": "field also has needle"}
+	r.FieldOrder = []string{"ctx"}
+	got := DeepContext(r, "needle")
+	if !strings.Contains(got, "snippet") {
+		t.Errorf("expected snippet context, got %q", got)
+	}
+}
+
+func TestDeepContextFallsBackToField(t *testing.T) {
+	r, _ := model.NewRecordWithOptions("Title", "full")
+	r.Snippet = "no match here"
+	r.Fields = map[string]string{"ctx": "field contains needle"}
+	r.FieldOrder = []string{"ctx"}
+	got := DeepContext(r, "needle")
+	if got == "" {
+		t.Fatal("expected context from field")
+	}
+	if !strings.Contains(got, "needle") {
+		t.Errorf("context should contain matched word, got %q", got)
+	}
+}
+
+func TestDeepContextRespectsFieldOrder(t *testing.T) {
+	r, _ := model.NewRecordWithOptions("Title", "full")
+	r.Fields = map[string]string{
+		"first":  "first field has needle",
+		"second": "second field has needle",
+	}
+	r.FieldOrder = []string{"first", "second"}
+	got := DeepContext(r, "needle")
+	if !strings.Contains(got, "first") {
+		t.Errorf("expected context from first field in FieldOrder, got %q", got)
+	}
+}
+
+func TestDeepContextLeadingDotsForMidTextMatch(t *testing.T) {
+	r, _ := model.NewRecordWithOptions("Title", "full")
+	r.Snippet = "long prefix text before the keyword appears in this sentence"
+	got := DeepContext(r, "keyword")
+	if !strings.HasPrefix(got, "...") {
+		t.Errorf("expected leading '...' for mid-text match, got %q", got)
+	}
+}
+
+func TestDeepContextNoLeadingDotsForStartMatch(t *testing.T) {
+	r, _ := model.NewRecordWithOptions("Title", "full")
+	r.Snippet = "keyword is right at the start of this text"
+	got := DeepContext(r, "keyword")
+	if strings.HasPrefix(got, "...") {
+		t.Errorf("expected no leading '...' for start match, got %q", got)
+	}
+}
+
+func TestDeepContextTrailingDotsWhenTextContinues(t *testing.T) {
+	r, _ := model.NewRecordWithOptions("Title", "full")
+	r.Snippet = "keyword appears early and there is much more text after it here to exceed the window"
+	got := DeepContext(r, "keyword")
+	if !strings.HasSuffix(got, "...") {
+		t.Errorf("expected trailing '...' when text continues past window, got %q", got)
 	}
 }

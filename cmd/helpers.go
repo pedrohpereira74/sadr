@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
@@ -197,6 +198,13 @@ func loadUsername() string {
 	return loadGlobalConfig().Username
 }
 
+func resolveRecordDirs(global bool, paths discover.SadrPaths) []string {
+	if global {
+		return []string{paths.Records}
+	}
+	return allUserRecordsDirs(paths.Root)
+}
+
 func allUserRecordsDirs(sadrRoot string) []string {
 	entries, err := os.ReadDir(sadrRoot)
 	if err != nil {
@@ -374,7 +382,7 @@ func (m textareaModel) View() string {
 	if m.done {
 		return ""
 	}
-	return fmt.Sprintf("\n%s\n\n%s\n\n  (Enter to confirm, Esc to cancel)\n", m.prompt, m.textarea.View())
+	return fmt.Sprintf("\n%s\n\n%s\n\n%s", m.prompt, m.textarea.View(), ui.HintsBar("enter confirm", "esc cancel", "ctrl+c quit"))
 }
 
 func runTextarea(prompt string, placeholder string) string {
@@ -529,4 +537,34 @@ func resolvePaths(global bool) (discover.SadrPaths, error) {
 	}
 
 	return paths, nil
+}
+
+func truncateTitle(title, query string, maxLen int) string {
+	runes := []rune(title)
+	if len(runes) <= maxLen {
+		return title
+	}
+	byteIdx := strings.Index(strings.ToLower(title), strings.ToLower(query))
+	if byteIdx < 0 {
+		return string(runes[:maxLen-3]) + "..."
+	}
+	const dots = 3
+	window := maxLen - dots*2
+	queryRunes := []rune(query)
+	half := (window - len(queryRunes)) / 2
+	runeIdx := utf8.RuneCountInString(title[:byteIdx])
+	start := max(runeIdx-half, 0)
+	end := start + window
+	if end > len(runes) {
+		end = len(runes)
+		start = max(end-window, 0)
+	}
+	result := string(runes[start:end])
+	if start > 0 {
+		result = "..." + result
+	}
+	if end < len(runes) {
+		result += "..."
+	}
+	return result
 }

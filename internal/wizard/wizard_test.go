@@ -834,10 +834,10 @@ func TestUpdateDefaultSpaceRuneTogglesMultiselect(t *testing.T) {
 	}
 }
 
-func TestInitReturnsNil(t *testing.T) {
+func TestInitReturnsBlink(t *testing.T) {
 	m := NewModel()
 	cmd := m.Init()
-	if cmd != nil {
-		t.Error("expected Init() to return nil")
+	if cmd == nil {
+		t.Error("expected Init() to return a blink cmd")
 	}
 }

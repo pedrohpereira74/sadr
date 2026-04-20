@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/pedrohpereira74/sadr/internal/hub"
 	"github.com/pedrohpereira74/sadr/internal/storage"
 	"github.com/pedrohpereira74/sadr/internal/ui"
 	"github.com/spf13/cobra"
@@ -37,7 +38,13 @@ func newDeleteCmd() *cobra.Command {
 			}
 
 			if id <= 0 {
-				ui.Error(os.Stderr, "provide --id <number> to delete a record.")
+				recordDirs := resolveRecordDirs(opts.global, paths)
+				if err := hub.Run(hub.Options{
+					Mode:       hub.ModeDelete,
+					RecordDirs: recordDirs,
+				}); err != nil {
+					ui.Error(os.Stderr, fmt.Sprintf("hub error: %v", err))
+				}
 				return
 			}
 

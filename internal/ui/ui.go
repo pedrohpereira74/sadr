@@ -103,3 +103,7 @@ func Warning(w io.Writer, msg string) {
 func Pause(seconds float64) {
 	PauseFn(seconds)
 }
+
+func HintsBar(hints ...string) string {
+	return "  " + strings.Join(hints, " · ") + "\n"
+}

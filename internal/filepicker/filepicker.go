@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/sahilm/fuzzy"
 )
 
 var skipDirs = map[string]bool{
@@ -76,12 +78,10 @@ func FilterFiles(files []string, query string) []string {
 		return files
 	}
 
-	lower := strings.ToLower(query)
-	var filtered []string
-	for _, f := range files {
-		if strings.Contains(strings.ToLower(f), lower) {
-			filtered = append(filtered, f)
-		}
+	results := fuzzy.Find(query, files)
+	out := make([]string, len(results))
+	for i, r := range results {
+		out[i] = r.Str
 	}
-	return filtered
+	return out
 }
