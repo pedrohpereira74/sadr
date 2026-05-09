@@ -1,0 +1,23 @@
+{
+  "id": "architecture/overview",
+  "title": "Architecture Overview",
+  "description": "Directory layout",
+  "source": "@site/docs/architecture/overview.md",
+  "sourceDirName": "architecture",
+  "slug": "/architecture/overview",
+  "permalink": "/sadr/architecture/overview",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/pedrohpereira74/sadr/tree/main/website/docs/architecture/overview.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 1,
+  "frontMatter": {
+    "sidebar_position": 1
+  },
+  "sidebar": "docs",
+  "previous": {
+    "title": "Record Format",
+    "permalink": "/sadr/reference/record-format"
+  }
+}

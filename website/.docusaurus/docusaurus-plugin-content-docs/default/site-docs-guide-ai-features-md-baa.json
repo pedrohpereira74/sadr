@@ -1,0 +1,27 @@
+{
+  "id": "guide/ai-features",
+  "title": "AI Features",
+  "description": "sadr uses the Gemini API for two distinct AI-powered features: assisted capture (--smart) and architectural queries (sadr ask).",
+  "source": "@site/docs/guide/ai-features.md",
+  "sourceDirName": "guide",
+  "slug": "/guide/ai-features",
+  "permalink": "/sadr/guide/ai-features",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/pedrohpereira74/sadr/tree/main/website/docs/guide/ai-features.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 3,
+  "frontMatter": {
+    "sidebar_position": 3
+  },
+  "sidebar": "docs",
+  "previous": {
+    "title": "Usage Guide",
+    "permalink": "/sadr/guide/usage"
+  },
+  "next": {
+    "title": "Team Workflows",
+    "permalink": "/sadr/guide/team-workflows"
+  }
+}

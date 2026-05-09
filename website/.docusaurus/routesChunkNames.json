@@ -1,0 +1,98 @@
+{
+  "/sadr/__docusaurus/debug-4ed": {
+    "__comp": "__comp---theme-debug-config-23-a-2ff",
+    "__context": {
+      "plugin": "plugin---sadr-docusaurus-debugb-38-05c"
+    }
+  },
+  "/sadr/__docusaurus/debug/config-23d": {
+    "__comp": "__comp---theme-debug-config-23-a-2ff",
+    "__context": {
+      "plugin": "plugin---sadr-docusaurus-debugb-38-05c"
+    }
+  },
+  "/sadr/__docusaurus/debug/content-890": {
+    "__comp": "__comp---theme-debug-contentba-8-ce7",
+    "__context": {
+      "plugin": "plugin---sadr-docusaurus-debugb-38-05c"
+    },
+    "__props": "__props---sadr-docusaurus-debug-content-53-f-b75"
+  },
+  "/sadr/__docusaurus/debug/globalData-099": {
+    "__comp": "__comp---theme-debug-global-dataede-0fa",
+    "__context": {
+      "plugin": "plugin---sadr-docusaurus-debugb-38-05c"
+    }
+  },
+  "/sadr/__docusaurus/debug/metadata-4cd": {
+    "__comp": "__comp---theme-debug-site-metadata-68-e-3d4",
+    "__context": {
+      "plugin": "plugin---sadr-docusaurus-debugb-38-05c"
+    }
+  },
+  "/sadr/__docusaurus/debug/registry-75b": {
+    "__comp": "__comp---theme-debug-registry-679-501",
+    "__context": {
+      "plugin": "plugin---sadr-docusaurus-debugb-38-05c"
+    }
+  },
+  "/sadr/__docusaurus/debug/routes-65a": {
+    "__comp": "__comp---theme-debug-routes-946-699",
+    "__context": {
+      "plugin": "plugin---sadr-docusaurus-debugb-38-05c"
+    }
+  },
+  "/sadr/-725": {
+    "__comp": "__comp---theme-docs-root-5-e-9-0b6",
+    "__context": {
+      "plugin": "plugin---sadr-aba-54f"
+    }
+  },
+  "/sadr/-062": {
+    "__comp": "__comp---theme-doc-version-roota-7-b-5de",
+    "__props": "__props---sadr-ca-3-8b3"
+  },
+  "/sadr/-710": {
+    "__comp": "__comp---theme-doc-roota-94-67a"
+  },
+  "/sadr/architecture/overview-d48": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---sadr-architecture-overview-0-b-1-d49"
+  },
+  "/sadr/getting-started-1f3": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---sadr-getting-startedd-58-a67"
+  },
+  "/sadr/guide/ai-features-4f6": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---sadr-guide-ai-featuresbaa-d41"
+  },
+  "/sadr/guide/configuration-974": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---sadr-guide-configurationd-1-b-40c"
+  },
+  "/sadr/guide/team-workflows-c08": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---sadr-guide-team-workflows-324-021"
+  },
+  "/sadr/guide/usage-cd0": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---sadr-guide-usage-1-d-7-337"
+  },
+  "/sadr/reference/cli-23c": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---sadr-reference-cli-91-c-66c"
+  },
+  "/sadr/reference/config-schema-620": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---sadr-reference-config-schema-96-f-d2b"
+  },
+  "/sadr/reference/record-format-2f4": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---sadr-reference-record-format-57-c-22e"
+  },
+  "/sadr/-c0d": {
+    "__comp": "__comp---theme-doc-item-178-a40",
+    "content": "content---sadr-0-e-3-e07"
+  }
+}

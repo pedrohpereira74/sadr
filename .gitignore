@@ -4,3 +4,5 @@ dist/
 *.txt
 .sadr/*/exports/
 .sadr/*/answers/
+node_modules/
+.claude/

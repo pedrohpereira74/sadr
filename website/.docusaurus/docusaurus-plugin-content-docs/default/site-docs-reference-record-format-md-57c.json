@@ -1,0 +1,27 @@
+{
+  "id": "reference/record-format",
+  "title": "Record Format",
+  "description": "Each sadr record is a Markdown file stored in .sadr//records/. The format is plain Markdown with a YAML frontmatter block — readable by humans and tools without sadr installed.",
+  "source": "@site/docs/reference/record-format.md",
+  "sourceDirName": "reference",
+  "slug": "/reference/record-format",
+  "permalink": "/sadr/reference/record-format",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/pedrohpereira74/sadr/tree/main/website/docs/reference/record-format.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 3,
+  "frontMatter": {
+    "sidebar_position": 3
+  },
+  "sidebar": "docs",
+  "previous": {
+    "title": "Config Schema Reference",
+    "permalink": "/sadr/reference/config-schema"
+  },
+  "next": {
+    "title": "Architecture Overview",
+    "permalink": "/sadr/architecture/overview"
+  }
+}

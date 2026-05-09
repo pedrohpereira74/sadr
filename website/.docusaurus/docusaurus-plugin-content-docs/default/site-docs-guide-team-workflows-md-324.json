@@ -1,0 +1,27 @@
+{
+  "id": "guide/team-workflows",
+  "title": "Team Workflows",
+  "description": "Multi-user projects",
+  "source": "@site/docs/guide/team-workflows.md",
+  "sourceDirName": "guide",
+  "slug": "/guide/team-workflows",
+  "permalink": "/sadr/guide/team-workflows",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/pedrohpereira74/sadr/tree/main/website/docs/guide/team-workflows.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 4,
+  "frontMatter": {
+    "sidebar_position": 4
+  },
+  "sidebar": "docs",
+  "previous": {
+    "title": "AI Features",
+    "permalink": "/sadr/guide/ai-features"
+  },
+  "next": {
+    "title": "CLI Reference",
+    "permalink": "/sadr/reference/cli"
+  }
+}

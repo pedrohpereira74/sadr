@@ -145,16 +145,16 @@ pre code {
 {{- if .Status}}
 <p><strong>Status:</strong> {{.Status}}</p>
 {{- end}}
+{{- range .Fields}}
+<h2>{{.Key}}</h2>
+<p>{{.Value}}</p>
+{{- end}}
 {{- if .Question}}
 <p><strong>Question:</strong> {{.Question}}</p>
 {{- end}}
 {{- if .Snippet}}
 <h2>Snippet</h2>
 <pre><code>{{.Snippet}}</code></pre>
-{{- end}}
-{{- range .Fields}}
-<h2>{{.Key}}</h2>
-<p>{{.Value}}</p>
 {{- end}}
 <script>hljs.highlightAll();</script>
 </body></html>`

@@ -1,0 +1,27 @@
+{
+  "id": "guide/configuration",
+  "title": "Configuration",
+  "description": "sadr uses three configuration files with distinct scopes:",
+  "source": "@site/docs/guide/configuration.md",
+  "sourceDirName": "guide",
+  "slug": "/guide/configuration",
+  "permalink": "/sadr/guide/configuration",
+  "draft": false,
+  "unlisted": false,
+  "editUrl": "https://github.com/pedrohpereira74/sadr/tree/main/website/docs/guide/configuration.md",
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 1,
+  "frontMatter": {
+    "sidebar_position": 1
+  },
+  "sidebar": "docs",
+  "previous": {
+    "title": "Getting Started",
+    "permalink": "/sadr/getting-started"
+  },
+  "next": {
+    "title": "Usage Guide",
+    "permalink": "/sadr/guide/usage"
+  }
+}

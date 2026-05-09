@@ -1,0 +1,78 @@
+{
+  "docusaurus-plugin-content-docs": {
+    "default": {
+      "path": "/sadr/",
+      "versions": [
+        {
+          "name": "current",
+          "label": "Next",
+          "isLast": true,
+          "path": "/sadr/",
+          "mainDocId": "intro",
+          "docs": [
+            {
+              "id": "architecture/overview",
+              "path": "/sadr/architecture/overview",
+              "sidebar": "docs"
+            },
+            {
+              "id": "getting-started",
+              "path": "/sadr/getting-started",
+              "sidebar": "docs"
+            },
+            {
+              "id": "guide/ai-features",
+              "path": "/sadr/guide/ai-features",
+              "sidebar": "docs"
+            },
+            {
+              "id": "guide/configuration",
+              "path": "/sadr/guide/configuration",
+              "sidebar": "docs"
+            },
+            {
+              "id": "guide/team-workflows",
+              "path": "/sadr/guide/team-workflows",
+              "sidebar": "docs"
+            },
+            {
+              "id": "guide/usage",
+              "path": "/sadr/guide/usage",
+              "sidebar": "docs"
+            },
+            {
+              "id": "intro",
+              "path": "/sadr/",
+              "sidebar": "docs"
+            },
+            {
+              "id": "reference/cli",
+              "path": "/sadr/reference/cli",
+              "sidebar": "docs"
+            },
+            {
+              "id": "reference/config-schema",
+              "path": "/sadr/reference/config-schema",
+              "sidebar": "docs"
+            },
+            {
+              "id": "reference/record-format",
+              "path": "/sadr/reference/record-format",
+              "sidebar": "docs"
+            }
+          ],
+          "draftIds": [],
+          "sidebars": {
+            "docs": {
+              "link": {
+                "path": "/sadr/",
+                "label": "intro"
+              }
+            }
+          }
+        }
+      ],
+      "breadcrumbs": true
+    }
+  }
+}
