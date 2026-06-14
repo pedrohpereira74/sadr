@@ -27,7 +27,7 @@ ai:
   provider: gemini
   api_key: ""            # set via: sadr config --set-api-key "key"
   api_key_env: ""        # alternatively, read from this env var
-  model: gemini-2.0-flash
+  model: gemini-3-flash-preview
   ai_depth: false        # if true, uses a more thorough Staff-level AI persona
 
 jira:
@@ -54,34 +54,47 @@ sadr config --global
 
 Defines the fields captured when running `sadr new` in this project. Committed to git so the whole team shares the same schema.
 
-### Minimal example
+The two examples below are exactly what `sadr init --preset minimal` and
+`sadr init --preset extended` generate.
+
+### Minimal preset
 
 ```yaml
 fields:
-  - name: context
-    type: text
-    required: true
-
-  - name: decision
+  - name: title
     type: text
     required: true
 
   - name: tags
-    type: text
-    required: false
+    type: multiselect
+    required: true
+    options: [architecture, api, database, security, performance, tooling, infrastructure, bugfix]
+
+ask:
+  limit: 50
+  range: 6m
 ```
 
-### Extended example
+### Extended preset
 
 ```yaml
 fields:
-  - name: context
+  - name: title
     type: text
     required: true
 
+  - name: tags
+    type: multiselect
+    required: true
+    options: [architecture, api, database, security, performance, tooling, infrastructure, bugfix]
+
+  - name: context
+    type: text
+    required: false
+
   - name: decision
     type: text
-    required: true
+    required: false
 
   - name: alternatives
     type: list
@@ -91,28 +104,13 @@ fields:
     type: text
     required: false
 
-  - name: status
-    type: select
-    required: true
-    options: [proposed, active, deprecated, superseded]
-    default: proposed
-
-  - name: category
-    type: multiselect
-    required: false
-    options: [security, performance, architecture, data, devops]
-
-  - name: jira_card
-    type: jira
-    required: false
-
 ask:
-  limit: 50      # max records passed to sadr ask
-  range: 6m      # only records created in the last 6 months
-
-jira:
-  url: https://your-company.atlassian.net
+  limit: 50
+  range: 6m
 ```
+
+Add your own fields (`select`, `multiselect`, `jira`, …) and a `jira:` block on
+top of either preset — see [Field types](#field-types) below.
 
 ---
 
@@ -143,11 +141,11 @@ A freeform field where each item becomes a bullet point. The AI formats multi-it
 A single-choice field. Rendered as a dropdown in the wizard.
 
 ```yaml
-- name: status
+- name: risk
   type: select
   required: true
-  options: [proposed, active, deprecated, superseded]
-  default: proposed
+  options: [low, medium, high]
+  default: low
 ```
 
 ### `multiselect`

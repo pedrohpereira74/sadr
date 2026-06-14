@@ -210,7 +210,7 @@ sadr ask [flags]
 | `--question <string>` | Question to ask — skips the text input |
 | `--tags <string>` | Filter records by tags (comma-separated) |
 | `--field <string>` | Filter records by field value (`key=value`) |
-| `--complete` | Include full snippet content in the prompt |
+| `--complete` | Include each record's snippet (compressed) in the prompt |
 | `--dry-run` | Show token estimate without calling the AI |
 | `--global` / `-g` | Use personal vault records |
 
@@ -228,24 +228,30 @@ sadr ask --global
 
 ## `sadr config`
 
-Manage configuration files.
+Manage configuration files. With no flags, opens a project config in `$EDITOR`;
+pass a `[name]` to open a specific project config (e.g. `sadr config db`).
 
 ```bash
-sadr config [flags]
+sadr config [name] [flags]
 ```
 
 | Flag | Description |
 |---|---|
-| `--global` | Open global config (`~/.sadr/global-config.yaml`) in `$EDITOR` |
-| `--set-api-key <string>` | Write the Gemini API key directly to global config |
-| `--check` | Validate all config files and report errors |
-| `--setup-jira` | Interactive Jira credentials setup |
-| `--disable-jira-warning` | Suppress the "Jira credentials set but no project URL" warning |
+| `--global` | Open the global config (`~/.sadr/global-config.yaml`); created on first use |
+| `--set-api-key <string>` | Write the Gemini API key directly to the global config |
+| `--check` | Validate all project configs and report errors (add `--global` to check personal configs) |
+| `--setup-jira` | Interactive Jira credentials setup (basic auth, bearer token, or OAuth 1.0a) |
+| `--setup-jira-admin` | Generate an RSA key pair for a Jira OAuth 1.0a application link (run once per organization) |
+| `--setup-admin` | Generate an admin token for privileged commands |
+| `--disable-jira-warning` | Suppress the warning shown when Jira credentials exist but the project has no Jira URL |
+
+The action flags above are mutually exclusive.
 
 ```bash
-sadr config                       # open project config
-sadr config --global              # open global config
-sadr config --set-api-key "AIza..." 
+sadr config                       # open the default project config
+sadr config db                    # open the project's "db" config
+sadr config --global              # open the global config
+sadr config --set-api-key "AIza..."
 sadr config --check
 sadr config --setup-jira
 ```

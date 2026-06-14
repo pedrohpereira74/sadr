@@ -9,7 +9,7 @@ sidebar_position: 2
 ### macOS / Linux — native script
 
 ```bash
-curl -sSfL https://raw.githubusercontent.com/pedrohpereira74/sadr/master/install.sh | sh
+curl -sSfL https://raw.githubusercontent.com/pedrohpereira74/sadr/main/install.sh | sh
 ```
 
 ### macOS / Linux — Homebrew
@@ -44,7 +44,7 @@ sudo rpm -i https://github.com/pedrohpereira74/sadr/releases/latest/download/sad
 
 ### Go (from source)
 
-Requires Go 1.21+:
+Requires Go 1.26+:
 
 ```bash
 go install github.com/pedrohpereira74/sadr@latest
@@ -72,7 +72,7 @@ sadr config --set-api-key "your-gemini-api-key"
 ```
 
 :::info
-Get a free Gemini API key at [ai.google.dev](https://ai.google.dev). The default model is `gemini-2.0-flash` which is free-tier eligible.
+Get a Gemini API key at [ai.google.dev](https://ai.google.dev) (a free tier is available). The default model is `gemini-3-flash-preview`.
 :::
 
 ---
@@ -151,7 +151,7 @@ Open the **interactive hub** (no query needed):
 sadr search
 ```
 
-Use `↑↓` to navigate, type to fuzzy-filter, and press `Enter` to view, `d` to delete, `e` to export.
+Use `↑↓` to navigate, type to fuzzy-filter, `Tab` to toggle deep search, `Enter` to open the selected record, `Ctrl+D` to delete, and `Ctrl+E` to export.
 
 Or search from the command line:
 

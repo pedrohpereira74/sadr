@@ -43,15 +43,20 @@ jira:
 
 ### Reserved field names
 
-These names cannot be used in your schema — they are managed internally by sadr:
+These names cannot be used as `fields` entries — `sadr config --check` rejects them. They are managed internally by sadr:
 
 | Name | Description |
 |---|---|
-| `snippet` | The code snippet content |
-| `file_ref` | The file path associated with the record |
-| `status` | The record lifecycle status |
+| `snippet` | The code snippet content (captured from the editor or `--clipboard`/`--file`/`--diff`) |
+| `file_ref` | The file path associated with the record (chosen in the file picker) |
+| `status` | The record lifecycle status — set to `active` on creation; change it by editing the record's frontmatter |
 
-`title` and `tags` are special: they are always captured and don't need to be declared in the schema.
+`title` and `tags` are special-cased rather than reserved: declare them like any
+other field (both presets do), and sadr handles them specially. `title` becomes
+the record title; `tags` becomes the record's tag list (rendered as
+`**Tags:**`, not a `## Tags` section), and the field's `options` define the
+selectable tags. They are always shown first in the wizard, before the snippet's
+file reference and the remaining fields.
 
 ### Full example
 
@@ -72,16 +77,6 @@ fields:
   - name: consequences
     type: text
     required: false
-
-  - name: status
-    type: select
-    required: true
-    default: proposed
-    options:
-      - proposed
-      - active
-      - deprecated
-      - superseded
 
   - name: category
     type: multiselect
@@ -126,9 +121,9 @@ language: <string>       # language for AI output, e.g. English, Portuguese
 
 ai:
   provider: gemini       # currently only gemini is supported
-  api_key: <string>      # Gemini API key (stored plaintext — use api_key_env in shared envs)
-  api_key_env: <string>  # env var name to read the key from (takes precedence over api_key)
-  model: <string>        # Gemini model name (default: gemini-2.0-flash)
+  api_key: <string>      # Gemini API key (stored plaintext — leave empty and use api_key_env in shared envs)
+  api_key_env: <string>  # env var name to read the key from (used only when api_key is empty)
+  model: <string>        # Gemini model name (default: gemini-3-flash-preview)
   ai_depth: <bool>       # if true, uses a Staff-level persona with more thorough output
 
 jira:
@@ -152,7 +147,9 @@ jira:
 
 ### Precedence for AI key
 
-1. `ai.api_key_env` (env var) — checked first
-2. `ai.api_key` (plaintext in file)
+The first non-empty source wins:
+
+1. `ai.api_key` (plaintext in the global config)
+2. `ai.api_key_env` (the env var named by that field) — used only when `ai.api_key` is empty
 3. `AI_API_KEY` environment variable
 4. `GEMINI_API_KEY` environment variable

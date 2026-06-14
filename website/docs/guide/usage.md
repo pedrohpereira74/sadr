@@ -74,10 +74,11 @@ sadr search
 Opens a fuzzy-search TUI. Features:
 - Type to filter by title in real time
 - `↑` / `↓` to navigate results
-- `Enter` to view record detail
-- `d` to delete a record (with confirmation)
-- `e` to export a record to HTML
-- `Esc` / `q` to quit
+- `Tab` to toggle deep search (also matches snippet and field content)
+- `Enter` to open the selected record
+- `Ctrl+D` to delete a record (with confirmation)
+- `Ctrl+E` to export a record to HTML
+- `Ctrl+C` to quit
 
 ### Text search
 
@@ -179,9 +180,9 @@ sadr ask --role "dba" --question "how is the database schema evolving?"
 
 # Filter which records are included
 sadr ask --tags "security,auth"
-sadr ask --field "status=active"
+sadr ask --field "team=platform"
 
-# Include full snippet content in the prompt (more tokens, richer answer)
+# Include each record's snippet (compressed) in the prompt — more tokens, richer answer
 sadr ask --complete
 
 # Preview token count without calling the AI

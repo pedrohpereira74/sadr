@@ -87,7 +87,7 @@ With depth mode on, the AI switches to a Staff Engineer persona and writes longe
 sadr new --clipboard --smart --model gemini-2.5-pro
 ```
 
-Any Gemini model name is accepted. If omitted, uses the model in your global config (default: `gemini-2.0-flash`).
+Any Gemini model name is accepted. If omitted, uses the model in your global config (default: `gemini-3-flash-preview`).
 
 ### Fallback behavior
 
@@ -106,7 +106,7 @@ sadr ask
 ### How it works
 
 1. sadr loads all `active` records from your vault (filtered by `ask.limit` and `ask.range` in your config)
-2. You choose a persona (Tech Lead, DBA, Security Analyst, etc.)
+2. You choose a persona — one of the built-ins (Tech Lead, DBA, QA Engineer, Security Analyst, DevOps Engineer, UX Designer) or a custom one you name on the spot
 3. You type a question
 4. sadr builds a prompt with the persona's instruction, your records, and optionally the source code context
 5. The AI responds; the answer is saved to `.sadr/<user>/answers/`
@@ -123,7 +123,10 @@ sadr ask --field "team=platform"
 
 ### Including snippet content
 
-By default, snippets are compressed before being sent (to reduce tokens). Pass `--complete` to include the full snippet content:
+By default the prompt contains each record's ADR fields (and any referenced
+source files, compressed) — the snippet body itself is left out to save tokens.
+Pass `--complete` to also include the snippet from each record; it is compressed
+before being sent:
 
 ```bash
 sadr ask --complete
