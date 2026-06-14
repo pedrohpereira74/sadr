@@ -6,3 +6,5 @@ dist/
 .sadr/*/answers/
 node_modules/
 .claude/
+website/.docusaurus/
+website/build/
