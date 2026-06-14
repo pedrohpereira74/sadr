@@ -255,3 +255,28 @@ sadr config --set-api-key "AIza..."
 sadr config --check
 sadr config --setup-jira
 ```
+
+---
+
+## `sadr doctor`
+
+Audit records against a pull request's diff and detect API/contract drift. Built
+to run in CI as a merge gatekeeper — see [CI Gatekeeper](../guide/ci-gatekeeper).
+
+```bash
+sadr doctor [flags]
+```
+
+| Flag | Description |
+|---|---|
+| `--ci` | Non-interactive CI mode with structured output for ChatOps |
+| `--base <string>` | Base branch (or ref) of the pull request (default `main`) |
+| `--apply <string>` | Comma-separated drift IDs (or `all`) approved for rewrite — runs the apply phase |
+
+It exits non-zero when record validation fails or drift is detected and
+unresolved, so a required status check blocks the merge.
+
+```bash
+sadr doctor --ci --base origin/main          # detect phase (CI)
+sadr doctor --ci --base origin/main --apply all
+```

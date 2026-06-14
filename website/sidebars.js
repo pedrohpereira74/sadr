@@ -14,6 +14,7 @@ const sidebars = {
         'guide/usage',
         'guide/ai-features',
         'guide/team-workflows',
+        'guide/ci-gatekeeper',
       ],
     },
     {

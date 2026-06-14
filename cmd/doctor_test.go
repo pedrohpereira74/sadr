@@ -1,12 +1,14 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/pedrohpereira74/sadr/internal/doctor"
 	"github.com/pedrohpereira74/sadr/internal/model"
@@ -230,5 +232,100 @@ func TestApplyRewritesUpdatesRecordInPlace(t *testing.T) {
 	}
 	if reloaded.Fields["decision"] != "now uses New()" {
 		t.Errorf("section not rewritten on disk, got %q", reloaded.Fields["decision"])
+	}
+}
+
+// --- end-to-end (all seams stubbed, real temp .sadr) ---
+
+func setupDoctorE2E(t *testing.T) string {
+	t.Helper()
+	setupTestUser(t, t.TempDir()) // sets HOME to a sandbox
+
+	proj := t.TempDir()
+	recordsDir := filepath.Join(proj, ".sadr", "testuser", "records")
+	if err := os.MkdirAll(recordsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(proj, "api.go"), []byte("package api\nfunc New() {}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	s := storage.NewStorage(recordsDir)
+	r, _ := model.NewRecordWithOptions("API contract", "full")
+	r.Author = "testuser"
+	r.Status = "active"
+	r.FileRef = "api.go"
+	r.FieldOrder = []string{"decision"}
+	r.Fields = map[string]string{"decision": "uses Old()"}
+	if _, err := s.SaveRecord(r); err != nil {
+		t.Fatal(err)
+	}
+
+	old := gitTopLevelFn
+	gitTopLevelFn = func() (string, error) { return proj, nil }
+	t.Cleanup(func() { gitTopLevelFn = old })
+
+	oldDiff := gitDiffFn
+	gitDiffFn = func(string) (string, error) {
+		return "diff --git a/api.go b/api.go\n@@ -1 +1 @@\n-func Old()\n+func New()\n", nil
+	}
+	t.Cleanup(func() { gitDiffFn = oldDiff })
+
+	return recordsDir
+}
+
+func stubGenerate(t *testing.T, fn func(prompt string) (string, error)) {
+	t.Helper()
+	old := generateTextFn
+	generateTextFn = func(_ context.Context, prompt, _, _ string, _ time.Duration) (string, error) {
+		return fn(prompt)
+	}
+	t.Cleanup(func() { generateTextFn = old })
+}
+
+func TestDoctorE2ENoDrift(t *testing.T) {
+	setupDoctorE2E(t)
+	stubGenerate(t, func(string) (string, error) { return "[]", nil })
+
+	if err := runDoctor(&doctorOptions{base: "main", ci: true})(nil, nil); err != nil {
+		t.Errorf("expected exit 0 when no drift, got %v", err)
+	}
+}
+
+func TestDoctorE2EDriftBlocksMerge(t *testing.T) {
+	setupDoctorE2E(t)
+	stubGenerate(t, func(string) (string, error) {
+		return `[{"record":"testuser/1","file_ref":"api.go","section":"decision","summary":"renamed Old->New"}]`, nil
+	})
+
+	err := runDoctor(&doctorOptions{base: "main", ci: true})(nil, nil)
+	if err == nil {
+		t.Error("expected non-zero exit (gate) when drift detected")
+	}
+}
+
+func TestDoctorE2EApplyResolves(t *testing.T) {
+	recordsDir := setupDoctorE2E(t)
+	stubGenerate(t, func(prompt string) (string, error) {
+		if strings.Contains(prompt, "documentation auditor") {
+			return `[{"record":"testuser/1","file_ref":"api.go","section":"decision","summary":"renamed Old->New"}]`, nil
+		}
+		return `[{"record":"testuser/1","section":"decision","content":"now uses New()"}]`, nil
+	})
+
+	committed := false
+	oldCommit := gitCommitFn
+	gitCommitFn = func(_ string, _ []string, _ string) error { committed = true; return nil }
+	t.Cleanup(func() { gitCommitFn = oldCommit })
+
+	if err := runDoctor(&doctorOptions{base: "main", ci: true, apply: "all"})(nil, nil); err != nil {
+		t.Fatalf("apply should resolve all drift, got %v", err)
+	}
+	if !committed {
+		t.Error("expected the rewritten record to be committed")
+	}
+
+	entries, _ := storage.NewStorage(recordsDir).ListRecordEntries()
+	if len(entries) != 1 || entries[0].Record.Fields["decision"] != "now uses New()" {
+		t.Errorf("expected section rewritten on disk, got %+v", entries[0].Record.Fields)
 	}
 }
