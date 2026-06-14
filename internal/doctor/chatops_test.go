@@ -28,12 +28,13 @@ func TestParseApplyCommand(t *testing.T) {
 }
 
 func TestIsAuthorized(t *testing.T) {
-	for _, a := range []string{"OWNER", "member", "Collaborator"} {
+	// GitHub author_association and GitLab access levels.
+	for _, a := range []string{"OWNER", "member", "Collaborator", "MAINTAINER", "developer"} {
 		if !IsAuthorized(a) {
 			t.Errorf("expected %q authorized", a)
 		}
 	}
-	for _, a := range []string{"CONTRIBUTOR", "NONE", "", "FIRST_TIME_CONTRIBUTOR"} {
+	for _, a := range []string{"CONTRIBUTOR", "NONE", "", "FIRST_TIME_CONTRIBUTOR", "REPORTER", "GUEST"} {
 		if IsAuthorized(a) {
 			t.Errorf("expected %q NOT authorized", a)
 		}

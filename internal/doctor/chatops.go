@@ -38,12 +38,13 @@ func ParseApplyCommand(body string) (ids []string, all bool, ok bool) {
 	return nil, false, false
 }
 
-// IsAuthorized reports whether a commenter's GitHub author_association is
-// allowed to trigger an apply. This guards the issue_comment workflow against
-// privilege escalation by arbitrary commenters.
-func IsAuthorized(association string) bool {
-	switch strings.ToUpper(strings.TrimSpace(association)) {
-	case "OWNER", "MEMBER", "COLLABORATOR":
+// IsAuthorized reports whether an actor's role is allowed to trigger an apply.
+// It accepts both a GitHub author_association (OWNER/MEMBER/COLLABORATOR) and a
+// GitLab access level (OWNER/MAINTAINER/DEVELOPER), so the same check guards
+// both platforms against privilege escalation by arbitrary commenters.
+func IsAuthorized(role string) bool {
+	switch strings.ToUpper(strings.TrimSpace(role)) {
+	case "OWNER", "MEMBER", "COLLABORATOR", "MAINTAINER", "DEVELOPER":
 		return true
 	}
 	return false

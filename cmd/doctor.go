@@ -44,6 +44,16 @@ func gitDiffImpl(base string) (string, error) {
 	return string(out), nil
 }
 
+// doctorActorRole returns the role of the actor triggering an apply, from the
+// GitHub author_association or a platform-neutral DOCTOR_ACTOR_ROLE (used by the
+// GitLab job). Empty means the CI platform already gated the trigger natively.
+func doctorActorRole() string {
+	if v := os.Getenv("GITHUB_ACTOR_ASSOCIATION"); v != "" {
+		return v
+	}
+	return os.Getenv("DOCTOR_ACTOR_ROLE")
+}
+
 // gitCommitImpl stages the given paths and commits them in the repo at root.
 func gitCommitImpl(root string, paths []string, message string) error {
 	addArgs := append([]string{"-C", root, "add"}, paths...)
@@ -232,11 +242,13 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) erro
 		ids := parseApplyIDs(opts.apply)
 		applying := applyAll || len(ids) > 0
 
-		// Defense in depth: the issue_comment workflow is the first authorization
-		// gate, but if it passes an actor association, refuse unauthorized applies.
+		// Defense in depth: the CI job is the first authorization gate (GitHub
+		// issue_comment / GitLab manual job), but if it passes an actor role,
+		// refuse unauthorized applies. GITHUB_ACTOR_ASSOCIATION (GitHub) or
+		// DOCTOR_ACTOR_ROLE (platform-neutral, e.g. a GitLab access level).
 		if applying {
-			if assoc := os.Getenv("GITHUB_ACTOR_ASSOCIATION"); assoc != "" && !doctor.IsAuthorized(assoc) {
-				return fmt.Errorf("actor association %q is not authorized to apply doctor fixes", assoc)
+			if role := doctorActorRole(); role != "" && !doctor.IsAuthorized(role) {
+				return fmt.Errorf("actor role %q is not authorized to apply doctor fixes", role)
 			}
 		}
 
