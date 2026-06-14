@@ -146,7 +146,9 @@ func newDoctorCmd() *cobra.Command {
 		Short: "Audit records against the diff (CI gatekeeper)",
 		Long: "Validate records and detect API contract drift introduced by a pull request.\n" +
 			"Designed to run in CI (--ci) as a merge gatekeeper.",
-		Run: runDoctor(opts),
+		RunE:          runDoctor(opts),
+		SilenceUsage:  true,
+		SilenceErrors: true,
 	}
 
 	cmd.Flags().BoolVar(&opts.ci, "ci", false, "Non-interactive CI mode with structured output for ChatOps")
@@ -155,40 +157,38 @@ func newDoctorCmd() *cobra.Command {
 	return cmd
 }
 
-func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) {
-	return func(cmd *cobra.Command, args []string) {
+func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) error {
+	return func(cmd *cobra.Command, args []string) error {
+		applyAll := strings.TrimSpace(opts.apply) == "all"
 		ids := parseApplyIDs(opts.apply)
-		phase := "detect"
-		if len(ids) > 0 {
-			phase = "apply"
-		}
-		ui.Info(os.Stderr, fmt.Sprintf("doctor: phase=%s base=%s ci=%v", phase, opts.base, opts.ci))
-		if len(ids) > 0 {
-			ui.Info(os.Stderr, fmt.Sprintf("doctor: approved drift ids: %s", strings.Join(ids, ", ")))
+		applying := applyAll || len(ids) > 0
+
+		// Defense in depth: the issue_comment workflow is the first authorization
+		// gate, but if it passes an actor association, refuse unauthorized applies.
+		if applying {
+			if assoc := os.Getenv("GITHUB_ACTOR_ASSOCIATION"); assoc != "" && !doctor.IsAuthorized(assoc) {
+				return fmt.Errorf("actor association %q is not authorized to apply doctor fixes", assoc)
+			}
 		}
 
 		diff, files, err := collectDoctorDiff(opts.base)
 		if err != nil {
-			ui.Error(os.Stderr, err.Error())
-			return
+			return err
 		}
-		ui.Info(os.Stderr, fmt.Sprintf("doctor: %d changed file(s) vs %s", len(files), opts.base))
 
 		root := doctorRepoRoot()
 		compressedDiff := compress.ZipSnippet(diff)
 		skeletons := buildSkeletons(root, files)
-		ui.Info(os.Stderr, fmt.Sprintf("doctor: compressed diff %d bytes, %d skeleton(s)", len(compressedDiff), len(skeletons)))
 
 		paths, err := doctorPaths()
 		if err != nil {
-			ui.Error(os.Stderr, err.Error())
-			return
+			return err
 		}
 		entries, err := listAllRecordEntries(paths.Root)
 		if err != nil {
-			ui.Error(os.Stderr, err.Error())
-			return
+			return err
 		}
+
 		refs := recordRefsFromEntries(entries)
 		result := doctor.Validate(refs, func(p string) bool {
 			_, statErr := os.Stat(filepath.Join(root, p))
@@ -200,39 +200,44 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) {
 		for _, c := range result.Collisions {
 			ui.Warning(os.Stderr, fmt.Sprintf("collision: file %q referenced by %s", c.FileRef, strings.Join(c.Records, ", ")))
 		}
-		if result.OK() {
-			ui.Info(os.Stderr, "doctor: record validation passed.")
+
+		var drifts []doctor.Drift
+		if targets := doctor.FilterChangedFiles(files, refs); len(targets) > 0 {
+			docs := recordDocsForTargets(targets, entries)
+			apiKey, model := loadAIConfig()
+			prompt := doctor.BuildDriftPrompt(compressedDiff, skeletons, docs)
+			resp, gErr := generateTextFn(context.Background(), prompt, apiKey, model, 0)
+			if gErr != nil {
+				return fmt.Errorf("drift detection failed: %w", gErr)
+			}
+			if drifts, err = doctor.ParseDrifts(resp); err != nil {
+				return err
+			}
 		}
 
-		targets := doctor.FilterChangedFiles(files, refs)
-		if len(targets) == 0 {
-			ui.Info(os.Stderr, "doctor: no documented files changed; nothing to audit.")
-			return
+		// Apply phase: rewrite the approved drifts (rewrite + commit land in F7/F8).
+		if applying {
+			approved := doctor.SelectDrifts(drifts, ids, applyAll)
+			ui.Info(os.Stderr, fmt.Sprintf("doctor: %d drift(s) approved for rewrite", len(approved)))
+			for _, d := range approved {
+				ui.Info(os.Stderr, fmt.Sprintf("  - %s [%s §%s]", d.ID, d.Record, d.Section))
+			}
+			ui.Info(os.Stderr, "doctor: rewrite/commit not implemented yet (scaffold).")
+			return nil
 		}
-		ui.Info(os.Stderr, fmt.Sprintf("doctor: %d documented file(s) to audit for drift", len(targets)))
 
-		docs := recordDocsForTargets(targets, entries)
-		apiKey, model := loadAIConfig()
-		prompt := doctor.BuildDriftPrompt(compressedDiff, skeletons, docs)
-		resp, err := generateTextFn(context.Background(), prompt, apiKey, model, 0)
-		if err != nil {
-			ui.Error(os.Stderr, fmt.Sprintf("drift detection failed: %v", err))
-			return
-		}
-		drifts, err := doctor.ParseDrifts(resp)
-		if err != nil {
-			ui.Error(os.Stderr, err.Error())
-			return
+		// Detect phase: gate the merge on validation failures or detected drift.
+		if !result.OK() {
+			return fmt.Errorf("record validation failed: %d orphan(s), %d collision(s)", len(result.Orphans), len(result.Collisions))
 		}
 		if len(drifts) == 0 {
 			ui.Success(os.Stderr, "doctor: no contract drift detected.")
-			return
-		}
-		for _, d := range drifts {
-			ui.Warning(os.Stderr, fmt.Sprintf("drift %s [%s §%s]: %s", d.ID, d.Record, d.Section, d.Summary))
+			return nil
 		}
 
-		ui.Info(os.Stderr, "doctor: chatops/apply not implemented yet (scaffold).")
+		// Emit the ChatOps comment (consumed by the workflow) and fail the check.
+		fmt.Fprintln(os.Stdout, doctor.RenderComment(drifts))
+		return fmt.Errorf("%d documentation drift(s) detected; reply /doctor apply to resolve", len(drifts))
 	}
 }
 
