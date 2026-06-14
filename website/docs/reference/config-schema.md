@@ -35,7 +35,6 @@ jira:
 | Type | Description | `options` required |
 |---|---|---|
 | `text` | Freeform textarea | No |
-| `multitext` | Multiple freeform entries | No |
 | `list` | Freeform, rendered as bullet list | No |
 | `select` | Single-choice dropdown | Yes |
 | `multiselect` | Multi-choice selector | Yes |

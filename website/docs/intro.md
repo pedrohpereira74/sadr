@@ -33,7 +33,7 @@ That context evaporates fast. sadr captures it *at the moment you write the code
 
 - **AI-assisted capture** — `--smart` analyzes your snippet and pre-fills fields using Gemini
 - **Multiple sources** — clipboard, file path, or `git diff HEAD`
-- **Customizable schemas** — define your own `text`, `multitext`, `select`, `multiselect`, `list`, and `jira` fields
+- **Customizable schemas** — define your own `text`, `select`, `multiselect`, `list`, and `jira` fields
 - **Interactive TUI hub** — `sadr search` opens a fuzzy-search interface for browsing, deleting, and exporting
 - **AI persona queries** — `sadr ask` lets a Tech Lead, DBA, Security Analyst, or custom persona answer questions grounded in your records
 - **Jira integration** — link records to Jira cards; the AI uses the card summary as extra context

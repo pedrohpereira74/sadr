@@ -159,16 +159,6 @@ A multi-choice field. The user picks one or more options.
   options: [security, performance, architecture, data, devops]
 ```
 
-### `multitext`
-
-Multiple freeform text entries.
-
-```yaml
-- name: notes
-  type: multitext
-  required: false
-```
-
 ### `jira`
 
 A Jira card key field. When Jira is configured, sadr fetches the card's summary and description and passes them to the AI as extra context.
