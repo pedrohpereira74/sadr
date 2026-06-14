@@ -48,17 +48,6 @@ fine_tuning_hint: "focus on migration risk and rollback strategy"
 
 **Status:** `#active`
 
-**Question:**
-> focus on migration risk and rollback strategy
-
-## Snippet
-
-```go
-func NewDB(cfg Config) (*sql.DB, error) {
-    return sql.Open("postgres", cfg.DSN)
-}
-```
-
 ## Context
 
 The previous SQLite setup was a bottleneck under concurrent load...
@@ -75,7 +64,23 @@ Migrate to PostgreSQL 15 for the primary data store...
 ## Consequences
 
 The migration requires a one-time data export and reimport...
+
+**Question:**
+> focus on migration risk and rollback strategy
+
+## Snippet
+
+```go
+func NewDB(cfg Config) (*sql.DB, error) {
+    return sql.Open("postgres", cfg.DSN)
+}
 ```
+```
+
+The body is ordered decision-first: the title, tags and status come first, then
+the ADR fields in schema order, and the code snippet (with its optional
+`**Question:**` capture hint) is rendered last — so the reasoning is what you
+read first and the code is reference at the bottom.
 
 ---
 
