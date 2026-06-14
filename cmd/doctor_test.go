@@ -7,6 +7,10 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/pedrohpereira74/sadr/internal/doctor"
+	"github.com/pedrohpereira74/sadr/internal/model"
+	"github.com/pedrohpereira74/sadr/internal/storage"
 )
 
 func TestDoctorCommandRegistered(t *testing.T) {
@@ -112,5 +116,33 @@ func TestBuildSkeletons(t *testing.T) {
 	}
 	if strings.Contains(got, "x := 1") {
 		t.Errorf("skeleton should drop the body, got %q", got)
+	}
+}
+
+func TestRecordRefsFromEntriesAndValidate(t *testing.T) {
+	mk := func(author string, id int, fileRef, status string) storage.RecordEntry {
+		r, _ := model.NewRecordWithOptions("t", "full")
+		r.FileRef = fileRef
+		r.Status = status
+		return storage.RecordEntry{Record: r, FileID: id, Author: author}
+	}
+	entries := []storage.RecordEntry{
+		mk("alice", 1, "exists.go", "active"),
+		mk("bob", 2, "gone.go", "active"),
+		mk("alice", 3, "exists.go", "active"), // collides with alice/1
+		mk("alice", 4, "old.go", "proposed"), // ignored (not active)
+	}
+
+	refs := recordRefsFromEntries(entries)
+	if refs[0].ID != "alice/1" || refs[1].ID != "bob/2" {
+		t.Fatalf("unexpected ids: %+v", refs)
+	}
+
+	res := doctor.Validate(refs, func(p string) bool { return p == "exists.go" })
+	if len(res.Orphans) != 1 || res.Orphans[0].Record != "bob/2" {
+		t.Errorf("expected orphan bob/2, got %+v", res.Orphans)
+	}
+	if len(res.Collisions) != 1 || res.Collisions[0].FileRef != "exists.go" {
+		t.Errorf("expected collision on exists.go, got %+v", res.Collisions)
 	}
 }

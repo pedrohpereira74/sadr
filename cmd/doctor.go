@@ -8,7 +8,9 @@ import (
 	"strings"
 
 	"github.com/pedrohpereira74/sadr/internal/compress"
+	"github.com/pedrohpereira74/sadr/internal/discover"
 	"github.com/pedrohpereira74/sadr/internal/doctor"
+	"github.com/pedrohpereira74/sadr/internal/storage"
 	"github.com/pedrohpereira74/sadr/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -57,6 +59,37 @@ func doctorRepoRoot() string {
 	}
 	dir, _ := os.Getwd()
 	return dir
+}
+
+// doctorPaths resolves the project vault without the interactive global
+// fallback — doctor is a CI gatekeeper and must run inside a sadr-tracked repo.
+func doctorPaths() (discover.SadrPaths, error) {
+	root := doctorRepoRoot()
+	paths, err := discover.FindSadrDir(root)
+	if err != nil {
+		return paths, err
+	}
+	if paths.IsGlobal {
+		return paths, fmt.Errorf("no project .sadr/ found in %s; doctor runs inside a sadr-tracked repository", root)
+	}
+	return paths, nil
+}
+
+// recordRefsFromEntries maps storage entries to the validator's minimal view.
+func recordRefsFromEntries(entries []storage.RecordEntry) []doctor.RecordRef {
+	refs := make([]doctor.RecordRef, 0, len(entries))
+	for _, e := range entries {
+		id := fmt.Sprintf("#%d", e.FileID)
+		if e.Author != "" {
+			id = fmt.Sprintf("%s/%d", e.Author, e.FileID)
+		}
+		refs = append(refs, doctor.RecordRef{
+			ID:      id,
+			FileRef: e.Record.FileRef,
+			Status:  e.Record.Status,
+		})
+	}
+	return refs
 }
 
 // buildSkeletons reads each changed file under root and returns path->skeleton.
@@ -109,9 +142,34 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) {
 		}
 		ui.Info(os.Stderr, fmt.Sprintf("doctor: %d changed file(s) vs %s", len(files), opts.base))
 
+		root := doctorRepoRoot()
 		compressedDiff := compress.ZipSnippet(diff)
-		skeletons := buildSkeletons(doctorRepoRoot(), files)
+		skeletons := buildSkeletons(root, files)
 		ui.Info(os.Stderr, fmt.Sprintf("doctor: compressed diff %d bytes, %d skeleton(s)", len(compressedDiff), len(skeletons)))
+
+		paths, err := doctorPaths()
+		if err != nil {
+			ui.Error(os.Stderr, err.Error())
+			return
+		}
+		entries, err := listAllRecordEntries(paths.Root)
+		if err != nil {
+			ui.Error(os.Stderr, err.Error())
+			return
+		}
+		result := doctor.Validate(recordRefsFromEntries(entries), func(p string) bool {
+			_, statErr := os.Stat(filepath.Join(root, p))
+			return statErr == nil
+		})
+		for _, o := range result.Orphans {
+			ui.Warning(os.Stderr, fmt.Sprintf("orphan: record %s points at missing file %q", o.Record, o.FileRef))
+		}
+		for _, c := range result.Collisions {
+			ui.Warning(os.Stderr, fmt.Sprintf("collision: file %q referenced by %s", c.FileRef, strings.Join(c.Records, ", ")))
+		}
+		if result.OK() {
+			ui.Info(os.Stderr, "doctor: record validation passed.")
+		}
 
 		ui.Info(os.Stderr, "doctor: not implemented yet (scaffold).")
 	}
