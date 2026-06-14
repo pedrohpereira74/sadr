@@ -17,6 +17,7 @@ var (
 	snippetCapturer                             = captureSnippetFromEditorImpl
 	clipboardReader                             = readClipboardImpl
 	confirmOverwrite                            = confirmOverwriteImpl
+	gitTopLevelFn                               = gitTopLevelImpl
 
 	generateTextFn  func(ctx context.Context, prompt, apiKey, model string, timeout time.Duration) (string, error) = ai.GenerateText
 	confirmPromptFn func(message string) bool                                                                      = confirmPromptImpl

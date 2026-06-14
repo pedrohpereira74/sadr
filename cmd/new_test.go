@@ -1,11 +1,13 @@
 package cmd
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 
+	"github.com/pedrohpereira74/sadr/internal/discover"
 	"github.com/pedrohpereira74/sadr/internal/storage"
 	"github.com/pedrohpereira74/sadr/internal/templates"
 )
@@ -334,5 +336,63 @@ index 1234567..abcdefg 100644`
 	result := extractFilesFromDiff(diff)
 	if len(result) != 1 {
 		t.Fatalf("expected 1 file (deduplicated), got %d", len(result))
+	}
+}
+
+func TestResolveProjectRootLocal(t *testing.T) {
+	paths := discover.SadrPaths{
+		Root:     filepath.Join(string(filepath.Separator)+"some", "project", ".sadr"),
+		IsGlobal: false,
+	}
+	got := resolveProjectRoot(paths)
+	want := filepath.Join(string(filepath.Separator)+"some", "project")
+	if got != want {
+		t.Errorf("local vault: got %q, want %q", got, want)
+	}
+}
+
+func TestResolveProjectRootGlobalUsesGitRoot(t *testing.T) {
+	oldGit := gitTopLevelFn
+	defer func() { gitTopLevelFn = oldGit }()
+	repoRoot := filepath.Join(string(filepath.Separator)+"home", "alice", "work", "myrepo")
+	gitTopLevelFn = func() (string, error) { return repoRoot, nil }
+
+	home, _ := os.UserHomeDir()
+	paths := discover.SadrPaths{Root: filepath.Join(home, ".sadr"), IsGlobal: true}
+	got := resolveProjectRoot(paths)
+	if got != repoRoot {
+		t.Errorf("global fallback should resolve to git repo root, got %q want %q", got, repoRoot)
+	}
+}
+
+func TestResolveProjectRootGlobalFallsBackToCwd(t *testing.T) {
+	oldGit := gitTopLevelFn
+	defer func() { gitTopLevelFn = oldGit }()
+	gitTopLevelFn = func() (string, error) { return "", errors.New("not a git repo") }
+
+	// Pin the working directory so the assertion does not depend on whatever
+	// directory other tests in the suite left the process in.
+	workdir := t.TempDir()
+	originalWd, _ := os.Getwd()
+	if err := os.Chdir(workdir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	t.Cleanup(func() { os.Chdir(originalWd) })
+
+	home, _ := os.UserHomeDir()
+	paths := discover.SadrPaths{Root: filepath.Join(home, ".sadr"), IsGlobal: true}
+	got := resolveProjectRoot(paths)
+
+	// Compare resolved paths (temp dirs may live behind symlinks, e.g. macOS).
+	wantWd, _ := filepath.EvalSymlinks(workdir)
+	gotResolved, _ := filepath.EvalSymlinks(got)
+	if gotResolved != wantWd {
+		t.Errorf("global fallback without git should resolve to cwd, got %q want %q", got, workdir)
+	}
+	// The core of the bug: the global fallback must never resolve to the home
+	// directory (filepath.Dir of ~/.sadr), or the file picker lists the wrong
+	// tree and diff auto-selection silently fails.
+	if got == filepath.Dir(paths.Root) {
+		t.Errorf("global fallback must not resolve to home dir %q", filepath.Dir(paths.Root))
 	}
 }

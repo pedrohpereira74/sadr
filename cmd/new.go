@@ -14,6 +14,7 @@ import (
 	"github.com/pedrohpereira74/sadr/internal/ai"
 	"github.com/pedrohpereira74/sadr/internal/compress"
 	"github.com/pedrohpereira74/sadr/internal/config"
+	"github.com/pedrohpereira74/sadr/internal/discover"
 	jiraclient "github.com/pedrohpereira74/sadr/internal/jira"
 	"github.com/pedrohpereira74/sadr/internal/model"
 	"github.com/pedrohpereira74/sadr/internal/storage"
@@ -469,6 +470,36 @@ func collectChangedFiles(diffContent string) []string {
 	return files
 }
 
+func gitTopLevelImpl() (string, error) {
+	out, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// resolveProjectRoot returns the directory the file picker and file references
+// are resolved against.
+//
+// For a local vault it's the directory that contains the .sadr folder. For the
+// global fallback the record is written to ~/.sadr, but the snippet and git diff
+// still come from the repository the terminal is in — so resolving against the
+// home directory would list the wrong files and break diff auto-selection.
+// In that case resolve the actual working location instead: the git repository
+// root (which git diff paths are relative to), falling back to the cwd.
+func resolveProjectRoot(paths discover.SadrPaths) string {
+	if !paths.IsGlobal {
+		return filepath.Dir(paths.Root)
+	}
+	if root, err := gitTopLevelFn(); err == nil && root != "" {
+		return root
+	}
+	if dir, err := os.Getwd(); err == nil {
+		return dir
+	}
+	return filepath.Dir(paths.Root)
+}
+
 func runNew(recordType string, opts *newOptions) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
 		paths, err := resolvePaths(opts.global)
@@ -507,7 +538,7 @@ func runNew(recordType string, opts *newOptions) func(cmd *cobra.Command, args [
 			opts.smart = true
 		}
 
-		projectRoot := filepath.Dir(paths.Root)
+		projectRoot := resolveProjectRoot(paths)
 
 		autoFileRef := ""
 		var preSelectedFiles []string
