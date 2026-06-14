@@ -174,3 +174,23 @@ func TestRecordDocsForTargets(t *testing.T) {
 		t.Errorf("expected record sections to be carried, got %+v", docs[0].Sections)
 	}
 }
+
+func TestRewriteRequestsForDrifts(t *testing.T) {
+	r1, _ := model.NewRecordWithOptions("t", "full")
+	r1.FileRef = "api.go"
+	r1.Fields = map[string]string{"decision": "uses Old()"}
+	entries := []storage.RecordEntry{{Record: r1, FileID: 1, Author: "alice"}}
+
+	drifts := []doctor.Drift{
+		{ID: "x", Record: "alice/1", FileRef: "api.go", Section: "decision", Summary: "renamed"},
+		{ID: "y", Record: "ghost/9", Section: "decision", Summary: "n/a"}, // unknown record skipped
+	}
+
+	reqs := rewriteRequestsForDrifts(drifts, entries)
+	if len(reqs) != 1 {
+		t.Fatalf("expected 1 request (unknown record skipped), got %d", len(reqs))
+	}
+	if reqs[0].Current != "uses Old()" || reqs[0].Summary != "renamed" {
+		t.Errorf("unexpected request %+v", reqs[0])
+	}
+}

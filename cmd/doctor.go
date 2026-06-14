@@ -97,13 +97,19 @@ func recordRefsFromEntries(entries []storage.RecordEntry) []doctor.RecordRef {
 	return refs
 }
 
-// recordDocsForTargets gathers the documentation (sections) of the records named
-// by the audit targets, de-duplicated, in target order.
-func recordDocsForTargets(targets []doctor.AuditTarget, entries []storage.RecordEntry) []doctor.RecordDoc {
+// indexEntries maps each record entry by its human-facing ID (e.g. "alice/3").
+func indexEntries(entries []storage.RecordEntry) map[string]storage.RecordEntry {
 	byID := make(map[string]storage.RecordEntry, len(entries))
 	for _, e := range entries {
 		byID[entryID(e)] = e
 	}
+	return byID
+}
+
+// recordDocsForTargets gathers the documentation (sections) of the records named
+// by the audit targets, de-duplicated, in target order.
+func recordDocsForTargets(targets []doctor.AuditTarget, entries []storage.RecordEntry) []doctor.RecordDoc {
+	byID := indexEntries(entries)
 	var docs []doctor.RecordDoc
 	seen := map[string]bool{}
 	for _, tgt := range targets {
@@ -122,6 +128,26 @@ func recordDocsForTargets(targets []doctor.AuditTarget, entries []storage.Record
 		}
 	}
 	return docs
+}
+
+// rewriteRequestsForDrifts builds rewrite requests from approved drifts, pulling
+// each section's current content from its record.
+func rewriteRequestsForDrifts(drifts []doctor.Drift, entries []storage.RecordEntry) []doctor.RewriteRequest {
+	byID := indexEntries(entries)
+	var reqs []doctor.RewriteRequest
+	for _, d := range drifts {
+		e, ok := byID[d.Record]
+		if !ok {
+			continue
+		}
+		reqs = append(reqs, doctor.RewriteRequest{
+			Record:  d.Record,
+			Section: d.Section,
+			Current: e.Record.Fields[d.Section],
+			Summary: d.Summary,
+		})
+	}
+	return reqs
 }
 
 // buildSkeletons reads each changed file under root and returns path->skeleton.
@@ -215,14 +241,25 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) erro
 			}
 		}
 
-		// Apply phase: rewrite the approved drifts (rewrite + commit land in F7/F8).
+		// Apply phase: rewrite the approved drifts (commit lands in F8).
 		if applying {
 			approved := doctor.SelectDrifts(drifts, ids, applyAll)
-			ui.Info(os.Stderr, fmt.Sprintf("doctor: %d drift(s) approved for rewrite", len(approved)))
-			for _, d := range approved {
-				ui.Info(os.Stderr, fmt.Sprintf("  - %s [%s §%s]", d.ID, d.Record, d.Section))
+			if len(approved) == 0 {
+				ui.Info(os.Stderr, "doctor: no matching drifts to apply.")
+				return nil
 			}
-			ui.Info(os.Stderr, "doctor: rewrite/commit not implemented yet (scaffold).")
+			reqs := rewriteRequestsForDrifts(approved, entries)
+			apiKey, model := loadAIConfig()
+			resp, gErr := generateTextFn(context.Background(), doctor.BuildRewritePrompt(compressedDiff, reqs), apiKey, model, 0)
+			if gErr != nil {
+				return fmt.Errorf("rewrite failed: %w", gErr)
+			}
+			rewrites, rErr := doctor.ParseRewrites(resp)
+			if rErr != nil {
+				return rErr
+			}
+			ui.Info(os.Stderr, fmt.Sprintf("doctor: AI rewrote %d section(s)", len(rewrites)))
+			ui.Info(os.Stderr, "doctor: commit not implemented yet (scaffold).")
 			return nil
 		}
 
