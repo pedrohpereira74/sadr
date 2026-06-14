@@ -67,8 +67,11 @@ editor:
 language: "english"
 
 ai:
+  # provider: gemini | claude | openai | deepseek
   provider: "gemini"
   api_key: ""
+  # model defaults per provider when empty (gemini: gemini-3-flash-preview,
+  # claude: claude-sonnet-4-6, openai: gpt-4o, deepseek: deepseek-chat)
   model: "gemini-3-flash-preview"
   ai_depth: true
 

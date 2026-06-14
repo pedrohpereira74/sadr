@@ -313,7 +313,7 @@ func loadAISuggestions(opts *newOptions, snippet string, fieldDefs []wizard.Fiel
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	suggestions, err := ai.Suggest(ctx, compress.ZipSnippet(snippet), fields, docLanguage, aiKey, modelName, aiDepth, jiraContext, fineTuningHint)
+	suggestions, err := ai.Suggest(ctx, cfg.AI.Provider, compress.ZipSnippet(snippet), fields, docLanguage, aiKey, modelName, aiDepth, jiraContext, fineTuningHint)
 	if err != nil {
 		if ctx.Err() != nil {
 			fmt.Fprintln(os.Stderr)

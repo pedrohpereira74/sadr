@@ -24,10 +24,10 @@ editor: vim
 language: English
 
 ai:
-  provider: gemini
+  provider: gemini       # gemini | claude | openai | deepseek
   api_key: ""            # set via: sadr config --set-api-key "key"
   api_key_env: ""        # alternatively, read from this env var
-  model: gemini-3-flash-preview
+  model: gemini-3-flash-preview   # empty uses the provider default
   ai_depth: false        # if true, uses a more thorough Staff-level AI persona
 
 jira:

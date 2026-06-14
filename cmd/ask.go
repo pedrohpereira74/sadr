@@ -188,7 +188,7 @@ func runAsk(opts *askOptions) {
 		return
 	}
 
-	apiKey, aiModel := loadAIConfig()
+	provider, apiKey, aiModel := loadAIConfig()
 	if apiKey == "" {
 		ui.Error(os.Stderr, "this feature requires an AI API key. set it up: https://ai.google.dev")
 		return
@@ -202,7 +202,7 @@ func runAsk(opts *askOptions) {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	response, err := generateTextFn(ctx, prompt, apiKey, aiModel, 60*time.Second)
+	response, err := generateTextFn(ctx, provider, prompt, apiKey, aiModel, 60*time.Second)
 	if err != nil {
 		if ctx.Err() != nil {
 			fmt.Fprintln(os.Stderr)

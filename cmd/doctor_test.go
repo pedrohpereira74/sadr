@@ -276,7 +276,7 @@ func setupDoctorE2E(t *testing.T) string {
 func stubGenerate(t *testing.T, fn func(prompt string) (string, error)) {
 	t.Helper()
 	old := generateTextFn
-	generateTextFn = func(_ context.Context, prompt, _, _ string, _ time.Duration) (string, error) {
+	generateTextFn = func(_ context.Context, _, prompt, _, _ string, _ time.Duration) (string, error) {
 		return fn(prompt)
 	}
 	t.Cleanup(func() { generateTextFn = old })

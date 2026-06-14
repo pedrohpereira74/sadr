@@ -109,45 +109,42 @@ func ParseResponse(response string) (map[string]string, error) {
 
 var httpClient = &http.Client{Timeout: 90 * time.Second}
 
-func resolveAPIKey(apiKey string) (string, error) {
-	if apiKey == "" {
-		apiKey = os.Getenv("AI_API_KEY")
+func resolveAPIKey(apiKey string, envs []string) (string, error) {
+	if apiKey != "" {
+		return apiKey, nil
 	}
-	if apiKey == "" {
-		apiKey = os.Getenv("GEMINI_API_KEY")
+	if v := os.Getenv("AI_API_KEY"); v != "" {
+		return v, nil
 	}
-	if apiKey == "" {
-		return "", fmt.Errorf("AI API key not set in global config or environment")
+	for _, e := range envs {
+		if v := os.Getenv(e); v != "" {
+			return v, nil
+		}
 	}
-	return apiKey, nil
+	return "", fmt.Errorf("AI API key not set in global config or environment")
 }
 
-func GenerateText(ctx context.Context, prompt string, apiKey string, model string, timeout time.Duration) (string, error) {
-	apiKey, err := resolveAPIKey(apiKey)
+// GenerateText sends a prompt to the configured provider (gemini, claude, openai
+// or deepseek) and returns the generated text.
+func GenerateText(ctx context.Context, provider, prompt, apiKey, model string, timeout time.Duration) (string, error) {
+	spec, err := providerByName(provider)
+	if err != nil {
+		return "", err
+	}
+
+	apiKey, err = resolveAPIKey(apiKey, spec.keyEnvs)
 	if err != nil {
 		return "", err
 	}
 
 	if model == "" {
-		model = DefaultModel
+		model = spec.defaultModel
 	}
 
-	reqBody := map[string]any{
-		"contents": []map[string]any{
-			{
-				"parts": []map[string]string{
-					{"text": prompt},
-				},
-			},
-		},
-	}
-
-	jsonBody, err := json.Marshal(reqBody)
+	jsonBody, err := json.Marshal(spec.body(model, prompt))
 	if err != nil {
 		return "", err
 	}
-
-	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent", model)
 
 	client := httpClient
 	if timeout > 0 {
@@ -157,12 +154,13 @@ func GenerateText(ctx context.Context, prompt string, apiKey string, model strin
 		}
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, "POST", spec.url(model), bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %v", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-goog-api-key", apiKey)
+	for k, v := range spec.headers(apiKey) {
+		req.Header.Set(k, v)
+	}
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -179,30 +177,12 @@ func GenerateText(ctx context.Context, prompt string, apiKey string, model strin
 		return "", fmt.Errorf("API error (%d): %s", resp.StatusCode, string(body))
 	}
 
-	var geminiResp struct {
-		Candidates []struct {
-			Content struct {
-				Parts []struct {
-					Text string `json:"text"`
-				} `json:"parts"`
-			} `json:"content"`
-		} `json:"candidates"`
-	}
-
-	if err := json.Unmarshal(body, &geminiResp); err != nil {
-		return "", fmt.Errorf("failed to parse API response: %v", err)
-	}
-
-	if len(geminiResp.Candidates) == 0 || len(geminiResp.Candidates[0].Content.Parts) == 0 {
-		return "", fmt.Errorf("empty response from API")
-	}
-
-	return geminiResp.Candidates[0].Content.Parts[0].Text, nil
+	return spec.parse(body)
 }
 
-func Suggest(ctx context.Context, snippet string, fields []string, language string, apiKey string, model string, depth bool, jiraContext string, fineTuningHint string) (map[string]string, error) {
+func Suggest(ctx context.Context, provider, snippet string, fields []string, language, apiKey, model string, depth bool, jiraContext, fineTuningHint string) (map[string]string, error) {
 	prompt := BuildPrompt(snippet, fields, language, depth, jiraContext, fineTuningHint)
-	text, err := GenerateText(ctx, prompt, apiKey, model, 0)
+	text, err := GenerateText(ctx, provider, prompt, apiKey, model, 0)
 	if err != nil {
 		return nil, err
 	}

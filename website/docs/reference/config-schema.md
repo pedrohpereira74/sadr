@@ -119,10 +119,10 @@ editor: <string>         # editor command, e.g. vim, nano, "code --wait"
 language: <string>       # language for AI output, e.g. English, Portuguese
 
 ai:
-  provider: gemini       # currently only gemini is supported
-  api_key: <string>      # Gemini API key (stored plaintext — leave empty and use api_key_env in shared envs)
+  provider: gemini       # gemini | claude | openai | deepseek
+  api_key: <string>      # API key (stored plaintext — leave empty and use api_key_env in shared envs)
   api_key_env: <string>  # env var name to read the key from (used only when api_key is empty)
-  model: <string>        # Gemini model name (default: gemini-3-flash-preview)
+  model: <string>        # model name; empty uses the provider default (see below)
   ai_depth: <bool>       # if true, uses a Staff-level persona with more thorough output
 
 jira:
@@ -144,6 +144,20 @@ jira:
   disable_project_warning: <bool>  # suppress "Jira configured but no project URL" warning
 ```
 
+### AI providers
+
+`provider` selects which API sadr calls. Each has its own default model and
+fallback environment variable for the key:
+
+| Provider | `provider` | Default model | Key env (fallback) |
+|---|---|---|---|
+| Google Gemini | `gemini` (default) | `gemini-3-flash-preview` | `GEMINI_API_KEY` |
+| Anthropic Claude | `claude` | `claude-sonnet-4-6` | `ANTHROPIC_API_KEY` |
+| OpenAI | `openai` | `gpt-4o` | `OPENAI_API_KEY` |
+| DeepSeek | `deepseek` | `deepseek-chat` | `DEEPSEEK_API_KEY` |
+
+Set `provider` and (optionally) `model`; leave `model` empty to use the default.
+
 ### Precedence for AI key
 
 The first non-empty source wins:
@@ -151,4 +165,4 @@ The first non-empty source wins:
 1. `ai.api_key` (plaintext in the global config)
 2. `ai.api_key_env` (the env var named by that field) — used only when `ai.api_key` is empty
 3. `AI_API_KEY` environment variable
-4. `GEMINI_API_KEY` environment variable
+4. The selected provider's key env (e.g. `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`)

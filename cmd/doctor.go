@@ -273,9 +273,9 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) erro
 		var drifts []doctor.Drift
 		if targets := doctor.FilterChangedFiles(files, refs); len(targets) > 0 {
 			docs := recordDocsForTargets(targets, entries)
-			apiKey, model := loadAIConfig()
+			provider, apiKey, model := loadAIConfig()
 			prompt := doctor.BuildDriftPrompt(compressedDiff, skeletons, docs)
-			resp, gErr := generateTextFn(context.Background(), prompt, apiKey, model, 0)
+			resp, gErr := generateTextFn(context.Background(), provider, prompt, apiKey, model, 0)
 			if gErr != nil {
 				return fmt.Errorf("drift detection failed: %w", gErr)
 			}
@@ -292,8 +292,8 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) erro
 				return nil
 			}
 			reqs := rewriteRequestsForDrifts(approved, entries)
-			apiKey, model := loadAIConfig()
-			resp, gErr := generateTextFn(context.Background(), doctor.BuildRewritePrompt(compressedDiff, reqs), apiKey, model, 0)
+			provider, apiKey, model := loadAIConfig()
+			resp, gErr := generateTextFn(context.Background(), provider, doctor.BuildRewritePrompt(compressedDiff, reqs), apiKey, model, 0)
 			if gErr != nil {
 				return fmt.Errorf("rewrite failed: %w", gErr)
 			}

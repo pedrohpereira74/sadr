@@ -4,22 +4,39 @@ sidebar_position: 3
 
 # AI Features
 
-sadr uses the Gemini API for two distinct AI-powered features: **assisted capture** (`--smart`) and **architectural queries** (`sadr ask`).
+sadr uses an AI provider for two distinct features: **assisted capture**
+(`--smart`) and **architectural queries** (`sadr ask`).
 
-## Setup
+## Choosing a provider
 
-Set your API key once:
-
-```bash
-sadr config --set-api-key "AIza..."
-```
-
-Or use an environment variable:
+The default provider is Google Gemini. You can switch to Anthropic Claude,
+OpenAI or DeepSeek in your global config — see the
+[provider table](../reference/config-schema#ai-providers) for the names, default
+models and key environment variables.
 
 ```yaml
 # ~/.sadr/global-config.yaml
 ai:
-  api_key_env: GEMINI_API_KEY
+  provider: claude          # gemini | claude | openai | deepseek
+  model: claude-sonnet-4-6  # optional; empty uses the provider default
+```
+
+## Setup
+
+Set your API key once (writes `ai.api_key` in the global config):
+
+```bash
+sadr config --set-api-key "your-key"
+```
+
+Or use an environment variable — `ai.api_key_env`, or the provider's default env
+var (e.g. `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
+`DEEPSEEK_API_KEY`):
+
+```yaml
+# ~/.sadr/global-config.yaml
+ai:
+  api_key_env: ANTHROPIC_API_KEY
 ```
 
 ---
