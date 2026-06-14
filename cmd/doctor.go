@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
+	"github.com/pedrohpereira74/sadr/internal/compress"
+	"github.com/pedrohpereira74/sadr/internal/doctor"
 	"github.com/pedrohpereira74/sadr/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -46,6 +49,30 @@ func collectDoctorDiff(base string) (string, []string, error) {
 	return diff, extractFilesFromDiff(diff), nil
 }
 
+// doctorRepoRoot returns the git repository root the command runs in, falling
+// back to the working directory.
+func doctorRepoRoot() string {
+	if root, err := gitTopLevelFn(); err == nil && root != "" {
+		return root
+	}
+	dir, _ := os.Getwd()
+	return dir
+}
+
+// buildSkeletons reads each changed file under root and returns path->skeleton.
+// Files that cannot be read (deleted in the diff, binary, outside root) are skipped.
+func buildSkeletons(root string, files []string) map[string]string {
+	skeletons := map[string]string{}
+	for _, f := range files {
+		data, err := os.ReadFile(filepath.Join(root, f))
+		if err != nil {
+			continue
+		}
+		skeletons[f] = doctor.Skeleton(string(data))
+	}
+	return skeletons
+}
+
 func newDoctorCmd() *cobra.Command {
 	opts := &doctorOptions{}
 
@@ -75,12 +102,16 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) {
 			ui.Info(os.Stderr, fmt.Sprintf("doctor: approved drift ids: %s", strings.Join(ids, ", ")))
 		}
 
-		_, files, err := collectDoctorDiff(opts.base)
+		diff, files, err := collectDoctorDiff(opts.base)
 		if err != nil {
 			ui.Error(os.Stderr, err.Error())
 			return
 		}
 		ui.Info(os.Stderr, fmt.Sprintf("doctor: %d changed file(s) vs %s", len(files), opts.base))
+
+		compressedDiff := compress.ZipSnippet(diff)
+		skeletons := buildSkeletons(doctorRepoRoot(), files)
+		ui.Info(os.Stderr, fmt.Sprintf("doctor: compressed diff %d bytes, %d skeleton(s)", len(compressedDiff), len(skeletons)))
 
 		ui.Info(os.Stderr, "doctor: not implemented yet (scaffold).")
 	}
