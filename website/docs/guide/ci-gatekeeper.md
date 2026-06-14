@@ -40,8 +40,9 @@ for the two judgment steps, on a compressed payload.
 
 ## ChatOps approval
 
-The approval model is the industry-standard pair: a **slash command** to pick
-what to fix, and a **required status check** to block the merge.
+On GitHub the approval model is the industry-standard pair: a **slash command**
+to pick what to fix, and a **required status check** to block the merge. (On
+GitLab the equivalent is a **manual job** — see [GitLab CI](#gitlab-ci) below.)
 
 - Doctor posts a comment listing each drift with an ID.
 - A reviewer replies on the PR:
@@ -61,15 +62,42 @@ binary re-checks it (`GITHUB_ACTOR_ASSOCIATION`) as defense in depth — require
 because `issue_comment` workflows run with a write token.
 :::
 
-## GitHub Actions
+## CI integration
 
-The repository ships `.github/workflows/doctor.yml` with two jobs:
+The same binary drives both platforms; only the trigger and how the comment is
+posted differ. The AI key (`GEMINI_API_KEY`, or the env matching your
+`ai.provider`) must be available to the jobs as a CI secret/variable.
 
-- **detect** — on `pull_request`: builds sadr and runs
-  `sadr doctor --ci --base origin/<base>`, upserts the PR comment, and fails the
-  check on unresolved drift.
-- **apply** — on `issue_comment`: validates the commenter, parses the command and
-  runs `sadr doctor --ci --apply <ids>`, then pushes the rewrite.
+### GitHub Actions
 
-Make the **detect** check required in branch protection so drift actually blocks
-merges. `--smart`-style features need `GEMINI_API_KEY` available to the workflow.
+`.github/workflows/doctor.yml` has two jobs:
+
+- **detect** — on `pull_request`: runs `sadr doctor --ci --base origin/<base>`,
+  upserts the PR comment, and fails the check on unresolved drift.
+- **apply** — on `issue_comment`: validates the commenter's `author_association`,
+  parses `/doctor apply <ids>` and runs `sadr doctor --ci --apply <ids>`, then
+  pushes the rewrite.
+
+Make the **detect** check required in branch protection so drift blocks merges.
+
+### GitLab CI
+
+`.gitlab-ci.yml` has two jobs in MR pipelines:
+
+- **doctor:detect** — runs `sadr doctor --ci --base origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME`,
+  posts the drift report as an MR note (via the GitLab API), and fails on
+  unresolved drift.
+- **doctor:apply** — a **manual** job: a reviewer runs it (set `APPLY_IDS` to the
+  drift ids or `all`) and the rewrite is pushed back to the MR source branch.
+
+Approval here uses GitLab's native gate: only members with at least **Developer**
+access can run a manual job. Set **Settings → Merge requests → Pipelines must
+succeed** so unresolved drift blocks the merge. Requires a `GITLAB_TOKEN` CI/CD
+variable (api scope) for posting notes and pushing.
+
+:::note Authorization vocabulary
+The binary's defense-in-depth check (`doctor.IsAuthorized`) accepts both GitHub
+`author_association` (OWNER/MEMBER/COLLABORATOR) and GitLab access levels
+(OWNER/MAINTAINER/DEVELOPER), read from `GITHUB_ACTOR_ASSOCIATION` or
+`DOCTOR_ACTOR_ROLE`.
+:::
