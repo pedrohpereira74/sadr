@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -75,21 +76,52 @@ func doctorPaths() (discover.SadrPaths, error) {
 	return paths, nil
 }
 
+// entryID is the human-facing label of a record entry, e.g. "alice/3".
+func entryID(e storage.RecordEntry) string {
+	if e.Author != "" {
+		return fmt.Sprintf("%s/%d", e.Author, e.FileID)
+	}
+	return fmt.Sprintf("#%d", e.FileID)
+}
+
 // recordRefsFromEntries maps storage entries to the validator's minimal view.
 func recordRefsFromEntries(entries []storage.RecordEntry) []doctor.RecordRef {
 	refs := make([]doctor.RecordRef, 0, len(entries))
 	for _, e := range entries {
-		id := fmt.Sprintf("#%d", e.FileID)
-		if e.Author != "" {
-			id = fmt.Sprintf("%s/%d", e.Author, e.FileID)
-		}
 		refs = append(refs, doctor.RecordRef{
-			ID:      id,
+			ID:      entryID(e),
 			FileRef: e.Record.FileRef,
 			Status:  e.Record.Status,
 		})
 	}
 	return refs
+}
+
+// recordDocsForTargets gathers the documentation (sections) of the records named
+// by the audit targets, de-duplicated, in target order.
+func recordDocsForTargets(targets []doctor.AuditTarget, entries []storage.RecordEntry) []doctor.RecordDoc {
+	byID := make(map[string]storage.RecordEntry, len(entries))
+	for _, e := range entries {
+		byID[entryID(e)] = e
+	}
+	var docs []doctor.RecordDoc
+	seen := map[string]bool{}
+	for _, tgt := range targets {
+		for _, rid := range tgt.Records {
+			if seen[rid] {
+				continue
+			}
+			seen[rid] = true
+			if e, ok := byID[rid]; ok {
+				docs = append(docs, doctor.RecordDoc{
+					ID:       rid,
+					FileRef:  e.Record.FileRef,
+					Sections: e.Record.Fields,
+				})
+			}
+		}
+	}
+	return docs
 }
 
 // buildSkeletons reads each changed file under root and returns path->skeleton.
@@ -179,7 +211,28 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) {
 		}
 		ui.Info(os.Stderr, fmt.Sprintf("doctor: %d documented file(s) to audit for drift", len(targets)))
 
-		ui.Info(os.Stderr, "doctor: drift detection not implemented yet (scaffold).")
+		docs := recordDocsForTargets(targets, entries)
+		apiKey, model := loadAIConfig()
+		prompt := doctor.BuildDriftPrompt(compressedDiff, skeletons, docs)
+		resp, err := generateTextFn(context.Background(), prompt, apiKey, model, 0)
+		if err != nil {
+			ui.Error(os.Stderr, fmt.Sprintf("drift detection failed: %v", err))
+			return
+		}
+		drifts, err := doctor.ParseDrifts(resp)
+		if err != nil {
+			ui.Error(os.Stderr, err.Error())
+			return
+		}
+		if len(drifts) == 0 {
+			ui.Success(os.Stderr, "doctor: no contract drift detected.")
+			return
+		}
+		for _, d := range drifts {
+			ui.Warning(os.Stderr, fmt.Sprintf("drift %s [%s §%s]: %s", d.ID, d.Record, d.Section, d.Summary))
+		}
+
+		ui.Info(os.Stderr, "doctor: chatops/apply not implemented yet (scaffold).")
 	}
 }
 

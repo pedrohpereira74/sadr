@@ -146,3 +146,31 @@ func TestRecordRefsFromEntriesAndValidate(t *testing.T) {
 		t.Errorf("expected collision on exists.go, got %+v", res.Collisions)
 	}
 }
+
+func TestRecordDocsForTargets(t *testing.T) {
+	r1, _ := model.NewRecordWithOptions("t", "full")
+	r1.FileRef = "api.go"
+	r1.Fields = map[string]string{"decision": "uses Old()"}
+	r2, _ := model.NewRecordWithOptions("t", "full")
+	r2.FileRef = "db.go"
+	r2.Fields = map[string]string{"context": "store"}
+
+	entries := []storage.RecordEntry{
+		{Record: r1, FileID: 1, Author: "alice"},
+		{Record: r2, FileID: 2, Author: "bob"},
+	}
+	targets := []doctor.AuditTarget{
+		{FileRef: "api.go", Records: []string{"alice/1"}},
+	}
+
+	docs := recordDocsForTargets(targets, entries)
+	if len(docs) != 1 {
+		t.Fatalf("expected docs only for targeted records, got %d", len(docs))
+	}
+	if docs[0].ID != "alice/1" || docs[0].FileRef != "api.go" {
+		t.Errorf("unexpected doc %+v", docs[0])
+	}
+	if docs[0].Sections["decision"] != "uses Old()" {
+		t.Errorf("expected record sections to be carried, got %+v", docs[0].Sections)
+	}
+}
