@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/pedrohpereira74/sadr/internal/ui"
@@ -25,6 +26,24 @@ func parseApplyIDs(csv string) []string {
 		}
 	}
 	return ids
+}
+
+// gitDiffImpl returns the unified diff between the merge base of <base> and HEAD.
+func gitDiffImpl(base string) (string, error) {
+	out, err := exec.Command("git", "--no-pager", "diff", base+"...HEAD").Output()
+	if err != nil {
+		return "", err
+	}
+	return string(out), nil
+}
+
+// collectDoctorDiff returns the raw diff against base and the list of changed files.
+func collectDoctorDiff(base string) (string, []string, error) {
+	diff, err := gitDiffFn(base)
+	if err != nil {
+		return "", nil, fmt.Errorf("git diff against %q failed: %w", base, err)
+	}
+	return diff, extractFilesFromDiff(diff), nil
 }
 
 func newDoctorCmd() *cobra.Command {
@@ -55,6 +74,14 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) {
 		if len(ids) > 0 {
 			ui.Info(os.Stderr, fmt.Sprintf("doctor: approved drift ids: %s", strings.Join(ids, ", ")))
 		}
+
+		_, files, err := collectDoctorDiff(opts.base)
+		if err != nil {
+			ui.Error(os.Stderr, err.Error())
+			return
+		}
+		ui.Info(os.Stderr, fmt.Sprintf("doctor: %d changed file(s) vs %s", len(files), opts.base))
+
 		ui.Info(os.Stderr, "doctor: not implemented yet (scaffold).")
 	}
 }
