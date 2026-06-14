@@ -44,11 +44,12 @@ func LoadRecord(path string) (model.Record, error) {
 	return NewStorage("").LoadRecord(path)
 }
 
-func (s *Storage) SaveRecord(r model.Record) (string, error) {
+// serializeRecord renders a record to its Markdown (frontmatter + body) form.
+func serializeRecord(r model.Record) ([]byte, error) {
 	frontmatter := buildFrontmatter(r)
 	yamlBytes, err := yaml.Marshal(frontmatter)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	var content strings.Builder
@@ -57,9 +58,26 @@ func (s *Storage) SaveRecord(r model.Record) (string, error) {
 	_, _ = fmt.Fprintf(&content, "---\n\n")
 
 	formatBody(&content, r)
+	return []byte(content.String()), nil
+}
+
+// UpdateRecord overwrites the record file at path with r's serialized form,
+// preserving its filename (unlike SaveRecord, which allocates a new ID).
+func (s *Storage) UpdateRecord(path string, r model.Record) error {
+	data, err := serializeRecord(r)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+func (s *Storage) SaveRecord(r model.Record) (string, error) {
+	data, err := serializeRecord(r)
+	if err != nil {
+		return "", err
+	}
 
 	slug := Slugify(r.Title)
-	data := []byte(content.String())
 
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -194,3 +194,41 @@ func TestRewriteRequestsForDrifts(t *testing.T) {
 		t.Errorf("unexpected request %+v", reqs[0])
 	}
 }
+
+func TestApplyRewritesUpdatesRecordInPlace(t *testing.T) {
+	dir := t.TempDir()
+	s := storage.NewStorage(dir)
+	r, _ := model.NewRecordWithOptions("Ordering", "full")
+	r.Status = "active"
+	r.FieldOrder = []string{"decision"}
+	r.Fields = map[string]string{"decision": "uses Old()"}
+	if _, err := s.SaveRecord(r); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	entries, err := s.ListRecordEntries()
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("list: %v (n=%d)", err, len(entries))
+	}
+	entries[0].Author = "alice" // entryID -> alice/1
+
+	rewrites := []doctor.Rewrite{{Record: "alice/1", Section: "decision", Content: "now uses New()"}}
+	changed, resolved, err := applyRewrites(rewrites, entries)
+	if err != nil {
+		t.Fatalf("applyRewrites: %v", err)
+	}
+	if len(changed) != 1 {
+		t.Fatalf("expected one changed path, got %v", changed)
+	}
+	if !resolved[doctor.DriftID("alice/1", "decision")] {
+		t.Error("expected the drift id to be marked resolved")
+	}
+
+	reloaded, err := storage.LoadRecord(changed[0])
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if reloaded.Fields["decision"] != "now uses New()" {
+		t.Errorf("section not rewritten on disk, got %q", reloaded.Fields["decision"])
+	}
+}

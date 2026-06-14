@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/pedrohpereira74/sadr/internal/compress"
@@ -41,6 +42,18 @@ func gitDiffImpl(base string) (string, error) {
 		return "", err
 	}
 	return string(out), nil
+}
+
+// gitCommitImpl stages the given paths and commits them in the repo at root.
+func gitCommitImpl(root string, paths []string, message string) error {
+	addArgs := append([]string{"-C", root, "add"}, paths...)
+	if out, err := exec.Command("git", addArgs...).CombinedOutput(); err != nil {
+		return fmt.Errorf("git add failed: %v: %s", err, out)
+	}
+	if out, err := exec.Command("git", "-C", root, "commit", "-m", message).CombinedOutput(); err != nil {
+		return fmt.Errorf("git commit failed: %v: %s", err, out)
+	}
+	return nil
 }
 
 // collectDoctorDiff returns the raw diff against base and the list of changed files.
@@ -148,6 +161,36 @@ func rewriteRequestsForDrifts(drifts []doctor.Drift, entries []storage.RecordEnt
 		})
 	}
 	return reqs
+}
+
+// applyRewrites writes each rewritten section back into its record file in place,
+// returning the changed file paths (sorted) and the set of resolved drift IDs.
+func applyRewrites(rewrites []doctor.Rewrite, entries []storage.RecordEntry) ([]string, map[string]bool, error) {
+	byID := indexEntries(entries)
+	s := storage.NewStorage("")
+	changed := map[string]bool{}
+	resolved := map[string]bool{}
+
+	for _, rw := range rewrites {
+		e, ok := byID[rw.Record]
+		if !ok {
+			continue
+		}
+		section := strings.ReplaceAll(strings.ToLower(rw.Section), " ", "_")
+		e.Record.Fields[section] = rw.Content
+		if err := s.UpdateRecord(e.Path, e.Record); err != nil {
+			return nil, nil, fmt.Errorf("failed to update %s: %w", e.Path, err)
+		}
+		changed[e.Path] = true
+		resolved[doctor.DriftID(rw.Record, section)] = true
+	}
+
+	paths := make([]string, 0, len(changed))
+	for p := range changed {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+	return paths, resolved, nil
 }
 
 // buildSkeletons reads each changed file under root and returns path->skeleton.
@@ -258,8 +301,30 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) erro
 			if rErr != nil {
 				return rErr
 			}
-			ui.Info(os.Stderr, fmt.Sprintf("doctor: AI rewrote %d section(s)", len(rewrites)))
-			ui.Info(os.Stderr, "doctor: commit not implemented yet (scaffold).")
+
+			changedPaths, resolved, aErr := applyRewrites(rewrites, entries)
+			if aErr != nil {
+				return aErr
+			}
+			if len(changedPaths) > 0 {
+				msg := fmt.Sprintf("docs(sadr): doctor rewrote %d drifted section(s)", len(changedPaths))
+				if cErr := gitCommitFn(root, changedPaths, msg); cErr != nil {
+					return cErr
+				}
+				ui.Success(os.Stderr, fmt.Sprintf("doctor: rewrote and committed %d record(s)", len(changedPaths)))
+			}
+
+			// Any detected drift that was not resolved keeps the merge blocked.
+			var unresolved int
+			for _, d := range drifts {
+				if !resolved[d.ID] {
+					unresolved++
+				}
+			}
+			if unresolved > 0 {
+				return fmt.Errorf("%d drift(s) still unresolved; merge blocked", unresolved)
+			}
+			ui.Success(os.Stderr, "doctor: all detected drift resolved.")
 			return nil
 		}
 
