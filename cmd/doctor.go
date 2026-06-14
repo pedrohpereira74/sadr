@@ -157,7 +157,8 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) {
 			ui.Error(os.Stderr, err.Error())
 			return
 		}
-		result := doctor.Validate(recordRefsFromEntries(entries), func(p string) bool {
+		refs := recordRefsFromEntries(entries)
+		result := doctor.Validate(refs, func(p string) bool {
 			_, statErr := os.Stat(filepath.Join(root, p))
 			return statErr == nil
 		})
@@ -171,7 +172,14 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) {
 			ui.Info(os.Stderr, "doctor: record validation passed.")
 		}
 
-		ui.Info(os.Stderr, "doctor: not implemented yet (scaffold).")
+		targets := doctor.FilterChangedFiles(files, refs)
+		if len(targets) == 0 {
+			ui.Info(os.Stderr, "doctor: no documented files changed; nothing to audit.")
+			return
+		}
+		ui.Info(os.Stderr, fmt.Sprintf("doctor: %d documented file(s) to audit for drift", len(targets)))
+
+		ui.Info(os.Stderr, "doctor: drift detection not implemented yet (scaffold).")
 	}
 }
 
