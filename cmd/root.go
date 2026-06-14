@@ -72,6 +72,11 @@ Available Commands:
               --global             Open global config (creates ~/.sadr/ on first use)
               --set-api-key <str>  Set the Gemini API key in the global config directly
 
+  doctor      Audit records against the diff and detect API contract drift (CI gatekeeper)
+              --ci                 Non-interactive CI mode with structured output
+              --base <string>      Base branch of the pull request (default "main")
+              --apply <string>     Comma-separated drift IDs approved for rewrite
+
 Examples:
   sadr init                          Initialize sadr in current project
 
