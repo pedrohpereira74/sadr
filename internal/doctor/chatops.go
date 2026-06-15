@@ -5,15 +5,8 @@ import (
 	"strings"
 )
 
-// CommentMarker identifies the doctor comment on a PR so it can be upserted
-// (found and updated) across CI runs instead of duplicated.
 const CommentMarker = "<!-- sadr-doctor -->"
 
-// ParseApplyCommand parses a PR comment body for a `/doctor apply` ChatOps
-// command. The command must start a line (matching the GitHub slash-command
-// convention; avoids matching commands quoted inside prose). It returns the
-// requested drift ids, whether "all" was requested, and whether a valid command
-// was found.
 func ParseApplyCommand(body string) (ids []string, all bool, ok bool) {
 	for line := range strings.SplitSeq(body, "\n") {
 		line = strings.TrimSpace(line)
@@ -38,10 +31,6 @@ func ParseApplyCommand(body string) (ids []string, all bool, ok bool) {
 	return nil, false, false
 }
 
-// IsAuthorized reports whether an actor's role is allowed to trigger an apply.
-// It accepts both a GitHub author_association (OWNER/MEMBER/COLLABORATOR) and a
-// GitLab access level (OWNER/MAINTAINER/DEVELOPER), so the same check guards
-// both platforms against privilege escalation by arbitrary commenters.
 func IsAuthorized(role string) bool {
 	switch strings.ToUpper(strings.TrimSpace(role)) {
 	case "OWNER", "MEMBER", "COLLABORATOR", "MAINTAINER", "DEVELOPER":
@@ -50,8 +39,6 @@ func IsAuthorized(role string) bool {
 	return false
 }
 
-// RenderComment renders the PR/MR comment listing the files documented by more
-// than one active record, prefixed with CommentMarker for idempotent upserts.
 func RenderComment(conflicts []Collision) string {
 	var b strings.Builder
 	b.WriteString(CommentMarker)

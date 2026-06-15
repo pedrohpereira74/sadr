@@ -44,7 +44,6 @@ func LoadRecord(path string) (model.Record, error) {
 	return NewStorage("").LoadRecord(path)
 }
 
-// serializeRecord renders a record to its Markdown (frontmatter + body) form.
 func serializeRecord(r model.Record) ([]byte, error) {
 	frontmatter := buildFrontmatter(r)
 	yamlBytes, err := yaml.Marshal(frontmatter)
@@ -61,8 +60,6 @@ func serializeRecord(r model.Record) ([]byte, error) {
 	return []byte(content.String()), nil
 }
 
-// UpdateRecord overwrites the record file at path with r's serialized form,
-// preserving its filename (unlike SaveRecord, which allocates a new ID).
 func (s *Storage) UpdateRecord(path string, r model.Record) error {
 	data, err := serializeRecord(r)
 	if err != nil {

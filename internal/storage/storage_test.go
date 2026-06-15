@@ -331,7 +331,6 @@ func TestFormatBodySnippetRenderedAfterFields(t *testing.T) {
 	if snippetIdx == -1 || contextIdx == -1 || decisionIdx == -1 || questionIdx == -1 {
 		t.Fatalf("expected all sections present, got:\n%s", out)
 	}
-	// The ADR fields must come first; the snippet (with its question) is last.
 	if !(contextIdx < decisionIdx && decisionIdx < questionIdx && questionIdx < snippetIdx) {
 		t.Errorf("expected order context < decision < question < snippet, got:\n%s", out)
 	}

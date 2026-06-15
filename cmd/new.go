@@ -478,15 +478,6 @@ func gitTopLevelImpl() (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-// resolveProjectRoot returns the directory the file picker and file references
-// are resolved against.
-//
-// For a local vault it's the directory that contains the .sadr folder. For the
-// global fallback the record is written to ~/.sadr, but the snippet and git diff
-// still come from the repository the terminal is in — so resolving against the
-// home directory would list the wrong files and break diff auto-selection.
-// In that case resolve the actual working location instead: the git repository
-// root (which git diff paths are relative to), falling back to the cwd.
 func resolveProjectRoot(paths discover.SadrPaths) string {
 	if !paths.IsGlobal {
 		return filepath.Dir(paths.Root)

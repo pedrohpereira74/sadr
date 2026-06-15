@@ -6,9 +6,6 @@ import (
 	"strings"
 )
 
-// providerSpec describes how to talk to one AI provider's text-generation API:
-// the endpoint, auth headers, request body and how to read the reply. Keeping
-// these as small pure builders makes each provider unit-testable without HTTP.
 type providerSpec struct {
 	defaultModel string
 	keyEnvs      []string
@@ -28,7 +25,7 @@ func geminiSpec() providerSpec {
 		headers: func(apiKey string) map[string]string {
 			return map[string]string{"Content-Type": "application/json", "x-goog-api-key": apiKey}
 		},
-		body: func(_ , prompt string) any {
+		body: func(_, prompt string) any {
 			return map[string]any{
 				"contents": []map[string]any{
 					{"parts": []map[string]string{{"text": prompt}}},
@@ -95,8 +92,6 @@ func claudeSpec() providerSpec {
 	}
 }
 
-// openAICompatSpec covers any OpenAI-compatible chat-completions API (OpenAI,
-// DeepSeek, and most local gateways).
 func openAICompatSpec(base, defaultModel string, keyEnvs []string) providerSpec {
 	return providerSpec{
 		defaultModel: defaultModel,
@@ -130,8 +125,6 @@ func openAICompatSpec(base, defaultModel string, keyEnvs []string) providerSpec 
 	}
 }
 
-// providerByName resolves a configured provider name to its spec. An empty name
-// defaults to Gemini for backward compatibility.
 func providerByName(name string) (providerSpec, error) {
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "", "gemini", "google":

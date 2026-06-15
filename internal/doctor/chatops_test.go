@@ -28,7 +28,6 @@ func TestParseApplyCommand(t *testing.T) {
 }
 
 func TestIsAuthorized(t *testing.T) {
-	// GitHub author_association and GitLab access levels.
 	for _, a := range []string{"OWNER", "member", "Collaborator", "MAINTAINER", "developer"} {
 		if !IsAuthorized(a) {
 			t.Errorf("expected %q authorized", a)

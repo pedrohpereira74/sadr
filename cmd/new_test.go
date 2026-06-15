@@ -370,8 +370,6 @@ func TestResolveProjectRootGlobalFallsBackToCwd(t *testing.T) {
 	defer func() { gitTopLevelFn = oldGit }()
 	gitTopLevelFn = func() (string, error) { return "", errors.New("not a git repo") }
 
-	// Pin the working directory so the assertion does not depend on whatever
-	// directory other tests in the suite left the process in.
 	workdir := t.TempDir()
 	originalWd, _ := os.Getwd()
 	if err := os.Chdir(workdir); err != nil {
@@ -383,15 +381,11 @@ func TestResolveProjectRootGlobalFallsBackToCwd(t *testing.T) {
 	paths := discover.SadrPaths{Root: filepath.Join(home, ".sadr"), IsGlobal: true}
 	got := resolveProjectRoot(paths)
 
-	// Compare resolved paths (temp dirs may live behind symlinks, e.g. macOS).
 	wantWd, _ := filepath.EvalSymlinks(workdir)
 	gotResolved, _ := filepath.EvalSymlinks(got)
 	if gotResolved != wantWd {
 		t.Errorf("global fallback without git should resolve to cwd, got %q want %q", got, workdir)
 	}
-	// The core of the bug: the global fallback must never resolve to the home
-	// directory (filepath.Dir of ~/.sadr), or the file picker lists the wrong
-	// tree and diff auto-selection silently fails.
 	if got == filepath.Dir(paths.Root) {
 		t.Errorf("global fallback must not resolve to home dir %q", filepath.Dir(paths.Root))
 	}

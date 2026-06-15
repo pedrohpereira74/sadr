@@ -124,8 +124,6 @@ func resolveAPIKey(apiKey string, envs []string) (string, error) {
 	return "", fmt.Errorf("AI API key not set in global config or environment")
 }
 
-// GenerateText sends a prompt to the configured provider (gemini, claude, openai
-// or deepseek) and returns the generated text.
 func GenerateText(ctx context.Context, provider, prompt, apiKey, model string, timeout time.Duration) (string, error) {
 	spec, err := providerByName(provider)
 	if err != nil {

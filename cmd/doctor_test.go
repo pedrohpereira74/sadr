@@ -52,8 +52,8 @@ func TestRecordRefsFromEntriesAndValidate(t *testing.T) {
 	entries := []storage.RecordEntry{
 		mk("alice", 1, "exists.go", "active"),
 		mk("bob", 2, "gone.go", "active"),
-		mk("alice", 3, "exists.go", "active"), // collides with alice/1
-		mk("alice", 4, "old.go", "proposed"), // ignored (not active)
+		mk("alice", 3, "exists.go", "active"),
+		mk("alice", 4, "old.go", "proposed"),
 	}
 
 	refs := recordRefsFromEntries(entries)
@@ -100,13 +100,9 @@ func TestDeprecateRecords(t *testing.T) {
 	}
 }
 
-// --- end-to-end (repo-wide conflict detection + deprecate) ---
-
-// setupDoctorE2E builds a temp project with one active record per status given,
-// all documenting api.go, plus a stubbed repo root. Returns the records dir.
 func setupDoctorE2E(t *testing.T, statuses ...string) string {
 	t.Helper()
-	setupTestUser(t, t.TempDir()) // sets HOME to a sandbox
+	setupTestUser(t, t.TempDir())
 
 	proj := t.TempDir()
 	recordsDir := filepath.Join(proj, ".sadr", "testuser", "records")
@@ -135,14 +131,14 @@ func setupDoctorE2E(t *testing.T, statuses ...string) string {
 }
 
 func TestDoctorE2ENoConflict(t *testing.T) {
-	setupDoctorE2E(t, "active") // single active record on api.go
+	setupDoctorE2E(t, "active")
 	if err := runDoctor(&doctorOptions{ci: true})(nil, nil); err != nil {
 		t.Errorf("expected exit 0 with no conflict, got %v", err)
 	}
 }
 
 func TestDoctorE2EConflictBlocks(t *testing.T) {
-	setupDoctorE2E(t, "active", "active") // two active records on api.go
+	setupDoctorE2E(t, "active", "active")
 	if err := runDoctor(&doctorOptions{ci: true})(nil, nil); err == nil {
 		t.Error("expected non-zero exit (gate) when records conflict")
 	}
@@ -156,7 +152,6 @@ func TestDoctorE2EApplyDeprecatesResolves(t *testing.T) {
 	gitCommitFn = func(_ string, _ []string, _ string) error { committed = true; return nil }
 	t.Cleanup(func() { gitCommitFn = oldCommit })
 
-	// Deprecate one of the two conflicting records -> conflict resolved.
 	if err := runDoctor(&doctorOptions{ci: true, apply: "testuser/1"})(nil, nil); err != nil {
 		t.Fatalf("apply should resolve the conflict, got %v", err)
 	}

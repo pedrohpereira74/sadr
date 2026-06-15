@@ -20,7 +20,6 @@ type doctorOptions struct {
 	apply string
 }
 
-// parseApplyIDs splits the --apply CSV into trimmed, non-empty record IDs.
 func parseApplyIDs(csv string) []string {
 	var ids []string
 	for part := range strings.SplitSeq(csv, ",") {
@@ -32,9 +31,6 @@ func parseApplyIDs(csv string) []string {
 	return ids
 }
 
-// doctorActorRole returns the role of the actor triggering an apply, from the
-// GitHub author_association or a platform-neutral DOCTOR_ACTOR_ROLE (used by the
-// GitLab job). Empty means the CI platform already gated the trigger natively.
 func doctorActorRole() string {
 	if v := os.Getenv("GITHUB_ACTOR_ASSOCIATION"); v != "" {
 		return v
@@ -42,7 +38,6 @@ func doctorActorRole() string {
 	return os.Getenv("DOCTOR_ACTOR_ROLE")
 }
 
-// gitCommitImpl stages the given paths and commits them in the repo at root.
 func gitCommitImpl(root string, paths []string, message string) error {
 	addArgs := append([]string{"-C", root, "add"}, paths...)
 	if out, err := exec.Command("git", addArgs...).CombinedOutput(); err != nil {
@@ -54,8 +49,6 @@ func gitCommitImpl(root string, paths []string, message string) error {
 	return nil
 }
 
-// doctorRepoRoot returns the git repository root the command runs in, falling
-// back to the working directory.
 func doctorRepoRoot() string {
 	if root, err := gitTopLevelFn(); err == nil && root != "" {
 		return root
@@ -64,8 +57,6 @@ func doctorRepoRoot() string {
 	return dir
 }
 
-// doctorPaths resolves the project vault without the interactive global
-// fallback — doctor is a CI gatekeeper and must run inside a sadr-tracked repo.
 func doctorPaths() (discover.SadrPaths, error) {
 	root := doctorRepoRoot()
 	paths, err := discover.FindSadrDir(root)
@@ -78,7 +69,6 @@ func doctorPaths() (discover.SadrPaths, error) {
 	return paths, nil
 }
 
-// entryID is the human-facing label of a record entry, e.g. "alice/3".
 func entryID(e storage.RecordEntry) string {
 	if e.Author != "" {
 		return fmt.Sprintf("%s/%d", e.Author, e.FileID)
@@ -86,7 +76,6 @@ func entryID(e storage.RecordEntry) string {
 	return fmt.Sprintf("#%d", e.FileID)
 }
 
-// recordRefsFromEntries maps storage entries to the validator's minimal view.
 func recordRefsFromEntries(entries []storage.RecordEntry) []doctor.RecordRef {
 	refs := make([]doctor.RecordRef, 0, len(entries))
 	for _, e := range entries {
@@ -99,7 +88,6 @@ func recordRefsFromEntries(entries []storage.RecordEntry) []doctor.RecordRef {
 	return refs
 }
 
-// indexEntries maps each record entry by its human-facing ID (e.g. "alice/3").
 func indexEntries(entries []storage.RecordEntry) map[string]storage.RecordEntry {
 	byID := make(map[string]storage.RecordEntry, len(entries))
 	for _, e := range entries {
@@ -108,9 +96,6 @@ func indexEntries(entries []storage.RecordEntry) map[string]storage.RecordEntry 
 	return byID
 }
 
-// deprecateRecords sets status=deprecated on the records named by ids, writing
-// each in place. It returns the changed file paths (sorted) and the set of ids
-// actually deprecated (unknown ids are skipped).
 func deprecateRecords(ids []string, entries []storage.RecordEntry) ([]string, map[string]bool, error) {
 	byID := indexEntries(entries)
 	s := storage.NewStorage("")
@@ -162,10 +147,6 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) erro
 		ids := parseApplyIDs(opts.apply)
 		applying := len(ids) > 0
 
-		// Defense in depth: the CI job is the first authorization gate (GitHub
-		// issue_comment / GitLab manual job), but if it passes an actor role,
-		// refuse unauthorized applies. GITHUB_ACTOR_ASSOCIATION (GitHub) or
-		// DOCTOR_ACTOR_ROLE (platform-neutral, e.g. a GitLab access level).
 		if applying {
 			if role := doctorActorRole(); role != "" && !doctor.IsAuthorized(role) {
 				return fmt.Errorf("actor role %q is not authorized to apply doctor fixes", role)
@@ -182,9 +163,6 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) erro
 			return err
 		}
 
-		// Detection is repo-wide and deterministic: orphans (file_ref missing) and
-		// collisions (one file documented by 2+ active records). doctor resolves any
-		// conflict in the repo, so a pre-existing one can be cleared by any PR.
 		refs := recordRefsFromEntries(entries)
 		result := doctor.Validate(refs, func(p string) bool {
 			_, statErr := os.Stat(filepath.Join(root, p))
@@ -194,7 +172,6 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) erro
 			ui.Warning(os.Stderr, fmt.Sprintf("orphan: record %s points at missing file %q", o.Record, o.FileRef))
 		}
 
-		// Apply phase: deprecate the chosen records, commit, re-check.
 		if applying {
 			changedPaths, deprecated, dErr := deprecateRecords(ids, entries)
 			if dErr != nil {
@@ -216,7 +193,6 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) erro
 			return nil
 		}
 
-		// Detect phase: gate the merge on orphans or conflicts.
 		if len(result.Collisions) > 0 {
 			fmt.Fprintln(os.Stdout, doctor.RenderComment(result.Collisions))
 		}

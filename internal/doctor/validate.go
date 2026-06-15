@@ -6,47 +6,36 @@ import (
 	"github.com/pedrohpereira74/sadr/internal/model"
 )
 
-// StatusActive is the canonical status of a record that is the current source
-// of truth (set on creation; see cmd/new.go). StatusDeprecated marks a record
-// whose decision no longer applies.
 const (
 	StatusActive     = "active"
 	StatusDeprecated = "deprecated"
 )
 
-// RecordRef is the minimal view of a record the validator needs.
 type RecordRef struct {
-	ID      string // human label, e.g. "alice/3"
+	ID      string
 	FileRef string
 	Status  string
 }
 
-// Orphan is an active record whose file_ref no longer exists on disk.
 type Orphan struct {
 	Record  string `json:"record"`
 	FileRef string `json:"file_ref"`
 }
 
-// Collision is a file_ref pointed at by more than one active record.
 type Collision struct {
 	FileRef string   `json:"file_ref"`
 	Records []string `json:"records"`
 }
 
-// ValidationResult is the deterministic outcome of record validation.
 type ValidationResult struct {
 	Orphans    []Orphan    `json:"orphans"`
 	Collisions []Collision `json:"collisions"`
 }
 
-// OK reports whether validation found no problems.
 func (r ValidationResult) OK() bool {
 	return len(r.Orphans) == 0 && len(r.Collisions) == 0
 }
 
-// RemainingCollisions drops the deprecated records from each collision and keeps
-// only those that still have more than one active record — used after an apply to
-// decide whether the merge is still blocked.
 func RemainingCollisions(collisions []Collision, deprecated map[string]bool) []Collision {
 	var remaining []Collision
 	for _, c := range collisions {
@@ -63,9 +52,6 @@ func RemainingCollisions(collisions []Collision, deprecated map[string]bool) []C
 	return remaining
 }
 
-// Validate checks active records deterministically: every file_ref other than
-// "N/A" must exist (fileExists predicate), and no two active records may share
-// the same file_ref. Records with a non-active status are ignored.
 func Validate(records []RecordRef, fileExists func(string) bool) ValidationResult {
 	var res ValidationResult
 	byFileRef := map[string][]string{}
