@@ -17,7 +17,6 @@ import (
 
 type doctorOptions struct {
 	ci    bool
-	base  string
 	apply string
 }
 
@@ -31,15 +30,6 @@ func parseApplyIDs(csv string) []string {
 		}
 	}
 	return ids
-}
-
-// gitDiffImpl returns the unified diff between the merge base of <base> and HEAD.
-func gitDiffImpl(base string) (string, error) {
-	out, err := exec.Command("git", "--no-pager", "diff", base+"...HEAD").Output()
-	if err != nil {
-		return "", err
-	}
-	return string(out), nil
 }
 
 // doctorActorRole returns the role of the actor triggering an apply, from the
@@ -62,15 +52,6 @@ func gitCommitImpl(root string, paths []string, message string) error {
 		return fmt.Errorf("git commit failed: %v: %s", err, out)
 	}
 	return nil
-}
-
-// collectDoctorDiff returns the raw diff against base and the list of changed files.
-func collectDoctorDiff(base string) (string, []string, error) {
-	diff, err := gitDiffFn(base)
-	if err != nil {
-		return "", nil, fmt.Errorf("git diff against %q failed: %w", base, err)
-	}
-	return diff, extractFilesFromDiff(diff), nil
 }
 
 // doctorRepoRoot returns the git repository root the command runs in, falling
@@ -162,17 +143,16 @@ func newDoctorCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "doctor",
-		Short: "Audit records against the diff (CI gatekeeper)",
-		Long: "Validate records and flag changed files documented by conflicting records.\n" +
-			"Designed to run in CI (--ci) as a merge gatekeeper; resolve conflicts by\n" +
-			"deprecating the stale record with --apply.",
+		Short: "Validate records and flag conflicting records (CI gatekeeper)",
+		Long: "Validate records repo-wide and flag any file documented by more than one\n" +
+			"active record. Designed to run in CI (--ci) as a merge gatekeeper; resolve\n" +
+			"conflicts by deprecating the stale record with --apply.",
 		RunE:          runDoctor(opts),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
 
 	cmd.Flags().BoolVar(&opts.ci, "ci", false, "Non-interactive CI mode with structured output for ChatOps")
-	cmd.Flags().StringVar(&opts.base, "base", "main", "Base branch of the pull request")
 	cmd.Flags().StringVar(&opts.apply, "apply", "", "Comma-separated record IDs to deprecate (triggers the apply phase)")
 	return cmd
 }
@@ -192,11 +172,6 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) erro
 			}
 		}
 
-		_, files, err := collectDoctorDiff(opts.base)
-		if err != nil {
-			return err
-		}
-
 		root := doctorRepoRoot()
 		paths, err := doctorPaths()
 		if err != nil {
@@ -207,6 +182,9 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) erro
 			return err
 		}
 
+		// Detection is repo-wide and deterministic: orphans (file_ref missing) and
+		// collisions (one file documented by 2+ active records). doctor resolves any
+		// conflict in the repo, so a pre-existing one can be cleared by any PR.
 		refs := recordRefsFromEntries(entries)
 		result := doctor.Validate(refs, func(p string) bool {
 			_, statErr := os.Stat(filepath.Join(root, p))
@@ -215,9 +193,6 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) erro
 		for _, o := range result.Orphans {
 			ui.Warning(os.Stderr, fmt.Sprintf("orphan: record %s points at missing file %q", o.Record, o.FileRef))
 		}
-
-		// Conflicts: changed files documented by more than one active record.
-		conflicts := doctor.Conflicts(files, refs)
 
 		// Apply phase: deprecate the chosen records, commit, re-check.
 		if applying {
@@ -233,7 +208,7 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) erro
 				ui.Success(os.Stderr, fmt.Sprintf("doctor: deprecated and committed %d record(s)", len(changedPaths)))
 			}
 
-			remaining := doctor.RemainingConflicts(conflicts, deprecated)
+			remaining := doctor.RemainingCollisions(result.Collisions, deprecated)
 			if len(remaining) > 0 || len(result.Orphans) > 0 {
 				return fmt.Errorf("%d unresolved conflict(s) and %d orphan(s); merge blocked", len(remaining), len(result.Orphans))
 			}
@@ -242,11 +217,11 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) erro
 		}
 
 		// Detect phase: gate the merge on orphans or conflicts.
-		if len(conflicts) > 0 {
-			fmt.Fprintln(os.Stdout, doctor.RenderComment(conflicts))
+		if len(result.Collisions) > 0 {
+			fmt.Fprintln(os.Stdout, doctor.RenderComment(result.Collisions))
 		}
-		if len(conflicts) > 0 || len(result.Orphans) > 0 {
-			return fmt.Errorf("%d conflict(s) and %d orphan(s) block the merge", len(conflicts), len(result.Orphans))
+		if !result.OK() {
+			return fmt.Errorf("%d conflict(s) and %d orphan(s) block the merge", len(result.Collisions), len(result.Orphans))
 		}
 
 		ui.Success(os.Stderr, "doctor: records are consistent.")

@@ -12,20 +12,18 @@
 stages:
   - doctor
 
-# Detect drift on every merge request. A non-zero exit fails the job.
+# Validate records on every merge request. A non-zero exit fails the job.
+# Detection is repo-wide (no diff needed).
 doctor:detect:
   stage: doctor
   image: golang:1.26
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-  variables:
-    GIT_DEPTH: "0" # full history so origin/<base>...HEAD has a merge base
   script:
     - go build -o /usr/local/bin/sadr .
-    - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
     - |
       set +e
-      sadr doctor --ci --base "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" >doctor-out.txt
+      sadr doctor --ci >doctor-out.txt
       code=$?
       cat doctor-out.txt
       if [ -n "$GITLAB_TOKEN" ] && grep -q 'sadr-doctor' doctor-out.txt; then
@@ -46,13 +44,12 @@ doctor:apply:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: manual
   variables:
-    GIT_DEPTH: "0"
     APPLY_IDS: "" # set to the record ids to deprecate when running the job
   script:
     - go build -o /usr/local/bin/sadr .
     - git config user.name "sadr-doctor"
     - git config user.email "sadr-doctor@users.noreply.gitlab.com"
-    - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" "$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"
+    - git fetch origin "$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"
     - git checkout -B "$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME" "origin/$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"
-    - sadr doctor --ci --base "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" --apply "$APPLY_IDS"
+    - sadr doctor --ci --apply "$APPLY_IDS"
     - git push "https://oauth2:${GITLAB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" "HEAD:${CI_MERGE_REQUEST_SOURCE_BRANCH_NAME}"

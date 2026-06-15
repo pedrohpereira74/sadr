@@ -41,6 +41,18 @@ func TestValidateDetectsCollisions(t *testing.T) {
 	}
 }
 
+func TestRemainingCollisions(t *testing.T) {
+	collisions := []Collision{
+		{FileRef: "api.go", Records: []string{"alice/1", "bob/2"}},
+		{FileRef: "db.go", Records: []string{"alice/3", "alice/4", "alice/5"}},
+	}
+	// Deprecating bob/2 resolves api.go; deprecating one of three on db.go leaves a conflict.
+	remaining := RemainingCollisions(collisions, map[string]bool{"bob/2": true, "alice/3": true})
+	if len(remaining) != 1 || remaining[0].FileRef != "db.go" || len(remaining[0].Records) != 2 {
+		t.Errorf("expected db.go still conflicting with 2 records, got %+v", remaining)
+	}
+}
+
 func TestValidateIgnoresNonActiveAndNA(t *testing.T) {
 	records := []RecordRef{
 		{ID: "alice/1", FileRef: "gone.go", Status: "proposed"}, // not active -> ignored

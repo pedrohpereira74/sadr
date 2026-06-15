@@ -42,7 +42,7 @@ func TestIsAuthorized(t *testing.T) {
 }
 
 func TestRenderComment(t *testing.T) {
-	out := RenderComment([]AuditTarget{
+	out := RenderComment([]Collision{
 		{FileRef: "api.go", Records: []string{"alice/1", "bob/4"}},
 	})
 	for _, want := range []string{CommentMarker, "api.go", "alice/1", "bob/4", "/doctor apply", "deprecated"} {

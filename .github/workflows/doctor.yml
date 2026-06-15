@@ -11,27 +11,23 @@ permissions:
   statuses: write
 
 jobs:
-  # Detect drift on every PR push and post/refresh the ChatOps comment. A
-  # non-zero exit fails this check; make it a required check in branch protection
-  # so unresolved drift blocks the merge.
+  # Validate records on every PR and post/refresh the ChatOps comment. A non-zero
+  # exit fails this check; make it a required check in branch protection so
+  # unresolved conflicts block the merge. Detection is repo-wide (no diff needed).
   detect:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26'
       - run: go build -o "$RUNNER_TEMP/sadr" .
-      - name: Fetch base branch
-        run: git fetch origin "${{ github.base_ref }}"
       - name: Run doctor
         id: doctor
         run: |
           set +e
-          "$RUNNER_TEMP/sadr" doctor --ci --base "origin/${{ github.base_ref }}" >doctor-out.txt
+          "$RUNNER_TEMP/sadr" doctor --ci >doctor-out.txt
           echo "exit=$?" >>"$GITHUB_OUTPUT"
       - name: Upsert PR comment
         if: always()
@@ -55,7 +51,7 @@ jobs:
       - name: Gate
         if: steps.doctor.outputs.exit != '0'
         run: |
-          echo "sadr doctor: unresolved drift blocks the merge"
+          echo "sadr doctor: unresolved conflicts block the merge"
           exit 1
 
   # Deprecate the stale records when an authorized reviewer comments
@@ -78,13 +74,11 @@ jobs:
               owner: context.repo.owner, repo: context.repo.repo, pull_number: context.issue.number,
             });
             core.setOutput('head', pr.data.head.ref);
-            core.setOutput('base', pr.data.base.ref);
             const line = context.payload.comment.body.split('\n').find(l => l.trim().startsWith('/doctor apply'));
             core.setOutput('ids', line.trim().replace('/doctor apply', '').trim());
       - uses: actions/checkout@v4
         with:
           ref: ${{ steps.pr.outputs.head }}
-          fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26'
@@ -93,14 +87,10 @@ jobs:
         run: |
           git config user.name "sadr-doctor[bot]"
           git config user.email "sadr-doctor@users.noreply.github.com"
-      - name: Fetch base branch
-        run: git fetch origin "${{ steps.pr.outputs.base }}"
       - name: Apply (deprecate approved records)
         env:
           GITHUB_ACTOR_ASSOCIATION: ${{ github.event.comment.author_association }}
         run: |
-          "$RUNNER_TEMP/sadr" doctor --ci \
-            --base "origin/${{ steps.pr.outputs.base }}" \
-            --apply "${{ steps.pr.outputs.ids }}"
+          "$RUNNER_TEMP/sadr" doctor --ci --apply "${{ steps.pr.outputs.ids }}"
       - name: Push changes
         run: git push origin "HEAD:${{ steps.pr.outputs.head }}"

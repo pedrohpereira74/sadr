@@ -50,13 +50,13 @@ func IsAuthorized(role string) bool {
 	return false
 }
 
-// RenderComment renders the PR/MR comment listing the conflicting records for
-// each changed file, prefixed with CommentMarker for idempotent upserts.
-func RenderComment(conflicts []AuditTarget) string {
+// RenderComment renders the PR/MR comment listing the files documented by more
+// than one active record, prefixed with CommentMarker for idempotent upserts.
+func RenderComment(conflicts []Collision) string {
 	var b strings.Builder
 	b.WriteString(CommentMarker)
 	b.WriteString("\n## sadr doctor — conflicting records\n\n")
-	b.WriteString("These changed files are documented by more than one active record. ")
+	b.WriteString("These files are documented by more than one active record. ")
 	b.WriteString("If an older decision no longer applies, deprecate it:\n\n")
 	for _, c := range conflicts {
 		fmt.Fprintf(&b, "- `%s` — %s\n", c.FileRef, strings.Join(c.Records, ", "))

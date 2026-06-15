@@ -18,7 +18,6 @@ var (
 	clipboardReader                             = readClipboardImpl
 	confirmOverwrite                            = confirmOverwriteImpl
 	gitTopLevelFn                               = gitTopLevelImpl
-	gitDiffFn                                   = gitDiffImpl
 	gitCommitFn                                 = gitCommitImpl
 
 	generateTextFn  func(ctx context.Context, provider, prompt, apiKey, model string, timeout time.Duration) (string, error) = ai.GenerateText

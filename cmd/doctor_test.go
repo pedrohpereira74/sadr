@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -17,13 +16,10 @@ func TestDoctorCommandRegistered(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("expected 'doctor' command to be registered on root")
 	}
-	for _, name := range []string{"ci", "base", "apply"} {
+	for _, name := range []string{"ci", "apply"} {
 		if cmd.Flags().Lookup(name) == nil {
 			t.Errorf("expected --%s flag on doctor command", name)
 		}
-	}
-	if got := cmd.Flags().Lookup("base").DefValue; got != "main" {
-		t.Errorf("expected --base default 'main', got %q", got)
 	}
 }
 
@@ -43,50 +39,6 @@ func TestParseApplyIDs(t *testing.T) {
 		if got := parseApplyIDs(c.in); !reflect.DeepEqual(got, c.want) {
 			t.Errorf("parseApplyIDs(%q) = %v, want %v", c.in, got, c.want)
 		}
-	}
-}
-
-func TestCollectDoctorDiff(t *testing.T) {
-	oldDiff := gitDiffFn
-	defer func() { gitDiffFn = oldDiff }()
-
-	var gotBase string
-	gitDiffFn = func(base string) (string, error) {
-		gotBase = base
-		return `diff --git a/internal/api/server.go b/internal/api/server.go
-index 111..222 100644
---- a/internal/api/server.go
-+++ b/internal/api/server.go
-@@ -1 +1 @@
--func Old()
-+func New()
-diff --git a/internal/api/client.go b/internal/api/client.go
-index 333..444 100644`, nil
-	}
-
-	diff, files, err := collectDoctorDiff("main")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if gotBase != "main" {
-		t.Errorf("expected base 'main' passed to git, got %q", gotBase)
-	}
-	if diff == "" {
-		t.Error("expected non-empty raw diff")
-	}
-	want := []string{"internal/api/server.go", "internal/api/client.go"}
-	if !reflect.DeepEqual(files, want) {
-		t.Errorf("changed files = %v, want %v", files, want)
-	}
-}
-
-func TestCollectDoctorDiffError(t *testing.T) {
-	oldDiff := gitDiffFn
-	defer func() { gitDiffFn = oldDiff }()
-	gitDiffFn = func(base string) (string, error) { return "", errors.New("boom") }
-
-	if _, _, err := collectDoctorDiff("main"); err == nil {
-		t.Error("expected error to propagate from git diff failure")
 	}
 }
 
@@ -148,11 +100,10 @@ func TestDeprecateRecords(t *testing.T) {
 	}
 }
 
-// --- end-to-end (conflict detection + deprecate, all seams stubbed) ---
+// --- end-to-end (repo-wide conflict detection + deprecate) ---
 
-// setupDoctorE2E builds a temp project with two active records both documenting
-// api.go (a conflict), a stubbed repo root and a diff that touches api.go.
-// Returns the records dir.
+// setupDoctorE2E builds a temp project with one active record per status given,
+// all documenting api.go, plus a stubbed repo root. Returns the records dir.
 func setupDoctorE2E(t *testing.T, statuses ...string) string {
 	t.Helper()
 	setupTestUser(t, t.TempDir()) // sets HOME to a sandbox
@@ -162,12 +113,12 @@ func setupDoctorE2E(t *testing.T, statuses ...string) string {
 	if err := os.MkdirAll(recordsDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(proj, "api.go"), []byte("package api\nfunc New() {}\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(proj, "api.go"), []byte("package api\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	s := storage.NewStorage(recordsDir)
 	for i, st := range statuses {
-		r, _ := model.NewRecordWithOptions("record "+st+string(rune('a'+i)), "full")
+		r, _ := model.NewRecordWithOptions("record "+string(rune('a'+i)), "full")
 		r.Author = "testuser"
 		r.Status = st
 		r.FileRef = "api.go"
@@ -180,26 +131,19 @@ func setupDoctorE2E(t *testing.T, statuses ...string) string {
 	gitTopLevelFn = func() (string, error) { return proj, nil }
 	t.Cleanup(func() { gitTopLevelFn = oldTop })
 
-	oldDiff := gitDiffFn
-	gitDiffFn = func(string) (string, error) {
-		return "diff --git a/api.go b/api.go\n@@ -1 +1 @@\n-func Old()\n+func New()\n", nil
-	}
-	t.Cleanup(func() { gitDiffFn = oldDiff })
-
 	return recordsDir
 }
 
 func TestDoctorE2ENoConflict(t *testing.T) {
 	setupDoctorE2E(t, "active") // single active record on api.go
-	if err := runDoctor(&doctorOptions{base: "main", ci: true})(nil, nil); err != nil {
+	if err := runDoctor(&doctorOptions{ci: true})(nil, nil); err != nil {
 		t.Errorf("expected exit 0 with no conflict, got %v", err)
 	}
 }
 
 func TestDoctorE2EConflictBlocks(t *testing.T) {
 	setupDoctorE2E(t, "active", "active") // two active records on api.go
-	err := runDoctor(&doctorOptions{base: "main", ci: true})(nil, nil)
-	if err == nil {
+	if err := runDoctor(&doctorOptions{ci: true})(nil, nil); err == nil {
 		t.Error("expected non-zero exit (gate) when records conflict")
 	}
 }
@@ -213,7 +157,7 @@ func TestDoctorE2EApplyDeprecatesResolves(t *testing.T) {
 	t.Cleanup(func() { gitCommitFn = oldCommit })
 
 	// Deprecate one of the two conflicting records -> conflict resolved.
-	if err := runDoctor(&doctorOptions{base: "main", ci: true, apply: "testuser/1"})(nil, nil); err != nil {
+	if err := runDoctor(&doctorOptions{ci: true, apply: "testuser/1"})(nil, nil); err != nil {
 		t.Fatalf("apply should resolve the conflict, got %v", err)
 	}
 	if !committed {
@@ -235,7 +179,7 @@ func TestDoctorE2EApplyDeprecatesResolves(t *testing.T) {
 func TestDoctorE2EApplyUnauthorized(t *testing.T) {
 	setupDoctorE2E(t, "active", "active")
 	t.Setenv("GITHUB_ACTOR_ASSOCIATION", "NONE")
-	if err := runDoctor(&doctorOptions{base: "main", ci: true, apply: "testuser/1"})(nil, nil); err == nil {
+	if err := runDoctor(&doctorOptions{ci: true, apply: "testuser/1"})(nil, nil); err == nil {
 		t.Error("expected unauthorized actor to be rejected")
 	}
 }

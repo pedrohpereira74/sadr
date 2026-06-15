@@ -5,33 +5,33 @@ sidebar_position: 5
 # CI Gatekeeper (`sadr doctor`)
 
 `sadr doctor --ci` runs in your pull-/merge-request pipeline and keeps records
-consistent. It is fully **deterministic — no AI**: it validates records and
-flags changed files that are documented by more than one active record
+consistent. It is fully **deterministic — no AI**: it validates records
+**repo-wide** and flags any file documented by more than one active record
 (**conflicts**). A reviewer resolves a conflict by **deprecating** the stale
 record. Unresolved conflicts block the merge.
 
 This follows the classic ADR convention: records are historical: you don't
 rewrite an old decision, you mark it `deprecated` when a newer one supersedes it.
+Detection is repo-wide on purpose — a conflict (even a pre-existing one) can be
+cleared by any PR, so it never gets stuck unresolved.
 
 ## What it does
 
-1. **Collect the diff** — `git diff <base>...HEAD` to find the changed files.
-2. **Validate records** — every `active` record's `file_ref` must exist on disk;
+1. **Validate records** — every `active` record's `file_ref` must exist on disk;
    missing ones are reported as **orphans**.
-3. **Detect conflicts** — among the changed files, flag any documented by **two
-   or more active records**. Those are the overlaps to reconcile.
-4. **Gate** — if there are conflicts or orphans, post a comment and fail the
+2. **Detect conflicts** — flag any file documented by **two or more active
+   records**. Those are the overlaps to reconcile.
+3. **Gate** — if there are conflicts or orphans, post a comment and fail the
    check (non-zero exit), blocking the merge.
-5. **Resolve** — a reviewer approves deprecating the stale record(s); doctor sets
+4. **Resolve** — a reviewer approves deprecating the stale record(s); doctor sets
    their status to `deprecated`, commits, and the check goes green once every
-   changed file has at most one active record.
+   file has at most one active record.
 
 ## Flags
 
 | Flag | Description |
 |---|---|
 | `--ci` | Non-interactive mode with structured output |
-| `--base` | Base branch/ref of the PR/MR (default `main`) |
 | `--apply` | Comma-separated record IDs (e.g. `alice/1`) to deprecate |
 
 ## Approval
@@ -65,8 +65,8 @@ posted differ. doctor needs no AI key.
 
 `.github/workflows/doctor.yml` has two jobs:
 
-- **detect** — on `pull_request`: runs `sadr doctor --ci --base origin/<base>`,
-  upserts the PR comment, and fails the check on conflicts/orphans.
+- **detect** — on `pull_request`: runs `sadr doctor --ci`, upserts the PR
+  comment, and fails the check on conflicts/orphans.
 - **apply** — on `issue_comment`: validates the commenter's `author_association`,
   parses `/doctor apply <ids>` and runs `sadr doctor --ci --apply <ids>`, then
   pushes the deprecation commit.
@@ -77,8 +77,8 @@ Make the **detect** check required in branch protection so conflicts block merge
 
 `.gitlab-ci.yml` has two jobs in MR pipelines:
 
-- **doctor:detect** — runs `sadr doctor --ci --base origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME`,
-  posts the report as an MR note (GitLab API), and fails on conflicts/orphans.
+- **doctor:detect** — runs `sadr doctor --ci`, posts the report as an MR note
+  (GitLab API), and fails on conflicts/orphans.
 - **doctor:apply** — a **manual** job: a reviewer runs it with `APPLY_IDS` set to
   the record ids to deprecate; the commit is pushed back to the MR source branch.
 

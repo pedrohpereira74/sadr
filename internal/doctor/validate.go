@@ -44,6 +44,25 @@ func (r ValidationResult) OK() bool {
 	return len(r.Orphans) == 0 && len(r.Collisions) == 0
 }
 
+// RemainingCollisions drops the deprecated records from each collision and keeps
+// only those that still have more than one active record — used after an apply to
+// decide whether the merge is still blocked.
+func RemainingCollisions(collisions []Collision, deprecated map[string]bool) []Collision {
+	var remaining []Collision
+	for _, c := range collisions {
+		var active []string
+		for _, r := range c.Records {
+			if !deprecated[r] {
+				active = append(active, r)
+			}
+		}
+		if len(active) > 1 {
+			remaining = append(remaining, Collision{FileRef: c.FileRef, Records: active})
+		}
+	}
+	return remaining
+}
+
 // Validate checks active records deterministically: every file_ref other than
 // "N/A" must exist (fileExists predicate), and no two active records may share
 // the same file_ref. Records with a non-active status are ignored.

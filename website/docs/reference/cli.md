@@ -260,9 +260,9 @@ sadr config --setup-jira
 
 ## `sadr doctor`
 
-Validate records and flag changed files documented by conflicting (overlapping)
-records. Deterministic — no AI. Built to run in CI as a merge gatekeeper; resolve
-a conflict by deprecating the stale record. See
+Validate records repo-wide and flag any file documented by conflicting
+(overlapping) records. Deterministic — no AI. Built to run in CI as a merge
+gatekeeper; resolve a conflict by deprecating the stale record. See
 [CI Gatekeeper](../guide/ci-gatekeeper).
 
 ```bash
@@ -272,13 +272,12 @@ sadr doctor [flags]
 | Flag | Description |
 |---|---|
 | `--ci` | Non-interactive CI mode with structured output for ChatOps |
-| `--base <string>` | Base branch (or ref) of the pull request (default `main`) |
 | `--apply <string>` | Comma-separated record IDs to deprecate — runs the apply phase |
 
 It exits non-zero when there are orphan records or unresolved conflicts, so a
 required status check blocks the merge.
 
 ```bash
-sadr doctor --ci --base origin/main                  # detect phase (CI)
-sadr doctor --ci --base origin/main --apply alice/1  # deprecate a stale record
+sadr doctor --ci                  # detect phase (CI)
+sadr doctor --ci --apply alice/1  # deprecate a stale record
 ```
