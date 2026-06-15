@@ -1,14 +1,11 @@
 package cmd
 
 import (
-	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
-	"time"
 
 	"github.com/pedrohpereira74/sadr/internal/doctor"
 	"github.com/pedrohpereira74/sadr/internal/model"
@@ -37,8 +34,8 @@ func TestParseApplyIDs(t *testing.T) {
 	}{
 		{"", nil},
 		{"   ", nil},
-		{"1", []string{"1"}},
-		{"1,2,3", []string{"1", "2", "3"}},
+		{"alice/1", []string{"alice/1"}},
+		{"alice/1,bob/2", []string{"alice/1", "bob/2"}},
 		{" a , , b ", []string{"a", "b"}},
 		{",,", nil},
 	}
@@ -93,34 +90,6 @@ func TestCollectDoctorDiffError(t *testing.T) {
 	}
 }
 
-func TestBuildSkeletons(t *testing.T) {
-	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, "internal/api"), 0755); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	src := "package api\nfunc Serve() {\n\tx := 1\n\t_ = x\n}\n"
-	if err := os.WriteFile(filepath.Join(root, "internal/api/server.go"), []byte(src), 0644); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-
-	// One real file and one that does not exist (e.g. deleted in the diff).
-	skeletons := buildSkeletons(root, []string{"internal/api/server.go", "gone.go"})
-
-	if _, ok := skeletons["gone.go"]; ok {
-		t.Error("unreadable files should be skipped")
-	}
-	got, ok := skeletons["internal/api/server.go"]
-	if !ok {
-		t.Fatal("expected skeleton for existing file")
-	}
-	if !strings.Contains(got, "func Serve()") {
-		t.Errorf("skeleton should keep the signature, got %q", got)
-	}
-	if strings.Contains(got, "x := 1") {
-		t.Errorf("skeleton should drop the body, got %q", got)
-	}
-}
-
 func TestRecordRefsFromEntriesAndValidate(t *testing.T) {
 	mk := func(author string, id int, fileRef, status string) storage.RecordEntry {
 		r, _ := model.NewRecordWithOptions("t", "full")
@@ -149,95 +118,42 @@ func TestRecordRefsFromEntriesAndValidate(t *testing.T) {
 	}
 }
 
-func TestRecordDocsForTargets(t *testing.T) {
-	r1, _ := model.NewRecordWithOptions("t", "full")
-	r1.FileRef = "api.go"
-	r1.Fields = map[string]string{"decision": "uses Old()"}
-	r2, _ := model.NewRecordWithOptions("t", "full")
-	r2.FileRef = "db.go"
-	r2.Fields = map[string]string{"context": "store"}
-
-	entries := []storage.RecordEntry{
-		{Record: r1, FileID: 1, Author: "alice"},
-		{Record: r2, FileID: 2, Author: "bob"},
-	}
-	targets := []doctor.AuditTarget{
-		{FileRef: "api.go", Records: []string{"alice/1"}},
-	}
-
-	docs := recordDocsForTargets(targets, entries)
-	if len(docs) != 1 {
-		t.Fatalf("expected docs only for targeted records, got %d", len(docs))
-	}
-	if docs[0].ID != "alice/1" || docs[0].FileRef != "api.go" {
-		t.Errorf("unexpected doc %+v", docs[0])
-	}
-	if docs[0].Sections["decision"] != "uses Old()" {
-		t.Errorf("expected record sections to be carried, got %+v", docs[0].Sections)
-	}
-}
-
-func TestRewriteRequestsForDrifts(t *testing.T) {
-	r1, _ := model.NewRecordWithOptions("t", "full")
-	r1.FileRef = "api.go"
-	r1.Fields = map[string]string{"decision": "uses Old()"}
-	entries := []storage.RecordEntry{{Record: r1, FileID: 1, Author: "alice"}}
-
-	drifts := []doctor.Drift{
-		{ID: "x", Record: "alice/1", FileRef: "api.go", Section: "decision", Summary: "renamed"},
-		{ID: "y", Record: "ghost/9", Section: "decision", Summary: "n/a"}, // unknown record skipped
-	}
-
-	reqs := rewriteRequestsForDrifts(drifts, entries)
-	if len(reqs) != 1 {
-		t.Fatalf("expected 1 request (unknown record skipped), got %d", len(reqs))
-	}
-	if reqs[0].Current != "uses Old()" || reqs[0].Summary != "renamed" {
-		t.Errorf("unexpected request %+v", reqs[0])
-	}
-}
-
-func TestApplyRewritesUpdatesRecordInPlace(t *testing.T) {
+func TestDeprecateRecords(t *testing.T) {
 	dir := t.TempDir()
 	s := storage.NewStorage(dir)
-	r, _ := model.NewRecordWithOptions("Ordering", "full")
-	r.Status = "active"
-	r.FieldOrder = []string{"decision"}
-	r.Fields = map[string]string{"decision": "uses Old()"}
-	if _, err := s.SaveRecord(r); err != nil {
-		t.Fatalf("save: %v", err)
+	for _, title := range []string{"first", "second"} {
+		r, _ := model.NewRecordWithOptions(title, "full")
+		r.Author = "alice"
+		r.Status = "active"
+		r.FileRef = "api.go"
+		if _, err := s.SaveRecord(r); err != nil {
+			t.Fatalf("save: %v", err)
+		}
+	}
+	entries, _ := s.ListRecordEntries()
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 records, got %d", len(entries))
 	}
 
-	entries, err := s.ListRecordEntries()
-	if err != nil || len(entries) != 1 {
-		t.Fatalf("list: %v (n=%d)", err, len(entries))
-	}
-	entries[0].Author = "alice" // entryID -> alice/1
-
-	rewrites := []doctor.Rewrite{{Record: "alice/1", Section: "decision", Content: "now uses New()"}}
-	changed, resolved, err := applyRewrites(rewrites, entries)
+	changed, done, err := deprecateRecords([]string{"alice/1", "ghost/9"}, entries)
 	if err != nil {
-		t.Fatalf("applyRewrites: %v", err)
+		t.Fatalf("deprecateRecords: %v", err)
 	}
-	if len(changed) != 1 {
-		t.Fatalf("expected one changed path, got %v", changed)
+	if len(changed) != 1 || !done["alice/1"] || done["ghost/9"] {
+		t.Fatalf("expected only alice/1 deprecated, changed=%v done=%v", changed, done)
 	}
-	if !resolved[doctor.DriftID("alice/1", "decision")] {
-		t.Error("expected the drift id to be marked resolved")
-	}
-
-	reloaded, err := storage.LoadRecord(changed[0])
-	if err != nil {
-		t.Fatalf("reload: %v", err)
-	}
-	if reloaded.Fields["decision"] != "now uses New()" {
-		t.Errorf("section not rewritten on disk, got %q", reloaded.Fields["decision"])
+	reloaded, _ := storage.LoadRecord(changed[0])
+	if reloaded.Status != "deprecated" {
+		t.Errorf("expected status deprecated on disk, got %q", reloaded.Status)
 	}
 }
 
-// --- end-to-end (all seams stubbed, real temp .sadr) ---
+// --- end-to-end (conflict detection + deprecate, all seams stubbed) ---
 
-func setupDoctorE2E(t *testing.T) string {
+// setupDoctorE2E builds a temp project with two active records both documenting
+// api.go (a conflict), a stubbed repo root and a diff that touches api.go.
+// Returns the records dir.
+func setupDoctorE2E(t *testing.T, statuses ...string) string {
 	t.Helper()
 	setupTestUser(t, t.TempDir()) // sets HOME to a sandbox
 
@@ -250,19 +166,19 @@ func setupDoctorE2E(t *testing.T) string {
 		t.Fatal(err)
 	}
 	s := storage.NewStorage(recordsDir)
-	r, _ := model.NewRecordWithOptions("API contract", "full")
-	r.Author = "testuser"
-	r.Status = "active"
-	r.FileRef = "api.go"
-	r.FieldOrder = []string{"decision"}
-	r.Fields = map[string]string{"decision": "uses Old()"}
-	if _, err := s.SaveRecord(r); err != nil {
-		t.Fatal(err)
+	for i, st := range statuses {
+		r, _ := model.NewRecordWithOptions("record "+st+string(rune('a'+i)), "full")
+		r.Author = "testuser"
+		r.Status = st
+		r.FileRef = "api.go"
+		if _, err := s.SaveRecord(r); err != nil {
+			t.Fatal(err)
+		}
 	}
 
-	old := gitTopLevelFn
+	oldTop := gitTopLevelFn
 	gitTopLevelFn = func() (string, error) { return proj, nil }
-	t.Cleanup(func() { gitTopLevelFn = old })
+	t.Cleanup(func() { gitTopLevelFn = oldTop })
 
 	oldDiff := gitDiffFn
 	gitDiffFn = func(string) (string, error) {
@@ -273,59 +189,53 @@ func setupDoctorE2E(t *testing.T) string {
 	return recordsDir
 }
 
-func stubGenerate(t *testing.T, fn func(prompt string) (string, error)) {
-	t.Helper()
-	old := generateTextFn
-	generateTextFn = func(_ context.Context, _, prompt, _, _ string, _ time.Duration) (string, error) {
-		return fn(prompt)
-	}
-	t.Cleanup(func() { generateTextFn = old })
-}
-
-func TestDoctorE2ENoDrift(t *testing.T) {
-	setupDoctorE2E(t)
-	stubGenerate(t, func(string) (string, error) { return "[]", nil })
-
+func TestDoctorE2ENoConflict(t *testing.T) {
+	setupDoctorE2E(t, "active") // single active record on api.go
 	if err := runDoctor(&doctorOptions{base: "main", ci: true})(nil, nil); err != nil {
-		t.Errorf("expected exit 0 when no drift, got %v", err)
+		t.Errorf("expected exit 0 with no conflict, got %v", err)
 	}
 }
 
-func TestDoctorE2EDriftBlocksMerge(t *testing.T) {
-	setupDoctorE2E(t)
-	stubGenerate(t, func(string) (string, error) {
-		return `[{"record":"testuser/1","file_ref":"api.go","section":"decision","summary":"renamed Old->New"}]`, nil
-	})
-
+func TestDoctorE2EConflictBlocks(t *testing.T) {
+	setupDoctorE2E(t, "active", "active") // two active records on api.go
 	err := runDoctor(&doctorOptions{base: "main", ci: true})(nil, nil)
 	if err == nil {
-		t.Error("expected non-zero exit (gate) when drift detected")
+		t.Error("expected non-zero exit (gate) when records conflict")
 	}
 }
 
-func TestDoctorE2EApplyResolves(t *testing.T) {
-	recordsDir := setupDoctorE2E(t)
-	stubGenerate(t, func(prompt string) (string, error) {
-		if strings.Contains(prompt, "documentation auditor") {
-			return `[{"record":"testuser/1","file_ref":"api.go","section":"decision","summary":"renamed Old->New"}]`, nil
-		}
-		return `[{"record":"testuser/1","section":"decision","content":"now uses New()"}]`, nil
-	})
+func TestDoctorE2EApplyDeprecatesResolves(t *testing.T) {
+	recordsDir := setupDoctorE2E(t, "active", "active")
 
 	committed := false
 	oldCommit := gitCommitFn
 	gitCommitFn = func(_ string, _ []string, _ string) error { committed = true; return nil }
 	t.Cleanup(func() { gitCommitFn = oldCommit })
 
-	if err := runDoctor(&doctorOptions{base: "main", ci: true, apply: "all"})(nil, nil); err != nil {
-		t.Fatalf("apply should resolve all drift, got %v", err)
+	// Deprecate one of the two conflicting records -> conflict resolved.
+	if err := runDoctor(&doctorOptions{base: "main", ci: true, apply: "testuser/1"})(nil, nil); err != nil {
+		t.Fatalf("apply should resolve the conflict, got %v", err)
 	}
 	if !committed {
-		t.Error("expected the rewritten record to be committed")
+		t.Error("expected the deprecation to be committed")
 	}
 
 	entries, _ := storage.NewStorage(recordsDir).ListRecordEntries()
-	if len(entries) != 1 || entries[0].Record.Fields["decision"] != "now uses New()" {
-		t.Errorf("expected section rewritten on disk, got %+v", entries[0].Record.Fields)
+	var deprecated int
+	for _, e := range entries {
+		if e.Record.Status == "deprecated" {
+			deprecated++
+		}
+	}
+	if deprecated != 1 {
+		t.Errorf("expected exactly one deprecated record, got %d", deprecated)
+	}
+}
+
+func TestDoctorE2EApplyUnauthorized(t *testing.T) {
+	setupDoctorE2E(t, "active", "active")
+	t.Setenv("GITHUB_ACTOR_ASSOCIATION", "NONE")
+	if err := runDoctor(&doctorOptions{base: "main", ci: true, apply: "testuser/1"})(nil, nil); err == nil {
+		t.Error("expected unauthorized actor to be rejected")
 	}
 }

@@ -7,8 +7,12 @@ import (
 )
 
 // StatusActive is the canonical status of a record that is the current source
-// of truth (set on creation; see cmd/new.go).
-const StatusActive = "active"
+// of truth (set on creation; see cmd/new.go). StatusDeprecated marks a record
+// whose decision no longer applies.
+const (
+	StatusActive     = "active"
+	StatusDeprecated = "deprecated"
+)
 
 // RecordRef is the minimal view of a record the validator needs.
 type RecordRef struct {

@@ -41,27 +41,11 @@ func TestIsAuthorized(t *testing.T) {
 	}
 }
 
-func TestSelectDrifts(t *testing.T) {
-	drifts := []Drift{
-		{ID: "aaa", Record: "alice/1"},
-		{ID: "bbb", Record: "alice/2"},
-		{ID: "ccc", Record: "bob/3"},
-	}
-	if got := SelectDrifts(drifts, nil, true); len(got) != 3 {
-		t.Errorf("all should select everything, got %d", len(got))
-	}
-	got := SelectDrifts(drifts, []string{"aaa", "ccc"}, false)
-	if len(got) != 2 || got[0].ID != "aaa" || got[1].ID != "ccc" {
-		t.Errorf("unexpected selection %+v", got)
-	}
-	if got := SelectDrifts(drifts, []string{"zzz"}, false); len(got) != 0 {
-		t.Errorf("unknown id should select nothing, got %+v", got)
-	}
-}
-
 func TestRenderComment(t *testing.T) {
-	out := RenderComment([]Drift{{ID: "aaa", Record: "alice/1", Section: "Decision", Summary: "sig changed"}})
-	for _, want := range []string{CommentMarker, "aaa", "alice/1", "Decision", "sig changed", "/doctor apply"} {
+	out := RenderComment([]AuditTarget{
+		{FileRef: "api.go", Records: []string{"alice/1", "bob/4"}},
+	})
+	for _, want := range []string{CommentMarker, "api.go", "alice/1", "bob/4", "/doctor apply", "deprecated"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("comment missing %q\n%s", want, out)
 		}

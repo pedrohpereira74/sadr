@@ -29,8 +29,6 @@ jobs:
         run: git fetch origin "${{ github.base_ref }}"
       - name: Run doctor
         id: doctor
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           set +e
           "$RUNNER_TEMP/sadr" doctor --ci --base "origin/${{ github.base_ref }}" >doctor-out.txt
@@ -60,8 +58,8 @@ jobs:
           echo "sadr doctor: unresolved drift blocks the merge"
           exit 1
 
-  # Apply approved rewrites when an authorized reviewer comments
-  # "/doctor apply <ids|all>". author_association is checked here (first gate)
+  # Deprecate the stale records when an authorized reviewer comments
+  # "/doctor apply <record-ids>". author_association is checked here (first gate)
   # and again inside the binary (defense in depth).
   apply:
     if: >
@@ -97,9 +95,8 @@ jobs:
           git config user.email "sadr-doctor@users.noreply.github.com"
       - name: Fetch base branch
         run: git fetch origin "${{ steps.pr.outputs.base }}"
-      - name: Apply approved rewrites
+      - name: Apply (deprecate approved records)
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GITHUB_ACTOR_ASSOCIATION: ${{ github.event.comment.author_association }}
         run: |
           "$RUNNER_TEMP/sadr" doctor --ci \

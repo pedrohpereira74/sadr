@@ -1,13 +1,13 @@
 # sadr doctor — GitLab CI gatekeeper.
 #
-# Mirrors .github/workflows/doctor.yml for GitLab. Requires CI/CD variables:
-#   GITLAB_TOKEN     - project/personal access token (api scope) to post MR
-#                      notes and push rewrites back to the source branch.
-#   GEMINI_API_KEY   - (or ANTHROPIC_API_KEY/OPENAI_API_KEY/DEEPSEEK_API_KEY,
-#                      matching ai.provider) for drift detection/rewrite.
+# Mirrors .github/workflows/doctor.yml for GitLab. Requires one CI/CD variable:
+#   GITLAB_TOKEN - project/personal access token (api scope) to post MR notes
+#                  and push the deprecation commit back to the source branch.
 #
-# Make "Pipelines must succeed" required in the project's merge settings so
-# unresolved drift (a failed detect job) blocks the merge.
+# doctor is deterministic (no AI), so no AI key is needed here.
+#
+# Make "Pipelines must succeed" required in the project's merge settings so an
+# unresolved conflict (a failed detect job) blocks the merge.
 
 stages:
   - doctor
@@ -36,9 +36,9 @@ doctor:detect:
       fi
       exit $code
 
-# Apply approved rewrites. Manual: only project members with at least Developer
-# access can trigger it (GitLab's native gate). Set APPLY_IDS when running it
-# (comma-separated drift ids, or "all").
+# Deprecate the stale records. Manual: only project members with at least
+# Developer access can trigger it (GitLab's native gate). Set APPLY_IDS when
+# running it (comma-separated record ids to deprecate, e.g. "alice/1,bob/2").
 doctor:apply:
   stage: doctor
   image: golang:1.26
@@ -47,7 +47,7 @@ doctor:apply:
       when: manual
   variables:
     GIT_DEPTH: "0"
-    APPLY_IDS: "all"
+    APPLY_IDS: "" # set to the record ids to deprecate when running the job
   script:
     - go build -o /usr/local/bin/sadr .
     - git config user.name "sadr-doctor"

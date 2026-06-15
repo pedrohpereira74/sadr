@@ -50,35 +50,18 @@ func IsAuthorized(role string) bool {
 	return false
 }
 
-// SelectDrifts returns the drifts approved by id (or all of them).
-func SelectDrifts(drifts []Drift, ids []string, all bool) []Drift {
-	if all {
-		return drifts
-	}
-	want := make(map[string]bool, len(ids))
-	for _, id := range ids {
-		want[id] = true
-	}
-	var out []Drift
-	for _, d := range drifts {
-		if want[d.ID] {
-			out = append(out, d)
-		}
-	}
-	return out
-}
-
-// RenderComment renders the PR comment listing the detected drifts, prefixed
-// with CommentMarker for idempotent upserts.
-func RenderComment(drifts []Drift) string {
+// RenderComment renders the PR/MR comment listing the conflicting records for
+// each changed file, prefixed with CommentMarker for idempotent upserts.
+func RenderComment(conflicts []AuditTarget) string {
 	var b strings.Builder
 	b.WriteString(CommentMarker)
-	b.WriteString("\n## sadr doctor — documentation drift detected\n\n")
-	b.WriteString("These records look out of date with this change:\n\n")
-	for i, d := range drifts {
-		fmt.Fprintf(&b, "%d. `%s` — **%s** §%s — %s\n", i+1, d.ID, d.Record, d.Section, d.Summary)
+	b.WriteString("\n## sadr doctor — conflicting records\n\n")
+	b.WriteString("These changed files are documented by more than one active record. ")
+	b.WriteString("If an older decision no longer applies, deprecate it:\n\n")
+	for _, c := range conflicts {
+		fmt.Fprintf(&b, "- `%s` — %s\n", c.FileRef, strings.Join(c.Records, ", "))
 	}
-	b.WriteString("\nReply `/doctor apply <ids>` (comma-separated drift ids) or `/doctor apply all` ")
-	b.WriteString("to let sadr rewrite the approved sections. Unresolved drift blocks the merge.\n")
+	b.WriteString("\nReply `/doctor apply <record-ids>` (comma-separated, e.g. `alice/1`) ")
+	b.WriteString("to mark those records as deprecated. Unresolved conflicts block the merge.\n")
 	return b.String()
 }

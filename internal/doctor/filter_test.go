@@ -30,3 +30,29 @@ func TestFilterChangedFilesNoMatches(t *testing.T) {
 		t.Errorf("expected no targets, got %+v", got)
 	}
 }
+
+func TestConflicts(t *testing.T) {
+	records := []RecordRef{
+		{ID: "alice/1", FileRef: "api.go", Status: "active"},
+		{ID: "bob/2", FileRef: "api.go", Status: "active"},   // conflict with alice/1
+		{ID: "alice/3", FileRef: "solo.go", Status: "active"}, // only one record -> not a conflict
+	}
+	changed := []string{"api.go", "solo.go", "untracked.go"}
+
+	got := Conflicts(changed, records)
+	if len(got) != 1 || got[0].FileRef != "api.go" || len(got[0].Records) != 2 {
+		t.Fatalf("expected one conflict on api.go with 2 records, got %+v", got)
+	}
+}
+
+func TestRemainingConflicts(t *testing.T) {
+	conflicts := []AuditTarget{
+		{FileRef: "api.go", Records: []string{"alice/1", "bob/2"}},
+		{FileRef: "db.go", Records: []string{"alice/3", "alice/4", "alice/5"}},
+	}
+	// Deprecating bob/2 resolves api.go; deprecating one of three on db.go leaves a conflict.
+	remaining := RemainingConflicts(conflicts, map[string]bool{"bob/2": true, "alice/3": true})
+	if len(remaining) != 1 || remaining[0].FileRef != "db.go" || len(remaining[0].Records) != 2 {
+		t.Errorf("expected db.go still conflicting with 2 records, got %+v", remaining)
+	}
+}
