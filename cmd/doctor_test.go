@@ -1,15 +1,98 @@
 package cmd
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/pedrohpereira74/sadr/internal/doctor"
 	"github.com/pedrohpereira74/sadr/internal/model"
 	"github.com/pedrohpereira74/sadr/internal/storage"
 )
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	old := os.Stdout
+	rp, wp, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	os.Stdout = wp
+	fn()
+	_ = wp.Close()
+	os.Stdout = old
+	data, _ := io.ReadAll(rp)
+	return string(data)
+}
+
+func setupDoctorOrphan(t *testing.T) string {
+	t.Helper()
+	setupTestUser(t, t.TempDir())
+	proj := t.TempDir()
+	recordsDir := filepath.Join(proj, ".sadr", "testuser", "records")
+	if err := os.MkdirAll(recordsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	s := storage.NewStorage(recordsDir)
+	r, _ := model.NewRecordWithOptions("orphan rec", "full")
+	r.Author = "testuser"
+	r.Status = "active"
+	r.FileRef = "missing.go"
+	if _, err := s.SaveRecord(r); err != nil {
+		t.Fatal(err)
+	}
+	old := gitTopLevelFn
+	gitTopLevelFn = func() (string, error) { return proj, nil }
+	t.Cleanup(func() { gitTopLevelFn = old })
+	return recordsDir
+}
+
+func TestUnderRoot(t *testing.T) {
+	for _, p := range []string{"a.go", "internal/api/server.go", "./x"} {
+		if !underRoot(p) {
+			t.Errorf("expected %q to be under root", p)
+		}
+	}
+	for _, p := range []string{"/etc/passwd", "../escape.go", "../../x"} {
+		if underRoot(p) {
+			t.Errorf("expected %q to be rejected", p)
+		}
+	}
+}
+
+func TestDoctorE2EOrphanPostsCommentAndBlocks(t *testing.T) {
+	setupDoctorOrphan(t)
+	var err error
+	out := captureStdout(t, func() {
+		err = runDoctor(&doctorOptions{ci: true})(nil, nil)
+	})
+	if err == nil {
+		t.Error("expected non-zero exit on orphan record")
+	}
+	for _, want := range []string{doctor.CommentMarker, "missing.go", "testuser/1"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected comment to contain %q, got:\n%s", want, out)
+		}
+	}
+}
+
+func TestDoctorE2EApplyResolvesOrphan(t *testing.T) {
+	recordsDir := setupDoctorOrphan(t)
+	oldCommit := gitCommitFn
+	gitCommitFn = func(_ string, _ []string, _ string) error { return nil }
+	t.Cleanup(func() { gitCommitFn = oldCommit })
+
+	if err := runDoctor(&doctorOptions{ci: true, apply: "testuser/1"})(nil, nil); err != nil {
+		t.Fatalf("deprecating the orphan should resolve, got %v", err)
+	}
+	entries, _ := storage.NewStorage(recordsDir).ListRecordEntries()
+	if len(entries) != 1 || entries[0].Record.Status != "deprecated" {
+		t.Errorf("expected the record deprecated, got %+v", entries[0].Record.Status)
+	}
+}
 
 func TestDoctorCommandRegistered(t *testing.T) {
 	cmd := findSubCmd("doctor")

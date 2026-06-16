@@ -15,6 +15,36 @@ func newTestStorage(t *testing.T) *Storage {
 	return NewStorage(t.TempDir())
 }
 
+func TestUpdateRecordOverwritesInPlace(t *testing.T) {
+	s := newTestStorage(t)
+	r, _ := model.NewRecordWithOptions("Update me", "full")
+	r.Status = "active"
+	path, err := s.SaveRecord(r)
+	if err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	r.Status = "deprecated"
+	if err := s.UpdateRecord(path, r); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+
+	loaded, err := s.LoadRecord(path)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if loaded.Status != "deprecated" {
+		t.Errorf("expected status deprecated, got %q", loaded.Status)
+	}
+
+	entries, _ := os.ReadDir(filepath.Dir(path))
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".tmp") {
+			t.Errorf("leftover temp file: %s", e.Name())
+		}
+	}
+}
+
 func TestSaveRecordCreatesFile(t *testing.T) {
 	s := newTestStorage(t)
 	r, _ := model.NewRecordWithOptions("Use retry", "full")

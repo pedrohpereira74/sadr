@@ -52,6 +52,33 @@ func TestRemainingCollisions(t *testing.T) {
 	}
 }
 
+func TestValidateMultiFileFileRef(t *testing.T) {
+	records := []RecordRef{
+		{ID: "alice/1", FileRef: "a.go,missing.go", Status: "active"},
+		{ID: "bob/2", FileRef: "a.go", Status: "active"},
+	}
+	exists := func(p string) bool { return p == "a.go" }
+	res := Validate(records, exists)
+
+	if len(res.Orphans) != 1 || res.Orphans[0].Record != "alice/1" || res.Orphans[0].FileRef != "missing.go" {
+		t.Errorf("expected orphan alice/1->missing.go, got %+v", res.Orphans)
+	}
+	if len(res.Collisions) != 1 || res.Collisions[0].FileRef != "a.go" || len(res.Collisions[0].Records) != 2 {
+		t.Errorf("expected collision on a.go with 2 records, got %+v", res.Collisions)
+	}
+}
+
+func TestRemainingOrphans(t *testing.T) {
+	orphans := []Orphan{
+		{Record: "alice/1", FileRef: "x.go"},
+		{Record: "bob/2", FileRef: "y.go"},
+	}
+	rem := RemainingOrphans(orphans, map[string]bool{"alice/1": true})
+	if len(rem) != 1 || rem[0].Record != "bob/2" {
+		t.Errorf("expected only bob/2 remaining, got %+v", rem)
+	}
+}
+
 func TestValidateIgnoresNonActiveAndNA(t *testing.T) {
 	records := []RecordRef{
 		{ID: "alice/1", FileRef: "gone.go", Status: "proposed"},

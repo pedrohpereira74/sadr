@@ -52,6 +52,16 @@ func RemainingCollisions(collisions []Collision, deprecated map[string]bool) []C
 	return remaining
 }
 
+func RemainingOrphans(orphans []Orphan, deprecated map[string]bool) []Orphan {
+	var remaining []Orphan
+	for _, o := range orphans {
+		if !deprecated[o.Record] {
+			remaining = append(remaining, o)
+		}
+	}
+	return remaining
+}
+
 func Validate(records []RecordRef, fileExists func(string) bool) ValidationResult {
 	var res ValidationResult
 	byFileRef := map[string][]string{}
@@ -60,13 +70,17 @@ func Validate(records []RecordRef, fileExists func(string) bool) ValidationResul
 		if r.Status != StatusActive {
 			continue
 		}
-		if r.FileRef == "" || r.FileRef == model.NoFileRef {
-			continue
+		seenPath := map[string]bool{}
+		for _, fr := range model.ParseTags(r.FileRef) {
+			if fr == model.NoFileRef || seenPath[fr] {
+				continue
+			}
+			seenPath[fr] = true
+			if !fileExists(fr) {
+				res.Orphans = append(res.Orphans, Orphan{Record: r.ID, FileRef: fr})
+			}
+			byFileRef[fr] = append(byFileRef[fr], r.ID)
 		}
-		if !fileExists(r.FileRef) {
-			res.Orphans = append(res.Orphans, Orphan{Record: r.ID, FileRef: r.FileRef})
-		}
-		byFileRef[r.FileRef] = append(byFileRef[r.FileRef], r.ID)
 	}
 
 	keys := make([]string, 0, len(byFileRef))

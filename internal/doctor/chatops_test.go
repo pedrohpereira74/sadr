@@ -41,10 +41,11 @@ func TestIsAuthorized(t *testing.T) {
 }
 
 func TestRenderComment(t *testing.T) {
-	out := RenderComment([]Collision{
-		{FileRef: "api.go", Records: []string{"alice/1", "bob/4"}},
+	out := RenderComment(ValidationResult{
+		Collisions: []Collision{{FileRef: "api.go", Records: []string{"alice/1", "bob/4"}}},
+		Orphans:    []Orphan{{Record: "carol/2", FileRef: "gone.go"}},
 	})
-	for _, want := range []string{CommentMarker, "api.go", "alice/1", "bob/4", "/doctor apply", "deprecated"} {
+	for _, want := range []string{CommentMarker, "api.go", "alice/1", "bob/4", "carol/2", "gone.go", "/doctor apply", "deprecated"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("comment missing %q\n%s", want, out)
 		}

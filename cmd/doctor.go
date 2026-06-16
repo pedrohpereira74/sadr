@@ -38,8 +38,24 @@ func doctorActorRole() string {
 	return os.Getenv("DOCTOR_ACTOR_ROLE")
 }
 
+func underRoot(p string) bool {
+	if filepath.IsAbs(p) {
+		return false
+	}
+	clean := filepath.Clean(p)
+	return clean != ".." && !strings.HasPrefix(clean, ".."+string(filepath.Separator))
+}
+
 func gitCommitImpl(root string, paths []string, message string) error {
-	addArgs := append([]string{"-C", root, "add"}, paths...)
+	rel := make([]string, 0, len(paths))
+	for _, p := range paths {
+		if r, err := filepath.Rel(root, p); err == nil {
+			rel = append(rel, r)
+		} else {
+			rel = append(rel, p)
+		}
+	}
+	addArgs := append([]string{"-C", root, "add"}, rel...)
 	if out, err := exec.Command("git", addArgs...).CombinedOutput(); err != nil {
 		return fmt.Errorf("git add failed: %v: %s", err, out)
 	}
@@ -162,6 +178,9 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) erro
 
 		refs := recordRefsFromEntries(entries)
 		result := doctor.Validate(refs, func(p string) bool {
+			if !underRoot(p) {
+				return false
+			}
 			_, statErr := os.Stat(filepath.Join(root, p))
 			return statErr == nil
 		})
@@ -183,17 +202,16 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) erro
 			}
 
 			remaining := doctor.RemainingCollisions(result.Collisions, deprecated)
-			if len(remaining) > 0 || len(result.Orphans) > 0 {
-				return fmt.Errorf("%d unresolved conflict(s) and %d orphan(s); merge blocked", len(remaining), len(result.Orphans))
+			remainingOrphans := doctor.RemainingOrphans(result.Orphans, deprecated)
+			if len(remaining) > 0 || len(remainingOrphans) > 0 {
+				return fmt.Errorf("%d unresolved conflict(s) and %d orphan(s); merge blocked", len(remaining), len(remainingOrphans))
 			}
 			ui.Success(os.Stderr, "doctor: all conflicts resolved.")
 			return nil
 		}
 
-		if len(result.Collisions) > 0 {
-			fmt.Fprintln(os.Stdout, doctor.RenderComment(result.Collisions))
-		}
 		if !result.OK() {
+			fmt.Fprintln(os.Stdout, doctor.RenderComment(result))
 			return fmt.Errorf("%d conflict(s) and %d orphan(s) block the merge", len(result.Collisions), len(result.Orphans))
 		}
 

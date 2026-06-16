@@ -39,16 +39,27 @@ func IsAuthorized(role string) bool {
 	return false
 }
 
-func RenderComment(conflicts []Collision) string {
+func RenderComment(res ValidationResult) string {
 	var b strings.Builder
 	b.WriteString(CommentMarker)
-	b.WriteString("\n## sadr doctor — conflicting records\n\n")
-	b.WriteString("These files are documented by more than one active record. ")
-	b.WriteString("If an older decision no longer applies, deprecate it:\n\n")
-	for _, c := range conflicts {
-		fmt.Fprintf(&b, "- `%s` — %s\n", c.FileRef, strings.Join(c.Records, ", "))
+	b.WriteString("\n## sadr doctor — record issues\n\n")
+	if len(res.Collisions) > 0 {
+		b.WriteString("Files documented by more than one active record. ")
+		b.WriteString("If an older decision no longer applies, deprecate it:\n\n")
+		for _, c := range res.Collisions {
+			fmt.Fprintf(&b, "- `%s` — %s\n", c.FileRef, strings.Join(c.Records, ", "))
+		}
+		b.WriteString("\n")
 	}
-	b.WriteString("\nReply `/doctor apply <record-ids>` (comma-separated, e.g. `alice/1`) ")
-	b.WriteString("to mark those records as deprecated. Unresolved conflicts block the merge.\n")
+	if len(res.Orphans) > 0 {
+		b.WriteString("Active records pointing at files that no longer exist. ")
+		b.WriteString("Fix the file_ref or deprecate the record:\n\n")
+		for _, o := range res.Orphans {
+			fmt.Fprintf(&b, "- %s → `%s`\n", o.Record, o.FileRef)
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString("Reply `/doctor apply <record-ids>` (comma-separated, e.g. `alice/1`) ")
+	b.WriteString("to mark records as deprecated. Unresolved issues block the merge.\n")
 	return b.String()
 }
