@@ -91,11 +91,12 @@ read first and the code is reference at the bottom.
 | `schema_version` | int | Always `1`. Used for forward-compatibility checks. |
 | `type` | string | Record type: `full`, `adr`, or `snippet` |
 | `title` | string | Record title |
-| `file_ref` | string | Associated file path, or `N/A` if not applicable |
+| `file_ref` | string | Associated file path(s), comma-separated, or `N/A` |
 | `created` | RFC3339 | Creation timestamp |
 | `author` | string | Username of the creator |
 | `tags` | string[] | List of tags |
 | `status` | string | Lifecycle status (see below) |
+| `related` | string[] | Record IDs (`author/id`) this record intentionally coexists with — see [CI Gatekeeper](../guide/ci-gatekeeper) |
 | `fine_tuning_hint` | string | Custom AI instruction used at capture time |
 
 ---

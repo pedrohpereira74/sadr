@@ -150,6 +150,10 @@ func buildFrontmatter(r model.Record) map[string]any {
 		fm[model.FieldTags] = r.Tags
 	}
 
+	if len(r.Related) > 0 {
+		fm[model.FieldRelated] = r.Related
+	}
+
 	if r.Status != "" {
 		fm[model.FieldStatus] = r.Status
 	}
@@ -269,6 +273,14 @@ func (s *Storage) LoadRecord(path string) (model.Record, error) {
 			strs[i] = fmt.Sprintf("%v", v)
 		}
 		r.Tags = strs
+	}
+
+	if related, ok := front[model.FieldRelated].([]any); ok {
+		strs := make([]string, len(related))
+		for i, v := range related {
+			strs[i] = fmt.Sprintf("%v", v)
+		}
+		r.Related = strs
 	}
 
 	if status, ok := front[model.FieldStatus].(string); ok && status != "" {

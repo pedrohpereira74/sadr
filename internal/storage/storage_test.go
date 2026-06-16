@@ -45,6 +45,24 @@ func TestUpdateRecordOverwritesInPlace(t *testing.T) {
 	}
 }
 
+func TestRelatedRoundTrip(t *testing.T) {
+	s := newTestStorage(t)
+	r, _ := model.NewRecordWithOptions("Has related", "full")
+	r.Status = "active"
+	r.Related = []string{"alice/3", "bob/7"}
+	path, err := s.SaveRecord(r)
+	if err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	loaded, err := s.LoadRecord(path)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(loaded.Related) != 2 || loaded.Related[0] != "alice/3" || loaded.Related[1] != "bob/7" {
+		t.Errorf("expected related to round-trip, got %v", loaded.Related)
+	}
+}
+
 func TestSaveRecordCreatesFile(t *testing.T) {
 	s := newTestStorage(t)
 	r, _ := model.NewRecordWithOptions("Use retry", "full")

@@ -1,6 +1,9 @@
 package doctor
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestValidateCleanWhenAllFileRefsExist(t *testing.T) {
 	records := []RecordRef{
@@ -41,17 +44,6 @@ func TestValidateDetectsCollisions(t *testing.T) {
 	}
 }
 
-func TestRemainingCollisions(t *testing.T) {
-	collisions := []Collision{
-		{FileRef: "api.go", Records: []string{"alice/1", "bob/2"}},
-		{FileRef: "db.go", Records: []string{"alice/3", "alice/4", "alice/5"}},
-	}
-	remaining := RemainingCollisions(collisions, map[string]bool{"bob/2": true, "alice/3": true})
-	if len(remaining) != 1 || remaining[0].FileRef != "db.go" || len(remaining[0].Records) != 2 {
-		t.Errorf("expected db.go still conflicting with 2 records, got %+v", remaining)
-	}
-}
-
 func TestValidateMultiFileFileRef(t *testing.T) {
 	records := []RecordRef{
 		{ID: "alice/1", FileRef: "a.go,missing.go", Status: "active"},
@@ -68,14 +60,31 @@ func TestValidateMultiFileFileRef(t *testing.T) {
 	}
 }
 
-func TestRemainingOrphans(t *testing.T) {
-	orphans := []Orphan{
-		{Record: "alice/1", FileRef: "x.go"},
-		{Record: "bob/2", FileRef: "y.go"},
+func TestValidateRelatedSuppressesCollision(t *testing.T) {
+	records := []RecordRef{
+		{ID: "alice/1", FileRef: "api.go", Status: "active"},
+		{ID: "bob/2", FileRef: "api.go", Status: "active", Related: []string{"alice/1"}},
 	}
-	rem := RemainingOrphans(orphans, map[string]bool{"alice/1": true})
-	if len(rem) != 1 || rem[0].Record != "bob/2" {
-		t.Errorf("expected only bob/2 remaining, got %+v", rem)
+	res := Validate(records, func(string) bool { return true })
+	if len(res.Collisions) != 0 {
+		t.Errorf("expected related records not to collide, got %+v", res.Collisions)
+	}
+}
+
+func TestValidateRelatedOnlySuppressesAcknowledgedPair(t *testing.T) {
+	records := []RecordRef{
+		{ID: "alice/1", FileRef: "api.go", Status: "active"},
+		{ID: "bob/2", FileRef: "api.go", Status: "active", Related: []string{"alice/1"}},
+		{ID: "carol/3", FileRef: "api.go", Status: "active"},
+	}
+	res := Validate(records, func(string) bool { return true })
+	if len(res.Collisions) != 1 || res.Collisions[0].FileRef != "api.go" {
+		t.Fatalf("expected one collision on api.go, got %+v", res.Collisions)
+	}
+	got := res.Collisions[0].Records
+	want := []string{"alice/1", "bob/2", "carol/3"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("expected carol/3's unreconciled pairs to flag all three, got %v", got)
 	}
 }
 

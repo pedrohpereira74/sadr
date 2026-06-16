@@ -15,6 +15,7 @@ type RecordRef struct {
 	ID      string
 	FileRef string
 	Status  string
+	Related []string
 }
 
 type Orphan struct {
@@ -36,40 +37,21 @@ func (r ValidationResult) OK() bool {
 	return len(r.Orphans) == 0 && len(r.Collisions) == 0
 }
 
-func RemainingCollisions(collisions []Collision, deprecated map[string]bool) []Collision {
-	var remaining []Collision
-	for _, c := range collisions {
-		var active []string
-		for _, r := range c.Records {
-			if !deprecated[r] {
-				active = append(active, r)
-			}
-		}
-		if len(active) > 1 {
-			remaining = append(remaining, Collision{FileRef: c.FileRef, Records: active})
-		}
-	}
-	return remaining
-}
-
-func RemainingOrphans(orphans []Orphan, deprecated map[string]bool) []Orphan {
-	var remaining []Orphan
-	for _, o := range orphans {
-		if !deprecated[o.Record] {
-			remaining = append(remaining, o)
-		}
-	}
-	return remaining
-}
-
 func Validate(records []RecordRef, fileExists func(string) bool) ValidationResult {
 	var res ValidationResult
-	byFileRef := map[string][]string{}
+	byFileRef := map[string][]RecordRef{}
+	related := map[string]map[string]bool{}
 
 	for _, r := range records {
 		if r.Status != StatusActive {
 			continue
 		}
+		rel := make(map[string]bool, len(r.Related))
+		for _, id := range r.Related {
+			rel[id] = true
+		}
+		related[r.ID] = rel
+
 		seenPath := map[string]bool{}
 		for _, fr := range model.ParseTags(r.FileRef) {
 			if fr == model.NoFileRef || seenPath[fr] {
@@ -79,7 +61,7 @@ func Validate(records []RecordRef, fileExists func(string) bool) ValidationResul
 			if !fileExists(fr) {
 				res.Orphans = append(res.Orphans, Orphan{Record: r.ID, FileRef: fr})
 			}
-			byFileRef[fr] = append(byFileRef[fr], r.ID)
+			byFileRef[fr] = append(byFileRef[fr], r)
 		}
 	}
 
@@ -89,8 +71,31 @@ func Validate(records []RecordRef, fileExists func(string) bool) ValidationResul
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		if len(byFileRef[k]) > 1 {
-			res.Collisions = append(res.Collisions, Collision{FileRef: k, Records: byFileRef[k]})
+		recs := byFileRef[k]
+		if len(recs) < 2 {
+			continue
+		}
+		sort.Slice(recs, func(i, j int) bool { return recs[i].ID < recs[j].ID })
+
+		involved := map[string]bool{}
+		var order []string
+		for i := range recs {
+			for j := i + 1; j < len(recs); j++ {
+				a, b := recs[i].ID, recs[j].ID
+				if related[a][b] || related[b][a] {
+					continue
+				}
+				for _, id := range []string{a, b} {
+					if !involved[id] {
+						involved[id] = true
+						order = append(order, id)
+					}
+				}
+			}
+		}
+		if len(order) > 0 {
+			sort.Strings(order)
+			res.Collisions = append(res.Collisions, Collision{FileRef: k, Records: order})
 		}
 	}
 

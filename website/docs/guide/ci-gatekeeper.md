@@ -18,14 +18,34 @@ cleared by any PR, so it never gets stuck unresolved.
 ## What it does
 
 1. **Validate records** — every `active` record's `file_ref` must exist on disk;
-   missing ones are reported as **orphans**.
-2. **Detect conflicts** — flag any file documented by **two or more active
-   records**. Those are the overlaps to reconcile.
+   missing ones are reported as **orphans**. `file_ref` may list several
+   comma-separated paths, each checked individually.
+2. **Detect conflicts** — flag any file documented by two or more active records
+   that **do not reference each other**. Two records that intentionally coexist
+   declare it with `related` (see below) and are not flagged.
 3. **Gate** — if there are conflicts or orphans, post a comment and fail the
    check (non-zero exit), blocking the merge.
-4. **Resolve** — a reviewer approves deprecating the stale record(s); doctor sets
-   their status to `deprecated`, commits, and the check goes green once every
-   file has at most one active record.
+4. **Resolve** — a reviewer either **deprecates** the stale record (`--apply`),
+   or marks the records as coexisting via `related`. The check goes green once no
+   unreconciled pair remains.
+
+## Coexisting records (`related`)
+
+Two active records can legitimately document the same file (e.g. an
+architectural decision plus an unrelated maintenance note). To stop the
+gatekeeper from flagging them, add the other record's ID to `related` in the
+frontmatter:
+
+```yaml
+file_ref: internal/api/client.go
+status: active
+related:
+  - alice/3
+```
+
+A pair is reconciled if **either** record lists the other. Acknowledgement is
+per-pair: a new, unreferenced record on the same file is flagged again, so this
+never silently suppresses a genuine future conflict.
 
 ## Flags
 

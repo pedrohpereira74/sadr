@@ -44,8 +44,8 @@ func RenderComment(res ValidationResult) string {
 	b.WriteString(CommentMarker)
 	b.WriteString("\n## sadr doctor — record issues\n\n")
 	if len(res.Collisions) > 0 {
-		b.WriteString("Files documented by more than one active record. ")
-		b.WriteString("If an older decision no longer applies, deprecate it:\n\n")
+		b.WriteString("Files documented by more than one active record that do not reference each other. ")
+		b.WriteString("Deprecate the stale one, or add a `related` entry if they coexist on purpose:\n\n")
 		for _, c := range res.Collisions {
 			fmt.Fprintf(&b, "- `%s` — %s\n", c.FileRef, strings.Join(c.Records, ", "))
 		}

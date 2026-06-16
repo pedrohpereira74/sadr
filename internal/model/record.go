@@ -26,6 +26,7 @@ const (
 	FieldSnippet = "snippet"
 	FieldStatus  = "status"
 	FieldFileRef = "file_ref"
+	FieldRelated = "related"
 
 	MaxSnippetFileSize = 10 << 20 // 10 MB
 )
@@ -38,6 +39,7 @@ type Record struct {
 	Snippet        string
 	SchemaVersion  int
 	FileRef        string
+	Related        []string
 	Author         string
 	FineTuningHint string
 	Fields         map[string]string

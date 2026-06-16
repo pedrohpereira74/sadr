@@ -95,9 +95,21 @@ func recordRefsFromEntries(entries []storage.RecordEntry) []doctor.RecordRef {
 			ID:      entryID(e),
 			FileRef: e.Record.FileRef,
 			Status:  e.Record.Status,
+			Related: e.Record.Related,
 		})
 	}
 	return refs
+}
+
+func deactivateRefs(refs []doctor.RecordRef, deprecated map[string]bool) []doctor.RecordRef {
+	out := make([]doctor.RecordRef, len(refs))
+	for i, r := range refs {
+		if deprecated[r.ID] {
+			r.Status = doctor.StatusDeprecated
+		}
+		out[i] = r
+	}
+	return out
 }
 
 func indexEntries(entries []storage.RecordEntry) map[string]storage.RecordEntry {
@@ -176,14 +188,16 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) erro
 			return err
 		}
 
-		refs := recordRefsFromEntries(entries)
-		result := doctor.Validate(refs, func(p string) bool {
+		fileExists := func(p string) bool {
 			if !underRoot(p) {
 				return false
 			}
 			_, statErr := os.Stat(filepath.Join(root, p))
 			return statErr == nil
-		})
+		}
+
+		refs := recordRefsFromEntries(entries)
+		result := doctor.Validate(refs, fileExists)
 		for _, o := range result.Orphans {
 			ui.Warning(os.Stderr, fmt.Sprintf("orphan: record %s points at missing file %q", o.Record, o.FileRef))
 		}
@@ -201,10 +215,9 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) erro
 				ui.Success(os.Stderr, fmt.Sprintf("doctor: deprecated and committed %d record(s)", len(changedPaths)))
 			}
 
-			remaining := doctor.RemainingCollisions(result.Collisions, deprecated)
-			remainingOrphans := doctor.RemainingOrphans(result.Orphans, deprecated)
-			if len(remaining) > 0 || len(remainingOrphans) > 0 {
-				return fmt.Errorf("%d unresolved conflict(s) and %d orphan(s); merge blocked", len(remaining), len(remainingOrphans))
+			post := doctor.Validate(deactivateRefs(refs, deprecated), fileExists)
+			if !post.OK() {
+				return fmt.Errorf("%d unresolved conflict(s) and %d orphan(s); merge blocked", len(post.Collisions), len(post.Orphans))
 			}
 			ui.Success(os.Stderr, "doctor: all conflicts resolved.")
 			return nil

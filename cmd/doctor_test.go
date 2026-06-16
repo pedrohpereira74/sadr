@@ -239,6 +239,42 @@ func TestDoctorE2EConflictBlocks(t *testing.T) {
 	}
 }
 
+func TestDoctorE2ERelatedSuppresses(t *testing.T) {
+	setupTestUser(t, t.TempDir())
+	proj := t.TempDir()
+	recordsDir := filepath.Join(proj, ".sadr", "testuser", "records")
+	if err := os.MkdirAll(recordsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(proj, "api.go"), []byte("package api\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	s := storage.NewStorage(recordsDir)
+	r1, _ := model.NewRecordWithOptions("a", "full")
+	r1.Author = "testuser"
+	r1.Status = "active"
+	r1.FileRef = "api.go"
+	if _, err := s.SaveRecord(r1); err != nil {
+		t.Fatal(err)
+	}
+	r2, _ := model.NewRecordWithOptions("b", "full")
+	r2.Author = "testuser"
+	r2.Status = "active"
+	r2.FileRef = "api.go"
+	r2.Related = []string{"testuser/1"}
+	if _, err := s.SaveRecord(r2); err != nil {
+		t.Fatal(err)
+	}
+
+	old := gitTopLevelFn
+	gitTopLevelFn = func() (string, error) { return proj, nil }
+	t.Cleanup(func() { gitTopLevelFn = old })
+
+	if err := runDoctor(&doctorOptions{ci: true})(nil, nil); err != nil {
+		t.Errorf("expected related records to pass, got %v", err)
+	}
+}
+
 func TestDoctorE2EApplyDeprecatesResolves(t *testing.T) {
 	recordsDir := setupDoctorE2E(t, "active", "active")
 
