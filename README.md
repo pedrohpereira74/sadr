@@ -11,6 +11,10 @@ sadr is a CLI tool that blends a snippet manager with Architectural Decision Rec
 - **HTML Export**: Export your knowledge base to a single standalone, styled HTML file (`sadr export`).
 - **Git-friendly**: sadr is designed to be used in git repositories. It stores records as markdown files in a `.sadr` directory, which can be tracked by git.
 
+## 📖 Documentation
+
+Read the full documentation at https://pedrohpereira74.github.io/sadr/
+
 ## 🚀 Installation
 
 sadr provides pre-compiled binaries for all major platforms. Choose your preferred method:
