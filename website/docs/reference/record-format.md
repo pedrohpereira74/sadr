@@ -48,6 +48,9 @@ fine_tuning_hint: "focus on migration risk and rollback strategy"
 
 **Status:** `#active`
 
+**Question:**
+> focus on migration risk and rollback strategy
+
 ## Context
 
 The previous SQLite setup was a bottleneck under concurrent load...
@@ -65,8 +68,6 @@ Migrate to PostgreSQL 15 for the primary data store...
 
 The migration requires a one-time data export and reimport...
 
-**Question:**
-> focus on migration risk and rollback strategy
 
 ## Snippet
 
