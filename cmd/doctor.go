@@ -180,7 +180,7 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) erro
 		root := doctorRepoRoot()
 		paths, ok := doctorPaths()
 		if !ok {
-			ui.Success(os.Stderr, "doctor: no records to validate.")
+			ui.Success(os.Stderr, "doctor: no records to validate")
 			return nil
 		}
 		entries, err := listAllRecordEntries(paths.Root)
@@ -219,7 +219,7 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) erro
 			if !post.OK() {
 				return fmt.Errorf("doctor: %d conflict(s) and %d orphan(s) still unresolved after apply; merge blocked", len(post.Collisions), len(post.Orphans))
 			}
-			ui.Success(os.Stderr, "doctor: all conflicts resolved.")
+			ui.Success(os.Stderr, "doctor: all conflicts resolved")
 			return nil
 		}
 
@@ -228,7 +228,7 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) erro
 			return fmt.Errorf("doctor: conflicting and/or orphan records. %d conflict(s) and %d orphan(s) detected", len(result.Collisions), len(result.Orphans))
 		}
 
-		ui.Success(os.Stderr, "doctor: records are consistent.")
+		ui.Success(os.Stderr, "doctor: records are consistent")
 		return nil
 	}
 }
