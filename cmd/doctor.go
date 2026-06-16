@@ -57,16 +57,12 @@ func doctorRepoRoot() string {
 	return dir
 }
 
-func doctorPaths() (discover.SadrPaths, error) {
-	root := doctorRepoRoot()
-	paths, err := discover.FindSadrDir(root)
-	if err != nil {
-		return paths, err
+func doctorPaths() (discover.SadrPaths, bool) {
+	paths, err := discover.FindSadrDir(doctorRepoRoot())
+	if err != nil || paths.IsGlobal {
+		return discover.SadrPaths{}, false
 	}
-	if paths.IsGlobal {
-		return paths, fmt.Errorf("no project .sadr/ found in %s; doctor runs inside a sadr-tracked repository", root)
-	}
-	return paths, nil
+	return paths, true
 }
 
 func entryID(e storage.RecordEntry) string {
@@ -154,9 +150,10 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) erro
 		}
 
 		root := doctorRepoRoot()
-		paths, err := doctorPaths()
-		if err != nil {
-			return err
+		paths, ok := doctorPaths()
+		if !ok {
+			ui.Success(os.Stderr, "doctor: no project records to validate.")
+			return nil
 		}
 		entries, err := listAllRecordEntries(paths.Root)
 		if err != nil {

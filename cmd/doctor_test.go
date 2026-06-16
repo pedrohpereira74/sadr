@@ -130,6 +130,18 @@ func setupDoctorE2E(t *testing.T, statuses ...string) string {
 	return recordsDir
 }
 
+func TestDoctorNoProjectVault(t *testing.T) {
+	setupTestUser(t, t.TempDir())
+	proj := t.TempDir()
+	old := gitTopLevelFn
+	gitTopLevelFn = func() (string, error) { return proj, nil }
+	t.Cleanup(func() { gitTopLevelFn = old })
+
+	if err := runDoctor(&doctorOptions{ci: true})(nil, nil); err != nil {
+		t.Errorf("expected pass when repo has no project records, got %v", err)
+	}
+}
+
 func TestDoctorE2ENoConflict(t *testing.T) {
 	setupDoctorE2E(t, "active")
 	if err := runDoctor(&doctorOptions{ci: true})(nil, nil); err != nil {
