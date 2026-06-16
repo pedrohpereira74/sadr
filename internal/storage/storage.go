@@ -176,6 +176,10 @@ func formatBody(content *strings.Builder, r model.Record) {
 		_, _ = fmt.Fprintf(content, "**Status:** `#%s`\n\n", r.Status)
 	}
 
+	if r.FineTuningHint != "" && r.Snippet != "" {
+		_, _ = fmt.Fprintf(content, "**Question:**\n> %s\n\n", r.FineTuningHint)
+	}
+
 	written := map[string]bool{}
 
 	for _, key := range r.FieldOrder {
@@ -199,9 +203,6 @@ func formatBody(content *strings.Builder, r model.Record) {
 	}
 
 	if r.Snippet != "" {
-		if r.FineTuningHint != "" {
-			_, _ = fmt.Fprintf(content, "**Question:**\n> %s\n\n", r.FineTuningHint)
-		}
 		bt := determineBackticks(r.Snippet)
 		_, _ = fmt.Fprintf(content, "## Snippet\n\n%s\n%s\n%s\n\n", bt, strings.TrimSpace(r.Snippet), bt)
 	}

@@ -4,7 +4,6 @@ const { themes } = require('prism-react-renderer');
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: 'sadr',
-  tagline: 'Capture code with context. Because snippets without a "why" are sadr.',
   // Update these when deploying to GitHub Pages
   url: 'https://pedrohpereira74.github.io',
   baseUrl: '/sadr/',

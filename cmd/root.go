@@ -12,14 +12,13 @@ var version = "dev"
 var rootCmd = &cobra.Command{
 	Use:     "sadr",
 	Short:   "sadr — snippets + architecture decision records",
-	Long:    "Capture code with context. Because snippets without a \"why\" are sadr.\nA tool to document decisions alongside code snippets.",
+	Long:    "Capture code with context.\nA tool to document decisions alongside code snippets.",
 	Version: version,
 }
 
 func init() {
 	rootCmd.SetHelpTemplate(`sadr — snippets + architecture decision records
 
-Capture code with context. Because snippets without a "why" are sadr.
 
 Usage:
   sadr <command> [flags]
