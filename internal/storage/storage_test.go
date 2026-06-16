@@ -379,8 +379,8 @@ func TestFormatBodySnippetRenderedAfterFields(t *testing.T) {
 	if snippetIdx == -1 || contextIdx == -1 || decisionIdx == -1 || questionIdx == -1 {
 		t.Fatalf("expected all sections present, got:\n%s", out)
 	}
-	if !(contextIdx < decisionIdx && decisionIdx < questionIdx && questionIdx < snippetIdx) {
-		t.Errorf("expected order context < decision < question < snippet, got:\n%s", out)
+	if !(questionIdx < contextIdx && contextIdx < decisionIdx && decisionIdx < snippetIdx) {
+		t.Errorf("expected order question < context < decision < snippet, got:\n%s", out)
 	}
 }
 
