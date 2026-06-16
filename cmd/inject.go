@@ -17,8 +17,10 @@ var (
 	snippetCapturer                             = captureSnippetFromEditorImpl
 	clipboardReader                             = readClipboardImpl
 	confirmOverwrite                            = confirmOverwriteImpl
+	gitTopLevelFn                               = gitTopLevelImpl
+	gitCommitFn                                 = gitCommitImpl
 
-	generateTextFn  func(ctx context.Context, prompt, apiKey, model string, timeout time.Duration) (string, error) = ai.GenerateText
+	generateTextFn  func(ctx context.Context, provider, prompt, apiKey, model string, timeout time.Duration) (string, error) = ai.GenerateText
 	confirmPromptFn func(message string) bool                                                                      = confirmPromptImpl
 
 	jiraFetcherFn func(ctx context.Context, client *jiraclient.Client, key string) (jiraclient.Issue, bool) = defaultJiraFetcher

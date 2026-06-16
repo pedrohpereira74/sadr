@@ -166,13 +166,13 @@ func loadGlobalConfig() config.GlobalConfig {
 	return cfg
 }
 
-func loadAIConfig() (string, string) {
+func loadAIConfig() (provider, apiKey, model string) {
 	cfg := loadGlobalConfig()
-	apiKey := cfg.AI.APIKey
+	apiKey = cfg.AI.APIKey
 	if apiKey == "" && cfg.AI.APIKeyEnv != "" {
 		apiKey = os.Getenv(cfg.AI.APIKeyEnv)
 	}
-	return apiKey, cfg.AI.Model
+	return cfg.AI.Provider, apiKey, cfg.AI.Model
 }
 
 func loadLanguageConfig() string {

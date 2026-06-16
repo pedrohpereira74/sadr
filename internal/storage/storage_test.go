@@ -15,6 +15,54 @@ func newTestStorage(t *testing.T) *Storage {
 	return NewStorage(t.TempDir())
 }
 
+func TestUpdateRecordOverwritesInPlace(t *testing.T) {
+	s := newTestStorage(t)
+	r, _ := model.NewRecordWithOptions("Update me", "full")
+	r.Status = "active"
+	path, err := s.SaveRecord(r)
+	if err != nil {
+		t.Fatalf("save: %v", err)
+	}
+
+	r.Status = "deprecated"
+	if err := s.UpdateRecord(path, r); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+
+	loaded, err := s.LoadRecord(path)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if loaded.Status != "deprecated" {
+		t.Errorf("expected status deprecated, got %q", loaded.Status)
+	}
+
+	entries, _ := os.ReadDir(filepath.Dir(path))
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".tmp") {
+			t.Errorf("leftover temp file: %s", e.Name())
+		}
+	}
+}
+
+func TestRelatedRoundTrip(t *testing.T) {
+	s := newTestStorage(t)
+	r, _ := model.NewRecordWithOptions("Has related", "full")
+	r.Status = "active"
+	r.Related = []string{"alice/3", "bob/7"}
+	path, err := s.SaveRecord(r)
+	if err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	loaded, err := s.LoadRecord(path)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(loaded.Related) != 2 || loaded.Related[0] != "alice/3" || loaded.Related[1] != "bob/7" {
+		t.Errorf("expected related to round-trip, got %v", loaded.Related)
+	}
+}
+
 func TestSaveRecordCreatesFile(t *testing.T) {
 	s := newTestStorage(t)
 	r, _ := model.NewRecordWithOptions("Use retry", "full")
@@ -299,6 +347,40 @@ func TestFormatBodyStatusRendered(t *testing.T) {
 
 	if !strings.Contains(string(data), "**Status:** `#accepted`") {
 		t.Errorf("expected status formatted as `#accepted`, got:\n%s", string(data))
+	}
+}
+
+func TestFormatBodySnippetRenderedAfterFields(t *testing.T) {
+	s := newTestStorage(t)
+	r, _ := model.NewRecordWithOptions("Ordering test", "full")
+	r.FieldOrder = []string{"context", "decision"}
+	r.Fields = map[string]string{
+		"context":  "Why we did it.",
+		"decision": "What we chose.",
+	}
+	r.FineTuningHint = "focus on rollback"
+	r.Snippet = "func main() {}"
+
+	path, err := s.SaveRecord(r)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("unexpected error reading file: %v", err)
+	}
+	out := string(data)
+
+	snippetIdx := strings.Index(out, "## Snippet")
+	contextIdx := strings.Index(out, "## Context")
+	decisionIdx := strings.Index(out, "## Decision")
+	questionIdx := strings.Index(out, "**Question:**")
+
+	if snippetIdx == -1 || contextIdx == -1 || decisionIdx == -1 || questionIdx == -1 {
+		t.Fatalf("expected all sections present, got:\n%s", out)
+	}
+	if !(contextIdx < decisionIdx && decisionIdx < questionIdx && questionIdx < snippetIdx) {
+		t.Errorf("expected order context < decision < question < snippet, got:\n%s", out)
 	}
 }
 

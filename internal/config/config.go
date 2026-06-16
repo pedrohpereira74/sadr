@@ -105,7 +105,6 @@ func validate(cfg Config) error {
 	validTypes := map[string]bool{
 		"text":        true,
 		"select":      true,
-		"multitext":   true,
 		"multiselect": true,
 		"list":        true,
 		"jira":        true,

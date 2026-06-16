@@ -44,11 +44,11 @@ func LoadRecord(path string) (model.Record, error) {
 	return NewStorage("").LoadRecord(path)
 }
 
-func (s *Storage) SaveRecord(r model.Record) (string, error) {
+func serializeRecord(r model.Record) ([]byte, error) {
 	frontmatter := buildFrontmatter(r)
 	yamlBytes, err := yaml.Marshal(frontmatter)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	var content strings.Builder
@@ -57,9 +57,46 @@ func (s *Storage) SaveRecord(r model.Record) (string, error) {
 	_, _ = fmt.Fprintf(&content, "---\n\n")
 
 	formatBody(&content, r)
+	return []byte(content.String()), nil
+}
+
+func (s *Storage) UpdateRecord(path string, r model.Record) error {
+	data, err := serializeRecord(r)
+	if err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".sadr-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := os.Chmod(tmpName, 0644); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	return nil
+}
+
+func (s *Storage) SaveRecord(r model.Record) (string, error) {
+	data, err := serializeRecord(r)
+	if err != nil {
+		return "", err
+	}
 
 	slug := Slugify(r.Title)
-	data := []byte(content.String())
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -113,6 +150,10 @@ func buildFrontmatter(r model.Record) map[string]any {
 		fm[model.FieldTags] = r.Tags
 	}
 
+	if len(r.Related) > 0 {
+		fm[model.FieldRelated] = r.Related
+	}
+
 	if r.Status != "" {
 		fm[model.FieldStatus] = r.Status
 	}
@@ -135,14 +176,6 @@ func formatBody(content *strings.Builder, r model.Record) {
 		_, _ = fmt.Fprintf(content, "**Status:** `#%s`\n\n", r.Status)
 	}
 
-	if r.Snippet != "" {
-		if r.FineTuningHint != "" {
-			_, _ = fmt.Fprintf(content, "**Question:**\n> %s\n\n", r.FineTuningHint)
-		}
-		bt := determineBackticks(r.Snippet)
-		_, _ = fmt.Fprintf(content, "## Snippet\n\n%s\n%s\n%s\n\n", bt, strings.TrimSpace(r.Snippet), bt)
-	}
-
 	written := map[string]bool{}
 
 	for _, key := range r.FieldOrder {
@@ -163,6 +196,14 @@ func formatBody(content *strings.Builder, r model.Record) {
 	sort.Strings(remaining)
 	for _, key := range remaining {
 		_, _ = fmt.Fprintf(content, "## %s\n\n%s\n\n", capitalizeKey(key), strings.TrimSpace(r.Fields[key]))
+	}
+
+	if r.Snippet != "" {
+		if r.FineTuningHint != "" {
+			_, _ = fmt.Fprintf(content, "**Question:**\n> %s\n\n", r.FineTuningHint)
+		}
+		bt := determineBackticks(r.Snippet)
+		_, _ = fmt.Fprintf(content, "## Snippet\n\n%s\n%s\n%s\n\n", bt, strings.TrimSpace(r.Snippet), bt)
 	}
 }
 
@@ -232,6 +273,14 @@ func (s *Storage) LoadRecord(path string) (model.Record, error) {
 			strs[i] = fmt.Sprintf("%v", v)
 		}
 		r.Tags = strs
+	}
+
+	if related, ok := front[model.FieldRelated].([]any); ok {
+		strs := make([]string, len(related))
+		for i, v := range related {
+			strs[i] = fmt.Sprintf("%v", v)
+		}
+		r.Related = strs
 	}
 
 	if status, ok := front[model.FieldStatus].(string); ok && status != "" {

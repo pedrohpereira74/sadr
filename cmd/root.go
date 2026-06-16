@@ -72,6 +72,10 @@ Available Commands:
               --global             Open global config (creates ~/.sadr/ on first use)
               --set-api-key <str>  Set the Gemini API key in the global config directly
 
+  doctor      Validate records and flag files with conflicting records (CI gatekeeper)
+              --ci                 Non-interactive CI mode with structured output
+              --apply <string>     Comma-separated record IDs to deprecate
+
 Examples:
   sadr init                          Initialize sadr in current project
 

@@ -27,7 +27,7 @@ func TestMain(m *testing.M) {
 	clipboardReader = func() (string, error) { return "mock clipboard", nil }
 	confirmOverwrite = func() string { return "yes" }
 	confirmPromptFn = func(_ string) bool { return true }
-	generateTextFn = func(_ context.Context, _, _, _ string, _ time.Duration) (string, error) {
+	generateTextFn = func(_ context.Context, _, _, _, _ string, _ time.Duration) (string, error) {
 		return "# Mock Report\n\nThis is a mock AI response.", nil
 	}
 

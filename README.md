@@ -18,7 +18,7 @@ sadr provides pre-compiled binaries for all major platforms. Choose your preferr
 ### 🌟 Native Script
 The easiest way to install sadr on macOS or Linux is via the native installer script:
 ```bash
-curl -sSfL https://raw.githubusercontent.com/pedrohpereira74/sadr/master/install.sh | sh
+curl -sSfL https://raw.githubusercontent.com/pedrohpereira74/sadr/main/install.sh | sh
 ```
 
 ### 🍺 Homebrew (macOS / Linux)

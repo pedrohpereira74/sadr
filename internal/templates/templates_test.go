@@ -39,6 +39,36 @@ func TestRenderRecordBasic(t *testing.T) {
 	}
 }
 
+func TestRenderRecordSnippetAfterFields(t *testing.T) {
+	data := ExportData{
+		Title:    "Ordering",
+		Type:     "full",
+		Snippet:  "func main() {}",
+		Question: "focus on rollback",
+		Fields: []ExportField{
+			{Key: "Context", Value: "Why we did it"},
+			{Key: "Decision", Value: "What we chose"},
+		},
+	}
+
+	html, err := RenderRecord(data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	contextIdx := strings.Index(html, "Why we did it")
+	decisionIdx := strings.Index(html, "What we chose")
+	questionIdx := strings.Index(html, "focus on rollback")
+	snippetIdx := strings.Index(html, "<h2>Snippet</h2>")
+
+	if contextIdx == -1 || decisionIdx == -1 || questionIdx == -1 || snippetIdx == -1 {
+		t.Fatalf("expected all sections present, got:\n%s", html)
+	}
+	if !(contextIdx < decisionIdx && decisionIdx < questionIdx && questionIdx < snippetIdx) {
+		t.Errorf("expected fields before question before snippet, got:\n%s", html)
+	}
+}
+
 func TestRenderRecordWithoutOptionalFields(t *testing.T) {
 	data := ExportData{
 		Title: "Minimal record",

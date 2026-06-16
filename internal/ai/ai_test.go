@@ -97,7 +97,7 @@ func TestSuggestValidResponse(t *testing.T) {
 	})
 	defer func() { httpClient = old }()
 
-	result, err := Suggest(context.Background(),"some code", []string{"title"}, "english", "fake-key", "", false, "", "")
+	result, err := Suggest(context.Background(), "gemini", "some code", []string{"title"}, "english", "fake-key", "", false, "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -114,7 +114,7 @@ func TestSuggestAPIError(t *testing.T) {
 	})
 	defer func() { httpClient = old }()
 
-	_, err := Suggest(context.Background(),"code", []string{"title"}, "english", "bad-key", "", false, "", "")
+	_, err := Suggest(context.Background(), "gemini", "code", []string{"title"}, "english", "bad-key", "", false, "", "")
 	if err == nil {
 		t.Fatal("expected error for non-200 response")
 	}
@@ -128,7 +128,7 @@ func TestSuggestEmptyResponse(t *testing.T) {
 	})
 	defer func() { httpClient = old }()
 
-	_, err := Suggest(context.Background(),"code", []string{"title"}, "english", "fake-key", "", false, "", "")
+	_, err := Suggest(context.Background(), "gemini", "code", []string{"title"}, "english", "fake-key", "", false, "", "")
 	if err == nil {
 		t.Fatal("expected error for empty candidates")
 	}
@@ -142,7 +142,7 @@ func TestSuggestInvalidJSON(t *testing.T) {
 	})
 	defer func() { httpClient = old }()
 
-	_, err := Suggest(context.Background(),"code", []string{"title"}, "english", "fake-key", "", false, "", "")
+	_, err := Suggest(context.Background(), "gemini", "code", []string{"title"}, "english", "fake-key", "", false, "", "")
 	if err == nil {
 		t.Fatal("expected error for invalid JSON response body")
 	}
@@ -152,7 +152,7 @@ func TestSuggestMissingAPIKey(t *testing.T) {
 	t.Setenv("AI_API_KEY", "")
 	t.Setenv("GEMINI_API_KEY", "")
 
-	_, err := Suggest(context.Background(),"code", []string{"title"}, "english", "", "", false, "", "")
+	_, err := Suggest(context.Background(), "gemini", "code", []string{"title"}, "english", "", "", false, "", "")
 	if err == nil {
 		t.Fatal("expected error when no API key is provided")
 	}
@@ -166,7 +166,7 @@ func TestGenerateText(t *testing.T) {
 	})
 	defer func() { httpClient = old }()
 
-	text, err := GenerateText(context.Background(), "analyze this", "fake-key", "", 0)
+	text, err := GenerateText(context.Background(), "gemini", "analyze this", "fake-key", "", 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -183,7 +183,7 @@ func TestGenerateTextAPIError(t *testing.T) {
 	})
 	defer func() { httpClient = old }()
 
-	_, err := GenerateText(context.Background(), "prompt", "fake-key", "", 0)
+	_, err := GenerateText(context.Background(), "gemini", "prompt", "fake-key", "", 0)
 	if err == nil {
 		t.Fatal("expected error for non-200 response")
 	}
@@ -193,7 +193,7 @@ func TestGenerateTextMissingKey(t *testing.T) {
 	t.Setenv("AI_API_KEY", "")
 	t.Setenv("GEMINI_API_KEY", "")
 
-	_, err := GenerateText(context.Background(), "prompt", "", "", 0)
+	_, err := GenerateText(context.Background(), "gemini", "prompt", "", "", 0)
 	if err == nil {
 		t.Fatal("expected error when no API key is provided")
 	}
@@ -209,7 +209,7 @@ func TestSuggestSetsAuthHeader(t *testing.T) {
 	})
 	defer func() { httpClient = old }()
 
-	_, _ = Suggest(context.Background(),"code", []string{"title"}, "english", "my-secret-key", "", false, "", "")
+	_, _ = Suggest(context.Background(), "gemini", "code", []string{"title"}, "english", "my-secret-key", "", false, "", "")
 	if gotKey != "my-secret-key" {
 		t.Errorf("expected API key header 'my-secret-key', got '%s'", gotKey)
 	}

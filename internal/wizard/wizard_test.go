@@ -87,7 +87,7 @@ func TestModelHasSnippetStep(t *testing.T) {
 func TestNewModelFromConfigTextFields(t *testing.T) {
 	fields := []FieldDef{
 		{Name: "title", Type: "text", Required: true},
-		{Name: "context", Type: "multitext", Required: false},
+		{Name: "context", Type: "text", Required: false},
 		{Name: "alternatives", Type: "list", Required: false},
 	}
 	m := NewModelFromConfig(fields)

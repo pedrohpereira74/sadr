@@ -120,7 +120,7 @@ func fieldDefToStep(f FieldDef) step {
 	}
 
 	switch f.Type {
-	case "text", "multitext", "list", "jira":
+	case "text", "list", "jira":
 		s.fieldType = "text"
 	case "select":
 		s.fieldType = "select"
@@ -434,7 +434,7 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if idx >= 0 {
 				current.selectedMap[idx] = !current.selectedMap[idx]
 			}
-		} else if current.fieldType == "text" || current.fieldType == "multitext" || current.fieldType == "list" {
+		} else if current.fieldType == "text" || current.fieldType == "list" {
 			var cmd tea.Cmd
 			m.textarea, cmd = m.textarea.Update(msg)
 			return m, cmd
