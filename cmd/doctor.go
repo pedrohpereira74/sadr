@@ -225,7 +225,7 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) erro
 
 		if !result.OK() {
 			fmt.Fprintln(os.Stdout, doctor.RenderComment(result))
-			return fmt.Errorf("doctor: conflicting and/or orphan records. %d conflict(s) and %d orphan(s) detected", len(result.Collisions), len(result.Orphans))
+			return fmt.Errorf("doctor: detected %d orphan and %d conflicting record(s)", len(result.Orphans), len(result.Collisions))
 		}
 
 		ui.Success(os.Stderr, "doctor: records are consistent")
