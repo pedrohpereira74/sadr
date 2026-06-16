@@ -57,10 +57,10 @@ func gitCommitImpl(root string, paths []string, message string) error {
 	}
 	addArgs := append([]string{"-C", root, "add"}, rel...)
 	if out, err := exec.Command("git", addArgs...).CombinedOutput(); err != nil {
-		return fmt.Errorf("git add failed: %v: %s", err, out)
+		return fmt.Errorf("doctor: git add failed: %v: %s", err, out)
 	}
 	if out, err := exec.Command("git", "-C", root, "commit", "-m", message).CombinedOutput(); err != nil {
-		return fmt.Errorf("git commit failed: %v: %s", err, out)
+		return fmt.Errorf("doctor: git commit failed: %v: %s", err, out)
 	}
 	return nil
 }
@@ -137,7 +137,7 @@ func deprecateRecords(ids []string, entries []storage.RecordEntry) ([]string, ma
 		}
 		e.Record.Status = doctor.StatusDeprecated
 		if err := s.UpdateRecord(e.Path, e.Record); err != nil {
-			return nil, nil, fmt.Errorf("failed to update %s: %w", e.Path, err)
+			return nil, nil, fmt.Errorf("doctor: failed to update %s: %w", e.Path, err)
 		}
 		changed = append(changed, e.Path)
 		done[id] = true
@@ -173,19 +173,19 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) erro
 
 		if applying {
 			if role := doctorActorRole(); role != "" && !doctor.IsAuthorized(role) {
-				return fmt.Errorf("actor role %q is not authorized to apply doctor fixes", role)
+				return fmt.Errorf("doctor: actor role %q is not authorized to apply fixes", role)
 			}
 		}
 
 		root := doctorRepoRoot()
 		paths, ok := doctorPaths()
 		if !ok {
-			ui.Success(os.Stderr, "doctor: no project records to validate.")
+			ui.Success(os.Stderr, "doctor: no records to validate.")
 			return nil
 		}
 		entries, err := listAllRecordEntries(paths.Root)
 		if err != nil {
-			return err
+			return fmt.Errorf("doctor: unexpected error: %w", err)
 		}
 
 		fileExists := func(p string) bool {
@@ -199,7 +199,7 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) erro
 		refs := recordRefsFromEntries(entries)
 		result := doctor.Validate(refs, fileExists)
 		for _, o := range result.Orphans {
-			ui.Warning(os.Stderr, fmt.Sprintf("orphan: record %s points at missing file %q", o.Record, o.FileRef))
+			ui.Warning(os.Stderr, fmt.Sprintf("doctor: orphan record %s points at missing file %q", o.Record, o.FileRef))
 		}
 
 		if applying {
@@ -217,7 +217,7 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) erro
 
 			post := doctor.Validate(deactivateRefs(refs, deprecated), fileExists)
 			if !post.OK() {
-				return fmt.Errorf("%d unresolved conflict(s) and %d orphan(s); merge blocked", len(post.Collisions), len(post.Orphans))
+				return fmt.Errorf("doctor: %d conflict(s) and %d orphan(s) still unresolved after apply; merge blocked", len(post.Collisions), len(post.Orphans))
 			}
 			ui.Success(os.Stderr, "doctor: all conflicts resolved.")
 			return nil
@@ -225,7 +225,7 @@ func runDoctor(opts *doctorOptions) func(cmd *cobra.Command, args []string) erro
 
 		if !result.OK() {
 			fmt.Fprintln(os.Stdout, doctor.RenderComment(result))
-			return fmt.Errorf("%d conflict(s) and %d orphan(s) block the merge", len(result.Collisions), len(result.Orphans))
+			return fmt.Errorf("doctor: conflicting and/or orphan records. %d conflict(s) and %d orphan(s) detected", len(result.Collisions), len(result.Orphans))
 		}
 
 		ui.Success(os.Stderr, "doctor: records are consistent.")
