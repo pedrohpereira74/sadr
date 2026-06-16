@@ -190,7 +190,7 @@ func runAsk(opts *askOptions) {
 
 	provider, apiKey, aiModel := loadAIConfig()
 	if apiKey == "" {
-		ui.Error(os.Stderr, "this feature requires an AI API key. set it up: https://ai.google.dev")
+		ui.Error(os.Stderr, "this feature requires an AI API key. set it with 'sadr config --set-api-key', or the provider's key env var")
 		return
 	}
 

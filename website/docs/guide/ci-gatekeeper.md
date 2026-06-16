@@ -68,12 +68,17 @@ which deprecates those records and commits. On GitLab the equivalent is a
 **manual job** (set `APPLY_IDS` when running it) — see [GitLab CI](#gitlab-ci).
 
 :::warning Authorization
-Only authorized actors can trigger an apply. `doctor.IsAuthorized` accepts both
-GitHub `author_association` (OWNER/MEMBER/COLLABORATOR) and GitLab access levels
-(OWNER/MAINTAINER/DEVELOPER), read from `GITHUB_ACTOR_ASSOCIATION` or
-`DOCTOR_ACTOR_ROLE`. On GitHub the `issue_comment` workflow checks it first; on
-GitLab the manual job is gated natively by project role. The binary re-checks as
-defense in depth.
+Only authorized actors can trigger an apply.
+
+- **GitHub** — the `issue_comment` workflow checks the commenter's
+  `author_association`, and the binary re-checks it (`GITHUB_ACTOR_ASSOCIATION`)
+  as defense in depth.
+- **GitLab** — the manual job is gated natively by project role; the binary's
+  check is skipped unless you also pass `DOCTOR_ACTOR_ROLE`.
+
+`doctor.IsAuthorized` accepts both vocabularies —
+`OWNER`/`MEMBER`/`COLLABORATOR` (GitHub) and `OWNER`/`MAINTAINER`/`DEVELOPER`
+(GitLab).
 :::
 
 ## CI integration
